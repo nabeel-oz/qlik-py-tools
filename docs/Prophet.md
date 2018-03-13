@@ -104,11 +104,11 @@ The `Prophet_Seasonality` function also allows you to add holidays to the foreca
 
 You should have completed the installation instructions in the master README.md.
 
-This sample app can be used as a template for the instructions below.
+The sample app can be used as a template for the instructions below.
 
 Firstly, you need to set up your Qlik data model with a forecasting calendar. These instructions work with daily and monthly forecasts, but should teach you enough to build a sub daily forecast as well.
 
-In your load script add a section for the Forecast Calendar and copy the script below. You'll need to replace ACCIDENTDATE with your key date field, and replace the ACCIDENT table with the relevant table in your data model.
+In your load script add a section for the Forecast Calendar and copy the script below. You'll need to replace `ACCIDENTDATE` with your key date field, and replace the `ACCIDENT` table with the relevant table in your data model.
 
 ```
 // Here we set the maximum number of years to be forecasted
@@ -227,7 +227,7 @@ vHolidayWindow
 
 In the same app you'll notice there are calculation conditions placed on all of the forecasting visualizations. This is a good practice as the user might want to make a series of selections and you can let them put forecasting on hold until they are ready. You can just copy the buttons, slider and KPI object to your app if you like.
 
-Next we set up additional variables that are used in our Prophet_Seasonality expressions:
+Next we set up additional variables that are used in our `Prophet_Seasonality` expressions:
 
 ```
 vAccidentsByMonth
@@ -257,7 +257,7 @@ Forecast Date
 if(FORECAST_MONTH <= AddMonths(Max(Total [Accident Month & Year]), $(vForecastPeriods)), FORECAST_DATE)
 ```
 
-For the visualizations that use these dimensions we use the Prophet function in the measures like this:
+For the visualizations that use these dimensions we use the `Prophet` function in the measures like this:
 
 ```
 Prediction
@@ -327,7 +327,7 @@ Weekly Seasonality
 PyTools.Prophet_Seasonality(Max({$<FORECAST_YEAR = {'2017'}>} FORECAST_DATE), $(vAccidentsByDate), '', 'freq=D, return=weekly, seasonality=weekly, weekly_start=6') 
 ```
 
-Finally for the Holiday Effects visualizations we use the date dimensions and Prophet_Holiday functions. We pass the HOLIDAY_NAME field as the third argument and the additional parameters become the fourth argument.
+Finally for the Holiday Effects visualizations we use the date dimensions and `Prophet_Holiday` functions. We pass the `HOLIDAY_NAME` field as the third argument and the additional parameters become the fourth argument.
 
 For showing a breakdown by holiday we can simply add the holiday field as a second dimension in our line chart. This is not a general rule and second dimensions will usually fail, but in this case we have modeled the data for this to work.
 
