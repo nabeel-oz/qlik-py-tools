@@ -4,7 +4,7 @@ Forecasting is something that can add value to almost any Qlik Sense app that co
 
 Last year Facebook's data science team released an open source forecasting tool for Python and R. There is no shortage of forecasting algorithms out there, but this one is impressive in how effortlessly it produces high quality forecasts. I recommend a quick read of [Facebook's post](https://research.fb.com/prophet-forecasting-at-scale/).
 
-While this is a great tool, there is a scarcity of data scientists at most organizations. Qlik's advanced analytics integration can bridge this gap by providing a simple, interactive experience to generating quality forecasts.
+While this is a great tool, there is a scarcity of people with the skills to use such tools at most organizations. Qlik's advanced analytics integration can bridge this gap by providing a simple, interactive experience to generating quality forecasts.
 
 The Prophet functions in this SSE provides almost all of Prophet's capabilities in Qlik through simple expressions.
 
