@@ -1,5 +1,7 @@
 # Python data science tools for Qlik
-This repository provides a server side extension for Qlik Sense built using Python. The intention is to provide a set of functions for data science that can be used as expressions in Qlik. 
+Qlik's advanced analytics integration provides a path to making modern algorithms more accessible to the wider business audience. This project is an attempt to show what's possible.
+
+This repository provides a server side extension for Qlik Sense built using Python. The intention is to provide a set of functions for data science that can be used as expressions in Qlik. Sample Qlik Sense apps are also included and explained so that the techniques shown here can be easily replicated.
 
 The current implementation includes:
 
