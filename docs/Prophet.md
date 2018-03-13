@@ -22,7 +22,11 @@ Here's an example of an actual expression:
 
 In this example the first column is the forecast month, the second column is the measure we want to forecast and the third column is a string of additional key word arguments.
 
-Using this expression in a line chart, with the dimension as forecast month, and another measure to show the actual values, would let us observe the actual and forecast values.
+Using this expression in a line chart, with the dimension as forecast month, and another measure to show the actual values, gives us this result:
+
+![actual vs forecast linechart](docs/images/QuickStart-01.png)
+
+As you can see, without any tweaking, we have a pretty accurate forecast.
 
 ## Additional Parameters
 
@@ -78,6 +82,11 @@ Note that the dates must be provided in their numerical representation by using 
 
 `Concat(DISTINCT TOTAL Aggr(Num(FORECAST_DATE) & ':' & Count({$<FORECAST_LINK_TYPE = {'Actual'}>} Distinct ACCIDENT_NO), FORECAST_DATE), ';')`
 
+With this we can get a nice seasonality plot by day of year. Similarly we can plot other seasonalities with different scales.
+
+![yearly seasonality chart](docs/images/Seasonality-01.png)
+![weekly seasonality chart](docs/images/Seasonality-02.png)
+
 ## Holidays
 
 You can add holidays to the model by using the `Prophet_Holiday` function. This variant takes an additional parameter which should give the holiday name, if any, for each date in the time series. You need to provide holidays for future dates as well. If you don't have holiday dates for all of your time series, just apply some selections before analyzing the holiday effects.
@@ -90,11 +99,17 @@ Here's an example of an actual expression. The `HOLIDAY_NAME` will be `NULL` or 
 
 This lets us plot the holiday effects against the original time series.
 
+![holiday seasonality](docs/images/Holidays-01.png)
+
 Individual holiday effects can be seen by specifying the holiday name in the return argument. But note that the holiday names are changed to lower case, spaces are replaced with underscores and apostrophes are removed. Remember you can see the forecast return options by using debug=true.
 
 You could also put the holiday names as a second dimension in your chart to see the breakdown of effect by each holiday. This is not a general rule and using a second dimension will usually mess up the results. This works for holidays as they have the same granularity as the forecast dates.
 
+![holiday breakdown](docs/images/Holidays-02.png)
+
 You can analyze holiday effects around the date by specifying the `lower_window` and `upper_window` parameters. These can extend the holiday effect to before and after a holiday respectively.
+
+![holiday extended effects](docs/images/Holidays-03.png)
 
 The `Prophet_Seasonality` function also allows you to add holidays to the forecast. The holidays need to be provided as a concatenated string made up of the numerical value of the date followed by the holiday names. Use a colon between the date and holiday name and a semicolon between different dates. For example:
 
@@ -107,6 +122,8 @@ You should have completed the installation instructions in the master README.md.
 The sample app can be used as a template for the instructions below.
 
 Firstly, you need to set up your Qlik data model with a forecasting calendar. These instructions work with daily and monthly forecasts, but should teach you enough to build a sub daily forecast as well.
+
+![Qlik data model snippet](docs/images/Data-01.png)
 
 In your load script add a section for the Forecast Calendar and copy the script below. You'll need to replace `ACCIDENTDATE` with your key date field, and replace the `ACCIDENT` table with the relevant table in your data model.
 
