@@ -28,7 +28,16 @@ For more information on Qlik Server Side Extensions see [qlik-oss](https://githu
 
 3. Double click the `Qlik-Py-Init.bat` in the repository files and let it do it's thing. You can open this file in a text editor to review the commands that will be executed. 
 
-4. Now whenever you want to start this Python service you can run `Qlik-Py-Start.bat`. 
+![Initialization batch file](docs/images/01-Init.png)
+
+If everything goes smoothly you will see a Python virtual environment being set up and some packages being installed. Once the execution completes, do a quick scan of the log to see everything installed correctly. The libraries imported are: `grpcio`, `numpy`, `scipy`, `pandas`, `fbprophet`
+
+![Initialization log](docs/images/02-Init.png)
+
+4. Now whenever you want to start this Python service you can run `Qlik-Py-Start.bat`. You should see the message below once the service is up.
+
+![Initialization log](docs/images/03-Init.png)
+
 If you get an error or no output check your firewall's inbound settings. You may need an inbound rule to open up port `50054`. 
 If you need to change the port you can do so in the file `core\__main__.py` by opening the file with a text editor and changing the value of the `_DEFAULT_PORT` variable.
 
