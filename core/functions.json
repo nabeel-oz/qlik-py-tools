@@ -1,0 +1,70 @@
+{
+  "Functions": [
+    {
+      "Id": 0,
+      "Name": "Correlation",
+      "Type": 0,
+      "ReturnType": 1,
+      "Params": {
+        "a_series1": 0,
+        "b_series2": 0,
+		"c_corr_type": 0
+      }
+    },
+	{
+      "Id": 1,
+      "Name": "Pearson",
+      "Type": 0,
+      "ReturnType": 1,
+      "Params": {
+        "a_series1": 0,
+        "b_series2": 0
+      }
+    },
+	{
+      "Id": 2,
+      "Name": "Prophet",
+      "Type": 0,
+      "ReturnType": 1,
+      "Params": {
+        "a_date": 2,
+        "b_value": 1,
+		"c_other_args": 0
+      }
+    },
+	{
+      "Id": 3,
+      "Name": "Prophet_Basic",
+      "Type": 0,
+      "ReturnType": 1,
+      "Params": {
+        "a_date": 2,
+        "b_value": 1
+      }
+    },
+	{
+      "Id": 4,
+      "Name": "Prophet_Holidays",
+      "Type": 0,
+      "ReturnType": 1,
+      "Params": {
+        "a_date": 2,
+        "b_value": 1,
+		"c_holidays": 2,
+		"d_other_args": 0
+      }
+    },
+	{
+      "Id": 5,
+      "Name": "Prophet_Seasonality",
+      "Type": 0,
+      "ReturnType": 1,
+      "Params": {
+        "a_season": 2,
+        "b_time_series": 0,
+		"c_holidays": 0,
+		"d_other_args": 0
+      }
+    }
+  ]
+}
