@@ -9,7 +9,7 @@ The current implementation includes:
 - Seasonality and holiday analysis: Also using Facebook Prophet.
 - Linear correlations : Implemented using Pandas.
 
-Further information on these features can be found under [docs](docs).
+Further information on these features is available through the Usage section below.
 
 For more information on Qlik Server Side Extensions see [qlik-oss](https://github.com/qlik-oss/server-side-extension).
 
