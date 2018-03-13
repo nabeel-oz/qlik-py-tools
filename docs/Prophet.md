@@ -103,3 +103,5 @@ The `Prophet_Seasonality` function also allows you to add holidays to the foreca
 
 `Concat({$<HOLIDAY_NAME={*}>} Distinct Total Num(FORECAST_DATE) & ':' & HOLIDAY_NAME, ';')`
 
+## Use Prophet with your own app
+
