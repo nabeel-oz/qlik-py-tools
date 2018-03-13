@@ -41,5 +41,15 @@ The Python service must be up before the Qlik Sense engine comes up. If a connec
 
 ![handshake log](docs/images/Run-02.png)
 
-Help on using the features and sample apps are available under [docs](docs).
+
+## Usage
+
+We go into the details of each feature in the relevant section below.
+
+Sample Qlik Sense apps are provided and each includes a series of Bookmarks that you can step through to see the respective functions in action.
+
+| Documentation | Sample App |
+| --- | --- |
+| [Prophet](docs/Prophet.md) | [Sample App - Facebook Prophet](docs/Sample_App_Prophet.qvf) |
+| [Correlations](docs/Correlation.md) | |
 
