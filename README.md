@@ -14,13 +14,13 @@ For more information on Qlik Server Side Extensions see [qlik-oss](https://githu
 **Disclaimer:** This project has been started by me in a personal capacity and is not supported by Qlik. 
 
 
-### Pre-requisites
+## Pre-requisites
 
 - Qlik Sense Enterprise or Qlik Sense Desktop
 - Python 3.4 or above
 
 
-### Installation
+## Installation
 
 1. Install Python from [here](https://www.python.org/downloads/). Remember to select the option to add Python to your PATH environment variable.
 
@@ -34,7 +34,7 @@ If you need to change the port you can do so in the file `core\__main__.py` by o
 
 5. Now you need to [set up an Analytics Connection in Qlik Sense Enterprise](https://help.qlik.com/en-US/sense/February2018/Subsystems/ManagementConsole/Content/create-analytic-connection.htm) or [update the Settings.ini file in Qlik Sense Desktop](https://help.qlik.com/en-US/sense/February2018/Subsystems/Hub/Content/Introduction/configure-analytic-connection-desktop.htm).
 
-6. Finally restart the Qlik Sense engine service for Qlik Sense Enterprise or restart Qlik Sense Desktop.
+6. Finally restart the Qlik Sense engine service for Qlik Sense Enterprise or close and reopen Qlik Sense Desktop.
 The Python service must be up before the Qlik Sense engine comes up. If a connection between Python and Qlik is established you should see the capabilities listed in the terminal.
 
 Help on using the features and sample apps are available under [docs](docs).
