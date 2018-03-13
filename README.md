@@ -32,8 +32,6 @@ For more information on Qlik Server Side Extensions see [qlik-oss](https://githu
 
 4. Now whenever you want to start this Python service you can run `Qlik-Py-Start.bat`. You should see the message below once the service is up. If you get an error or no output check your firewall's inbound settings. You may need an inbound rule to open up port `50054`. If you need to change the port you can do so in the file `core\__main__.py` by opening the file with a text editor and changing the value of the `_DEFAULT_PORT` variable.
 
-![service start log](docs/images/Run-01.png)
-
 5. Now you need to [set up an Analytics Connection in Qlik Sense Enterprise](https://help.qlik.com/en-US/sense/February2018/Subsystems/ManagementConsole/Content/create-analytic-connection.htm) or [update the Settings.ini file in Qlik Sense Desktop](https://help.qlik.com/en-US/sense/February2018/Subsystems/Hub/Content/Introduction/configure-analytic-connection-desktop.htm).
 
 6. Finally restart the Qlik Sense engine service for Qlik Sense Enterprise or close and reopen Qlik Sense Desktop.
@@ -44,9 +42,9 @@ The Python service must be up before the Qlik Sense engine comes up. If a connec
 
 ## Usage
 
-We go into the details of each feature in the relevant section below.
+We go into the details of each feature in the sections below.
 
-Sample Qlik Sense apps are provided and each includes a series of Bookmarks that you can step through to see the respective functions in action.
+Sample Qlik Sense apps are provided and each app includes a series of Bookmarks that you can step through to see the respective functions in action.
 
 | Documentation | Sample App |
 | --- | --- |
