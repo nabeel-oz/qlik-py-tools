@@ -22,7 +22,7 @@ In this example the first column is the forecast month, the second column is the
 
 Using this expression in a line chart, with the dimension as forecast month, and another measure to show the actual values, gives us this result:
 
-![actual vs forecast linechart](docs/images/QuickStart.png)
+![actual vs forecast linechart](images/QuickStart.png)
 
 As you can see, without any tweaking, we have a pretty accurate forecast.
 
