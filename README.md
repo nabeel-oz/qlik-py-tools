@@ -5,7 +5,7 @@ This repository provides a server side extension for Qlik Sense built using Pyth
 
 The current implementation includes:
 
-- Time series forecasting : Implemented using [Facebook Prophet](https://research.fb.com/prophet-forecasting-at-scale/), a modern library for generating quality forecasts.
+- Time series forecasting : Implemented using [Facebook Prophet](https://research.fb.com/prophet-forecasting-at-scale/), a modern library for easily generating good quality forecasts.
 - Seasonality and holiday analysis: Also using Facebook Prophet.
 - Linear correlations : Implemented using Pandas.
 
