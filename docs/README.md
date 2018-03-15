@@ -27,7 +27,7 @@ For more information on Qlik Server Side Extensions see [qlik-oss](https://githu
 
 1. Get Python from [here](https://www.python.org/downloads/). Remember to select the option to add Python to your PATH environment variable.
 
-2. You'll also need a recent compiler such as [Microsoft Visual C++ Build Tools](http://landinghub.visualstudio.com/visual-cpp-build-tools)
+2. You'll also need a recent C++ compiler such as [Microsoft Visual C++ Build Tools](http://landinghub.visualstudio.com/visual-cpp-build-tools)
 
 3. Download this git repository and extract it to a location of your choice. The machine where you are placing this repository should have access to a local or remote Qlik Sense instance.
 
