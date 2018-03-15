@@ -25,17 +25,19 @@ For more information on Qlik Server Side Extensions see [qlik-oss](https://githu
 
 ## Installation
 
-1. Install Python from [here](https://www.python.org/downloads/). Remember to select the option to add Python to your PATH environment variable.
+1. Get Python from [here](https://www.python.org/downloads/). Remember to select the option to add Python to your PATH environment variable.
 
-2. Download this git repository and extract it to a location of your choice. The machine where you are placing this repository should have access to a local or remote Qlik Sense instance.
+2. You'll also need a recent compiler such as [Microsoft Visual C++ Build Tools](http://landinghub.visualstudio.com/visual-cpp-build-tools)
 
-3. Double click `Qlik-Py-Init.bat` in the repository files and let it do it's thing. You can open this file in a text editor to review the commands that will be executed. If everything goes smoothly you will see a Python virtual environment being set up and some packages being installed. Once the execution completes, do a quick scan of the log to see everything installed correctly. The libraries imported are: `grpcio`, `numpy`, `scipy`, `pandas`, `fbprophet`.
+3. Download this git repository and extract it to a location of your choice. The machine where you are placing this repository should have access to a local or remote Qlik Sense instance.
 
-4. Now whenever you want to start this Python service you can run `Qlik-Py-Start.bat`. You should see the message below once the service is up. If you get an error or no output check your firewall's inbound settings. You may need an inbound rule to open up port `50054`. If you need to change the port you can do so in the file `core\__main__.py` by opening the file with a text editor and changing the value of the `_DEFAULT_PORT` variable.
+4. Double click `Qlik-Py-Init.bat` in the repository files and let it do it's thing. You can open this file in a text editor to review the commands that will be executed. If everything goes smoothly you will see a Python virtual environment being set up and some packages being installed. Once the execution completes, do a quick scan of the log to see everything installed correctly. The libraries imported are: `grpcio`, `numpy`, `scipy`, `pandas`, `fbprophet`.
 
-5. Now you need to [set up an Analytics Connection in Qlik Sense Enterprise](https://help.qlik.com/en-US/sense/February2018/Subsystems/ManagementConsole/Content/create-analytic-connection.htm) or [update the Settings.ini file in Qlik Sense Desktop](https://help.qlik.com/en-US/sense/February2018/Subsystems/Hub/Content/Introduction/configure-analytic-connection-desktop.htm).
+5. Now whenever you want to start this Python service you can run `Qlik-Py-Start.bat`. You should see the message below once the service is up. If you get an error or no output check your firewall's inbound settings. You may need an inbound rule to open up port `50054`. If you need to change the port you can do so in the file `core\__main__.py` by opening the file with a text editor and changing the value of the `_DEFAULT_PORT` variable.
 
-6. Finally restart the Qlik Sense engine service for Qlik Sense Enterprise or close and reopen Qlik Sense Desktop.
+6. Now you need to [set up an Analytics Connection in Qlik Sense Enterprise](https://help.qlik.com/en-US/sense/February2018/Subsystems/ManagementConsole/Content/create-analytic-connection.htm) or [update the Settings.ini file in Qlik Sense Desktop](https://help.qlik.com/en-US/sense/February2018/Subsystems/Hub/Content/Introduction/configure-analytic-connection-desktop.htm).
+
+7. Finally restart the Qlik Sense engine service for Qlik Sense Enterprise or close and reopen Qlik Sense Desktop.
 The Python service must be up before the Qlik Sense engine comes up. If a connection between Python and Qlik is established you should see the capabilities listed in the terminal.
 
 ![handshake log](docs/images/Run-02.png)
