@@ -20,6 +20,7 @@ For more information on Qlik Server Side Extensions see [qlik-oss](https://githu
 
 - Qlik Sense Enterprise or Qlik Sense Desktop
 - Python 3.4 or above
+- Microsoft Visual C++ Build Tools
 
 
 ## Installation
