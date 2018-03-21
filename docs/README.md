@@ -52,4 +52,4 @@ Sample Qlik Sense apps are provided and each app includes a series of Bookmarks 
 | Documentation | Sample App |
 | --- | --- |
 | [Prophet](Prophet.md) | [Sample App - Facebook Prophet](Sample_App_Prophet.qvf) |
-| [Correlations](Correlation.md) | Work in progress |
+| [Correlations](Correlation.md) | [Sample App - Correlations](Sample_App_Correlations.qvf) |
