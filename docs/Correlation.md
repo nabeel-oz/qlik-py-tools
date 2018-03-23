@@ -10,6 +10,8 @@ The Correl funtion is the simpler approach and will generally give you better pe
 
 In addition, this SSE allows you to calculate three types of correlations: Pearson, Spearman Rank and Kendall Tau. 
 
+![Dynamic correlations for 194 Indicators](images/Correlations-00.png)
+
 ## Quick Start
 
 There are several methods for calculating correlation, but the most commonly used statistic is the Pearson r correlation coefficient. This can be calculated using the Pearson function with the syntax:
@@ -47,7 +49,7 @@ The first variable in the expression remains constant for all Indicators, and is
 
 ![Steps to get to the correlation](images/Correlations-01.png)
 
-The `vSeriesInd1` is based on a third variable: `vIndicator1` which sets the Indicator dimension to the first value in the current selections:
+`vSeriesInd1` is based on a third variable: `vIndicator1` which sets the Indicator dimension to the first value in the current selections:
 
 `=SubField(Concat(Distinct [Indicator],';'),';',1)`
 
@@ -67,7 +69,7 @@ Keepchar(
 
 The inner Aggr function is restricted using set analysis and will always use the first Indicator value in the current selections based on `vIndicator1`. This Aggr function gives us the `[LGA Name] & ':' & Value` for each Indicator and LGA. We include the LGA name in order to sort the values consistently for all series. We include Indicator as well to remain consistent with the visualization's dimensions.
 
-The Concat function then takes the multiple rows returned by the Aggr function and concatenates them into a string separated by semi-colons. By using TOTAL we can repeat this series across all Indicator values.
+The Concat function then takes the multiple rows returned by the Aggr function and concatenates them into a string separated by semi-colons. By using `TOTAL` we can repeat this series across all Indicator values.
 
 Finally we only keep numerical values and separators in our result. We do this at the end so that the Concat function maintains the desired sort order.
 
@@ -87,5 +89,14 @@ Keepchar(
     , '0123456789.;')
 ```
 
-Here the set analysis in the Aggr function excludes the value of `vIndicator1` so that we are not calculating the correlation of an Indicator with itself. The Concat function adds back this value of the Indicator so we get NULL as a result for the selected Indicator as seen in the top right table in the sreenshot above.
+Here the set analysis in the Aggr function excludes the value of `vIndicator1` so that we are not calculating the correlation of the selected Indicator with itself. 
 
+In the first sheet of sample app we have set up a Scatter Plot and a Table to visualize correlations for up to two selected Indicators. This is done with the expressions defined above, but with additional measures for the second selected Indicator. 
+
+We have also defined measures for the Spearman Rank correlation which works well here when used with the Ranking instead of the Value.
+
+`PyTools.Correlation($(vRanksInd1), $(vRanksExcInd1), 'spearman')`
+
+These variables just use the Rank field instead of Value. 
+
+Similary, these variables and expressions can be ported over to any data model that contains multiple indicators with series of values or rankings.
