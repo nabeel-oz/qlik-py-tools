@@ -365,3 +365,6 @@ PyTools.Prophet_Holidays(if(FORECAST_MONTH <= AddMonths(Max(Total [Accident Mont
                 [Christmas Day],
                 'freq=D, return=holidays, lower_window=-$(vHolidayWindow), upper_window=$(vHolidayWindow)')
 ```
+
+## Attribution
+The data used in the sample app was obtained from the [Crash Stats - Data Extract](https://www.data.vic.gov.au/data/dataset/crash-stats-data-extract) published by the Victorian State Government.
