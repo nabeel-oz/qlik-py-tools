@@ -61,11 +61,11 @@ Let's take a closer look at the `vSeriesInd1`:
 //vSeriesInd1
 Keepchar(
 	Concat(TOTAL
-        Aggr(
-            Only({$<[Profile Type] = {'LGA'}, [Indicator] = {"$(vIndicator1)"}>} ([LGA Name] & ':' & Value)), 
-            (Indicator, (TEXT, ASCENDING)), ([LGA Name], (TEXT, ASCENDING))
-            ) 
-        , '; ')
+		Aggr(
+		    Only({$<[Profile Type] = {'LGA'}, [Indicator] = {"$(vIndicator1)"}>} ([LGA Name] & ':' & Value)), 
+		    (Indicator, (TEXT, ASCENDING)), ([LGA Name], (TEXT, ASCENDING))
+		    ) 
+		, '; ')
 	, '0123456789.;')
 ```
 
@@ -83,11 +83,11 @@ The second variable `vSeriesExcInd1` has a similar expression, except that in th
 //vSeriesExcInd1
 Keepchar(
 	Concat({$<[Indicator] = {*}>}
-        Aggr(
-            Only({$<[Profile Type] = {'LGA'}, [Correlation Relevant] = {'Yes'}, [Indicator]={*}-{"$(vIndicator1)"}>} ([LGA Name] & ':' & Value)), 
-            (Indicator, (TEXT, ASCENDING)), ([LGA Name], (TEXT, ASCENDING))
-            ) 
-        , '; ')
+		Aggr(
+		    Only({$<[Profile Type] = {'LGA'}, [Correlation Relevant] = {'Yes'}, [Indicator]={*}-{"$(vIndicator1)"}>} ([LGA Name] & ':' & Value)), 
+		    (Indicator, (TEXT, ASCENDING)), ([LGA Name], (TEXT, ASCENDING))
+		    ) 
+		, '; ')
     , '0123456789.;')
 ```
 
