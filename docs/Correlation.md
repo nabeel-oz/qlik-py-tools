@@ -10,6 +10,8 @@ The Correl funtion is the simpler approach and will generally give you better pe
 
 In addition, this SSE allows you to calculate three types of correlations: Pearson, Spearman Rank and Kendall Tau. 
 
+The purpose here is to build a powerful, interactive tool to explore correlations between many different indicators.
+
 ![Dynamic correlations for 194 Indicators](images/Correlations-00.png)
 
 ## Quick Start
@@ -91,12 +93,14 @@ Keepchar(
 
 Here the set analysis in the Aggr function excludes the value of `vIndicator1` so that we are not calculating the correlation of the selected Indicator with itself. 
 
-In the first sheet of sample app we have set up a Scatter Plot and a Table to visualize correlations for up to two selected Indicators. This is done with the expressions defined above, but with additional measures for the second selected Indicator. 
+In the first sheet of the sample app we have set up a Scatter Plot and a Table to visualize correlations for up to two selected Indicators. This is done with the expressions defined above and similar ones for the second selected Indicator. 
 
-We have also defined measures for the Spearman Rank correlation which works well here when used with the Ranking instead of the Value.
+The Indiciator dimension is used to select the target of the analysis. Other dimensions such as Category and Sub Category can be used to further specify the scope of the analysis. This gives us a powerful, interactive tool to explore correlations between these 194 different indicators.
+
+We have also defined Alternate Measures in the Scatter Plot for the Spearman Rank correlation. This works well here when used with the Ranking instead of the Value.
 
 `PyTools.Correlation($(vRanksInd1), $(vRanksExcInd1), 'spearman')`
 
-These variables just use the Rank field instead of Value. 
+These variables are similar to the ones defined abvoe but use the Rank field instead of Value. 
 
-Similary, these variables and expressions can be ported over to any data model that contains multiple indicators with series of values or rankings.
+You can apply these techniques to any data model that contains multiple indicators with series of values or rankings.
