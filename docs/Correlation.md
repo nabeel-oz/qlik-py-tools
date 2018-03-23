@@ -12,11 +12,11 @@ In addition, this SSE allows you to calculate three types of correlations: Pears
 
 ## Quick Start
 
-The most commonly used linear correlatinon is the Pearson r correlation coefficient. This can be calculated using the Pearson function with the syntax:
+There are several methods for calculating correlation, but the most commonly used statistic is the Pearson r correlation coefficient. This can be calculated using the Pearson function with the syntax:
 
 `<Analytic connection name>.Pearson([Series 1 as string], [Series 2 as string])`
 
-The two series are passed an a concatenated string of values, which gives us flexibility in using the result against various dimensions and visualizations. The string should take the form of comma separated values for example:
+The two series are passed an a concatenated string of values, which gives us flexibility in using the result against various dimensions and visualizations. The string should take the form of semi-colon separated values for example:
 
 `PyTools.Pearson('10;12;14', '1;2;3')`
 
@@ -31,13 +31,23 @@ Possible values for the Correlation Type parameter are:
 
 ## Use Correlations in your own app
 
-Here's an example of an actual expression:
+While the Correlation function is straight forward, you will need to set up a few expressions in Qlik to use it dynamically against multiple data series.
 
-`PyTools.Pearson($(vSeriesInd1), $(vSeriesExcInd1))`
+The [sample app](Sample_App_Correlations.qvf) can be used as a template for the instructions below.
 
-The variables in this expression are concatenated strings of values. The first variable remains constant for all rows in the visualization, while the second variable excludes the series in the first variable. 
+In this app we have 194 different Indicators, with values and rankings for each Local Government Area (LGA) in Victoria, Australia. There are 79 LGAs, so each Indicator has a series of 79 values. 
 
-Plotted against the "Indicator" dimension, we will get a correlation coefficient for each indicator versus the constant indicator in the first series.
+Here's an expression to calculate the correlation of one specific Indicator versus all the others:
+
+`PyTools.Correlation($(vSeriesInd1), $(vSeriesExcInd1), 'pearson')`
+
+Plotted against the "Indicator" dimension, we will get a correlation coefficient for each row.
+
+The first variable in the expression remains constant for all Indicators, and is based on a selection. The second variable gives us a series for each row in the visualization, but excludes the series in the first variable. This is perhaps better understood by looking at the screenshot below:
+
+![Steps to get to the correlation](images/Correlations-01.png)
+
+Here are the expressions for the two variables:
 
 ```
 //vSeriesInd1
@@ -62,3 +72,5 @@ Keepchar(
         , '; ')
     , '0123456789.;')
 ```
+
+The `vIndicator1` variable in `vSeriesInd1` is fixing the 
