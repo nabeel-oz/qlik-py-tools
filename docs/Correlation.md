@@ -4,7 +4,7 @@ The correlation methods in this Server Side Extension (SSE) take in two columns 
 
 The methods are implemented using Pandas, specifically the [pandas.DataFrame.corr](https://pandas.pydata.org/pandas-docs/stable/generated/pandas.DataFrame.corr.html) method.
 
-## Why not just use the Qlik "Correl" function?
+## How's this different from the Qlik "Correl" function?
 
 The Correl funtion is the simpler approach and will generally give you better performance. However, in certain cases this function may not be flexible enough. For example, if you have several series in your data and want to dynamically select one and calculate the correlations versus the others, you will find the out-of-the-box function is insufficient.
 
@@ -51,9 +51,9 @@ The first variable in the expression remains constant for all Indicators, and is
 
 ![Steps to get to the correlation](images/Correlations-01.png)
 
-`vSeriesInd1` is based on a third variable: `vIndicator1` which sets the Indicator dimension to the first value in the current selections:
+`vSeriesInd1` is based on a third variable `vIndicator1` which sets the Indicator dimension to the first value in the current selections:
 
-`=SubField(Concat(Distinct [Indicator],';'),';',1)`
+`SubField(Concat(Distinct [Indicator],';'),';',1)`
 
 Let's take a closer look at the `vSeriesInd1`:
 
@@ -77,7 +77,7 @@ Finally we only keep numerical values and separators in our result. We do this a
 
 The result of all this can be seen in the top left table in the screenshot above.
 
-The second variable `vSeriesExcInd1` has a similar expression, except that in this case it is based on the dimensional value of Indicator. 
+The second variable `vSeriesExcInd1` has a similar expression, except that it is based on the value of the Indicator dimension for each row in the visualization. 
 
 ```
 //vSeriesExcInd1
@@ -97,10 +97,10 @@ In the first sheet of the sample app we have set up a Scatter Plot and a Table t
 
 The Indiciator dimension is used to select the target of the analysis. Other dimensions such as Category and Sub Category can be used to further specify the scope of the analysis. This gives us a powerful, interactive tool to explore correlations between these 194 different indicators.
 
-We have also defined Alternate Measures in the Scatter Plot for the Spearman Rank correlation. This works well here when used with the Ranking instead of the Value.
+We have also defined Alternate Measures in the Scatter Plot for the Spearman Rank correlation. This works well when used with rankings instead of values.
 
 `PyTools.Correlation($(vRanksInd1), $(vRanksExcInd1), 'spearman')`
 
-These variables are similar to the ones defined abvoe but use the Rank field instead of Value. 
+These variables are similar to the ones defined above but use the Rank field instead of Value. 
 
-You can apply these techniques to any data model that contains multiple indicators with series of values or rankings.
+You can apply these techniques to any data model that contains multiple indicators or measures, with series of values or rankings.
