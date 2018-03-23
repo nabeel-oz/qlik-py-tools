@@ -105,5 +105,5 @@ These variables are similar to the ones defined above but use the Rank field ins
 
 You can apply these techniques to any data model that contains multiple indicators or measures, with series of values or rankings.
 
-###Attribution
+### Attribution
 The data used in the sample app was obtained from the [2015 Local Government Area (LGA) Statistical Profiles](https://www2.health.vic.gov.au/about/reporting-planning-data/gis-and-planning-products/geographical-profiles) published by the Victorian State Government.
