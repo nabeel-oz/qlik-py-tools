@@ -41,13 +41,17 @@ Here's an expression to calculate the correlation of one specific Indicator vers
 
 `PyTools.Correlation($(vSeriesInd1), $(vSeriesExcInd1), 'pearson')`
 
-Plotted against the "Indicator" dimension, we will get a correlation coefficient for each row.
+Plotted against the Indicator dimension, this gives us a correlation coefficient for each row.
 
-The first variable in the expression remains constant for all Indicators, and is based on a selection. The second variable gives us a series for each row in the visualization, but excludes the series in the first variable. This is perhaps better understood by looking at the screenshot below:
+The first variable in the expression remains constant for all Indicators, and is based on a selection. The second variable gives us a series for each value in the Indicator dimension. This is perhaps better understood by looking at the screenshot below:
 
 ![Steps to get to the correlation](images/Correlations-01.png)
 
-Here are the expressions for the two variables:
+The `vSeriesInd1` is based on a third variable: `vIndicator1` which sets the Indicator dimension to the first value in the current selections:
+
+`=SubField(Concat(Distinct [Indicator],';'),';',1)`
+
+Let's take a closer look at the `vSeriesInd1`:
 
 ```
 //vSeriesInd1
@@ -61,6 +65,16 @@ Keepchar(
 	, '0123456789.;')
 ```
 
+The inner Aggr function is restricted using set analysis and will always use the first Indicator value in the current selections based on `vIndicator1`. This Aggr function gives us the `[LGA Name] & ':' & Value` for each Indicator and LGA. We include the LGA name in order to sort the values consistently for all series. We include Indicator as well to remain consistent with the visualization's dimensions.
+
+The Concat function then takes the multiple rows returned by the Aggr function and concatenates them into a string separated by semi-colons. By using TOTAL we can repeat this series across all Indicator values.
+
+Finally we only keep numerical values and separators in our result. We do this at the end so that the Concat function maintains the desired sort order.
+
+The result of all this can be seen in the top left table in the screenshot above.
+
+The second variable `vSeriesExcInd1` has a similar expression, except that in this case it is based on the dimensional value of Indicator. 
+
 ```
 //vSeriesExcInd1
 Keepchar(
@@ -73,4 +87,5 @@ Keepchar(
     , '0123456789.;')
 ```
 
-The `vIndicator1` variable in `vSeriesInd1` is fixing the 
+Here the set analysis in the Aggr function excludes the value of `vIndicator1` so that we are not calculating the correlation of an Indicator with itself. The Concat function adds back this value of the Indicator so we get NULL as a result for the selected Indicator as seen in the top right table in the sreenshot above.
+
