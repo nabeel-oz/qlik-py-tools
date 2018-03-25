@@ -49,8 +49,8 @@ We go into the details of each feature in the sections below.
 
 Sample Qlik Sense apps are provided and each app includes a series of Bookmarks that you can step through to see the respective functions in action.
 
-| Documentation | Sample App |
-| --- | --- |
-| [Prophet](docs/Prophet.md) | [Sample App - Facebook Prophet](docs/Sample_App_Prophet.qvf) |
-| [Correlations](docs/Correlation.md) | [Sample App - Correlations](docs/Sample_App_Correlations.qvf) |
+| Documentation | Sample App | App Dependencies |
+| --- | --- | --- |
+| [Prophet](docs/Prophet.md) | [Sample App - Facebook Prophet](docs/Sample_App_Prophet.qvf) | The [qsVariable](https://github.com/erikwett/qsVariable) extension |
+| [Correlations](docs/Correlation.md) | [Sample App - Correlations](docs/Sample_App_Correlations.qvf) | --- |
 
