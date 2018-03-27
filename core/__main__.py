@@ -1,4 +1,3 @@
-#! /usr/bin/env python3
 import argparse
 import json
 import logging
@@ -19,6 +18,7 @@ import grpc
 import numpy as np
 import pandas as pd
 from _prophet_forecast import ProphetForQlik
+from _clustering import HDBSCANForQlik
 
 # Set the default port for this SSE Extension
 _DEFAULT_PORT = '50054'
@@ -61,7 +61,9 @@ class ExtensionService(SSE.ConnectorServicer):
             2: '_prophet',
             3: '_prophet',
             4: '_prophet',
-            5: '_prophet_seasonality'
+            5: '_prophet_seasonality',
+            6: '_cluster',
+            7: '_cluster_by_dim'
         }
 
     """
