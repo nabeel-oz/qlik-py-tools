@@ -1,17 +1,18 @@
 @echo off
 echo Setting up the Python virtual environment... & echo.
-python -m venv qlik-py-env
+python -m venv "%~dp0\qlik-py-env"
 echo.
 echo Moving project files to the new directory... & echo.
 move generated "%~dp0\qlik-py-env"
 move core "%~dp0\qlik-py-env"
 echo.
 echo Activating the virtual environment... & echo.
-cd "%~dp0\qlik-py-env\Scripts"
+cd /d "%~dp0\qlik-py-env\Scripts"
 call activate
 cd ..
 echo.
 echo Installing required packages... & echo.
+python -m pip install --upgrade pip
 pip install grpcio
 pip install numpy
 pip install scipy

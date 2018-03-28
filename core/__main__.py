@@ -17,6 +17,7 @@ import grpc
 # Import libraries for added functions
 import numpy as np
 import pandas as pd
+import _utils as utils
 from _prophet_forecast import ProphetForQlik
 from _clustering import HDBSCANForQlik
 
@@ -56,14 +57,15 @@ class ExtensionService(SSE.ConnectorServicer):
         :return: Mapping of function id and implementation
         """
         return {
-            0: '_correlation',
-            1: '_correlation',
-            2: '_prophet',
-            3: '_prophet',
-            4: '_prophet',
-            5: '_prophet_seasonality',
-            6: '_cluster',
-            7: '_cluster_by_dim'
+            0: '_cluster',
+            1: '_cluster_by_dim',
+            2: '_cluster_geo',
+            3: '_correlation',
+            4: '_correlation',
+            5: '_prophet',
+            6: '_prophet',
+            7: '_prophet',
+            8: '_prophet_seasonality'
         }
 
     """
@@ -71,16 +73,96 @@ class ExtensionService(SSE.ConnectorServicer):
     """
     
     @staticmethod
-    def _string_to_float(s):
+    def _cluster(request, context):
         """
-        Utility function
-        :return: Float for the String parameter s, or None in the case of a ValueError exception
+        Look for clusters within a dimension using the given features. Scalar function.
+        This variant takes in one dimension and a string of features.
+        :param request: an iterable sequence of RowData
+        :param context:
+        :return: the clustering classification for each row
+        :Qlik expression examples:
+        :<AAI Connection Name>.Cluster(dimension, sum(value1) & ';' & sum(value2), 'scaler=standard')
         """
-        try:
-            f = float(s)
-            return f
-        except ValueError:
-            return None
+        # Get a list from the generator object so that it can be iterated over multiple times
+        request_list = [request_rows for request_rows in request]
+                       
+        # Create an instance of the HDBSCANForQlik class
+        # This will take the request data from Qlik and prepare it for clustering
+        clusterer = HDBSCANForQlik(request_list)
+        
+        # Calculate the clusters and store in a Pandas series
+        clusters = clusterer.cluster()
+        
+        # Values in the series are converted to type SSE.Dual
+        response_rows = clusters.apply(lambda result: iter([SSE.Dual(numData=result)]))
+        
+        # Values in the series are converted to type SSE.Row
+        # The series is then converted to a list
+        response_rows = response_rows.apply(lambda duals: SSE.Row(duals=duals)).tolist()        
+        
+        # Iterate over bundled rows
+        for request_rows in request_list:
+            # Yield Row data as Bundled rows
+            yield SSE.BundledRows(rows=response_rows)
+    
+    @staticmethod
+    def _cluster_by_dim(request, context):
+        """
+        Look for clusters within a dimension using the given features. Scalar function.
+        This variant can only be used in the load script, not in chart expressions.
+        It takes in two dimensions and one measure.
+        Features for the clustering are produced by pivoting the data for the second dimension.
+        """
+        # Get a list from the generator object so that it can be iterated over multiple times
+        request_list = [request_rows for request_rows in request]
+                       
+        # Create an instance of the HDBSCANForQlik class
+        # This will take the request data from Qlik and prepare it for clustering
+        clusterer = HDBSCANForQlik(request_list, variant="two_dims")
+        
+        # Calculate the clusters and store in a Pandas series
+        clusters = clusterer.cluster()
+        
+        # Values in the series are converted to type SSE.Dual
+        response_rows = clusters.apply(lambda result: iter([SSE.Dual(numData=result)]))
+        
+        # Values in the series are converted to type SSE.Row
+        # The series is then converted to a list
+        response_rows = response_rows.apply(lambda duals: SSE.Row(duals=duals)).tolist()        
+        
+        # Iterate over bundled rows
+        for request_rows in request_list:
+            # Yield Row data as Bundled rows
+            yield SSE.BundledRows(rows=response_rows)
+    
+    @staticmethod
+    def _cluster_geo(request, context):
+        """
+        Look for clusters using geospatial coordinates. Scalar function.
+        This variant can only be used when latitude and longitude fields are avaialble.
+        It takes in one dimension, the latitude and longitude.
+        """
+        # Get a list from the generator object so that it can be iterated over multiple times
+        request_list = [request_rows for request_rows in request]
+                       
+        # Create an instance of the HDBSCANForQlik class
+        # This will take the request data from Qlik and prepare it for clustering
+        clusterer = HDBSCANForQlik(request_list, variant="lat_long")
+        
+        # Calculate the clusters and store in a Pandas series
+        clusters = clusterer.cluster()
+        
+        # Values in the series are converted to type SSE.Dual
+        response_rows = clusters.apply(lambda result: iter([SSE.Dual(numData=result)]))
+        
+        # Values in the series are converted to type SSE.Row
+        # The series is then converted to a list
+        response_rows = response_rows.apply(lambda duals: SSE.Row(duals=duals)).tolist()        
+        
+        # Iterate over bundled rows
+        for request_rows in request_list:
+            # Yield Row data as Bundled rows
+            yield SSE.BundledRows(rows=response_rows)
     
     @staticmethod
     def _correlation(request, context):
@@ -144,8 +226,8 @@ class ExtensionService(SSE.ConnectorServicer):
                 # Check that the lists are of equal length
                 if len(x) == len(y) and len(x) > 0:
                     # Create a Pandas data frame using the lists
-                    df = pd.DataFrame({'x': [ExtensionService._string_to_float(d) for d in x], \
-                                       'y': [ExtensionService._string_to_float(d) for d in y]})
+                    df = pd.DataFrame({'x': [utils._string_to_float(d) for d in x], \
+                                       'y': [utils._string_to_float(d) for d in y]})
                 
                     # Calculate the correlation matrix for the two series in the data frame
                     corr_matrix = df.corr(method=corr_type)
@@ -222,7 +304,7 @@ class ExtensionService(SSE.ConnectorServicer):
         # The request_list line above is not timed as the generator can only be iterated once
         # ProphetForQlik.timeit(request_list)
                        
-        # Create an instance of the _prophet_forecast class
+        # Create an instance of the ProphetForQlik class
         # This will take the request data from Qlik and prepare it for forecasting
         predictor = ProphetForQlik(request_list)
         
@@ -283,7 +365,7 @@ class ExtensionService(SSE.ConnectorServicer):
         # Get a list from the generator object so that it can be iterated over multiple times
         request_list = [request_rows for request_rows in request]
                               
-        # Create an instance of the _prophet_forecast class
+        # Create an instance of the ProphetForQlik class
         # This will take the request data from Qlik and prepare it for forecasting
         predictor = ProphetForQlik.init_seasonality(request_list)
         
