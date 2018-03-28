@@ -26,11 +26,7 @@ class HDBSCANForQlik:
         :param request: an iterable sequence of RowData
         :Sets up the input data frame and parameters based on the request
         """
-        
-        # Additional information is printed to the terminal and logs if the paramater debug = true
-        if self.debug == 'true':
-            self._print_log(1)
-        
+               
         # Set the request and variant variables for this object instance
         self.request = request
         self.variant = variant       
@@ -49,10 +45,10 @@ class HDBSCANForQlik:
         self.request_df = utils.request_df(request, row_template, col_headers)
         
         # Handle null value rows in the request dataset
-        self.NaT_df = self.request_df.loc[self.request_df.dim1.isnull()].copy()
+        self.NaN_df = self.request_df.loc[self.request_df.dim1.isnull()].copy()
         
-        # If such a row exists it will be sliced off and then added back to the response
-        if len(self.NaT_df) > 0:
+        # If null rows exist they will be sliced off and then added back to the response
+        if len(self.NaN_df) > 0:
             self.request_df = self.request_df.loc[self.request_df.dim1.notnull()]               
         
         # Get additional arguments from the 'kwargs' column in the request data
@@ -60,13 +56,17 @@ class HDBSCANForQlik:
         kwargs = self.request_df.loc[0, 'kwargs']
         self._set_params(kwargs)
         
-        # Set up an input Data Frame, excluding the arguments column
-        self.input_df = self.request_df.loc[:, self.request_df.difference(['kwargs'])]
+        # Additional information is printed to the terminal and logs if the paramater debug = true
+        if self.debug == 'true':
+            self._print_log(1)
         
-        # For the two_dims variant we pivot the data to change dim2 into columns
+        # Set up an input Data Frame, excluding the arguments column
+        self.input_df = self.request_df.loc[:, self.request_df.columns.difference(['kwargs'])]
+               
+        # For the two_dims variant we pivot the data to change dim2 into columns and with dim1 as the index
         if variant == "two_dims":
             self.input_df = self.input_df.pivot(index='dim1', columns='dim2')
-        # For the other two variants we set the index as the 'dim1' column
+        # For the other two variants we also set the index as the 'dim1' column
         else:
             self.input_df = self.input_df.set_index('dim1')
             
@@ -74,7 +74,10 @@ class HDBSCANForQlik:
             if variant == "standard":
                 self.input_df = pd.DataFrame([s.split(';') for r in self.input_df.values for s in r], index=self.input_df.index) 
                 self.input_df = self.input_df.apply(pd.to_numeric, errors='coerce')
-            
+        
+        # Consider if NaNs should be replaced with Zeros here
+        # self.input_df = self.input_df.fillna(0)
+        
         if self.debug == 'true':
             self._print_log(2)
     
@@ -99,14 +102,16 @@ class HDBSCANForQlik:
     def _set_params(self, kwargs):
         """
         Set input parameters based on the request.
-        Parameters implemented for the HDBSCAN() function are:  
-        Additional parameters used are: scaler, debug
+        Parameters implemented for the HDBSCAN() function are: 
+        Parameters implemented for preprocessing data are: scaler
+        Additional parameters used are: load_script, result_type, debug
         """
         
         # Set the row count in the original request
-        self.request_row_count = len(self.request_df) + len(self.NaT_df)
+        self.request_row_count = len(self.request_df) + len(self.NaN_df)
         
         # Set default values which will be used if arguments are not passed
+        self.load_script = False
         self.result_type = 'labels_'
         self.scaler = 'robust'
         self.debug = 'false'
@@ -131,6 +136,11 @@ class HDBSCANForQlik:
             
             # Make sure the key words are in lower case
             self.kwargs = {k.lower(): v for k, v in self.kwargs.items()}
+            
+            # Set the load_script parameter to determine the output format 
+            # Set to 'true' if calling the functions from the load script in the Qlik app
+            if 'load_script' in self.kwargs:
+                self.load_script = bool(self.kwargs['load_script'].lower())
             
             # Set the return type 
             # Valid values are: labels, probabilities, cluster_persistence, outlier_scores
@@ -186,7 +196,7 @@ class HDBSCANForQlik:
             # By default HDBSCAN* will not produce a single cluster.
             # Setting this to True will override this and allow single cluster results.
             if 'allow_single_cluster' in self.kwargs:
-                self.allow_single_cluster = bool(self.kwargs['allow_single_cluster'])
+                self.allow_single_cluster = bool(self.kwargs['allow_single_cluster'].lower())
             
             # There exist some interpretational differences between this HDBSCAN implementation 
             # and the original authors reference implementation in Java. 
@@ -251,9 +261,9 @@ class HDBSCANForQlik:
             sys.stdout.write("HDBSCAN parameters: {0}\n\n".format(self.hdbscan_kwargs))
             sys.stdout.write("REQUEST DATA FRAME: {0} rows x cols\n\n".format(self.request_df.shape))
             sys.stdout.write("{0} \n\n".format(self.request_df.to_string()))
-            if len(self.NaT_df) > 0:
-                sys.stdout.write("REQUEST NULL VALUES DATA FRAME: {0} rows x cols\n\n".format(self.NaT_df.shape))
-                sys.stdout.write("{0} \n\n".format(self.NaT_df.to_string()))
+            if len(self.NaN_df) > 0:
+                sys.stdout.write("REQUEST NULL VALUES DATA FRAME: {0} rows x cols\n\n".format(self.NaN_df.shape))
+                sys.stdout.write("{0} \n\n".format(self.NaN_df.to_string()))
             sys.stdout.write("INPUT DATA FRAME: {0} rows x cols\n\n".format(self.input_df.shape))
             sys.stdout.write("{} \n\n".format(self.input_df.to_string()))
                         
@@ -263,9 +273,9 @@ class HDBSCANForQlik:
                 f.write("HDBSCAN parameters: {0}\n\n".format(self.hdbscan_kwargs))
                 f.write("REQUEST DATA FRAME: {0} rows x cols\n\n".format(self.request_df.shape))
                 f.write("{0} \n\n".format(self.request_df.to_string()))
-                if len(self.NaT_df) > 0:
-                    f.write("REQUEST NULL VALUES DATA FRAME: {0} rows x cols\n\n".format(self.NaT_df.shape))
-                    f.write("{0} \n\n".format(self.NaT_df.to_string()))
+                if len(self.NaN_df) > 0:
+                    f.write("REQUEST NULL VALUES DATA FRAME: {0} rows x cols\n\n".format(self.NaN_df.shape))
+                    f.write("{0} \n\n".format(self.NaN_df.to_string()))
                 f.write("INPUT DATA FRAME: {0} rows x cols\n\n".format(self.input_df.shape))
                 f.write("{0} \n\n".format(self.input_df.to_string()))
         
