@@ -19,8 +19,8 @@ def _string_to_float(s):
 
 def request_df(request, row_template, col_headers):
     """
-    This function takes in a SSE Request together with a row template and column headers as lists of strings.
-    Returns a data frame for the request.
+    This function takes in a SSE request as a list together with a row template and column headers as lists of strings.
+    Returns a Data Frame for the request.
     e.g. request_df(request, ['strData', 'numData', 'strData'], ['dim1', 'measure', 'kwargs'])
     """
     
@@ -40,7 +40,7 @@ def request_df(request, row_template, col_headers):
 
 def fillna(df, method="zeros"):
     """
-    Fill empty values in a data frame with the chosen method.
+    Fill empty values in a Data Frame with the chosen method.
     Valid options for method are: zeros, mean, median, mode
     """
     
@@ -57,7 +57,7 @@ def fillna(df, method="zeros"):
     
 def scale(df, s="robust", **kwargs):
     """
-    Scale values in a Data Frame using the relevant sklearn preprocessing method
+    Scale values in a Data Frame using the relevant sklearn preprocessing method.
     Valid options for the scaler are: standard, minmax, maxabs, robust, quantile
     """
     
