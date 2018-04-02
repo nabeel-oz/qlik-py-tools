@@ -1,11 +1,14 @@
 import os
 import sys
-import time
 import string
 import numpy as np
 import pandas as pd
 from sklearn import preprocessing
 import ServerSideExtension_pb2 as SSE
+
+# Add Generated folder to module path.
+PARENT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.append(os.path.join(PARENT_DIR, 'generated'))
 
 def _string_to_float(s):
     """
