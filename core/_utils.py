@@ -58,16 +58,20 @@ def fillna(df, method="zeros"):
     else
         return df.fillna(0)
     
-def scale(df, s="robust", **kwargs):
+def scale(df, missing="zeros", scaler="robust", **kwargs):
     """
     Scale values in a Data Frame using the relevant sklearn preprocessing method.
     Valid options for the scaler are: standard, minmax, maxabs, robust, quantile
+    Missing values must be dealt with before the scaling is applied. 
+    Valid options specified through the missing parameter are: zeros, mean, median, mode
     """
     
     scalers = {'standard':'StandardScaler', 'minmax':'MinMaxScaler', 'maxabs':'MaxAbsScaler',\
                'robust':'RobustScaler', 'quantile':'QuantileTransformer'}
     
-    scaler = getattr(preprocessing, scalers[s])
-    scaler = scaler(**kwargs)
+    s = getattr(preprocessing, scalers[scaler])
+    s = s(**kwargs)
     
-    return scaler.fit_transform(df)
+    df = fillna(df, method=missing)
+    
+    return s.fit_transform(df)
