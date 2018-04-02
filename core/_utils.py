@@ -38,7 +38,24 @@ def request_df(request, row_template, col_headers):
     
     return pd.DataFrame(outer, columns=col_headers)
 
-def scale(df, s, **kwargs):
+def fillna(df, method="zeros"):
+    """
+    Fill empty values in a data frame with the chosen method.
+    Valid options for method are: zeros, mean, median, mode
+    """
+    
+    strategy = method.lower()
+    
+    if strategy == "mean":
+        return df.fillna(df.mean())
+    elif strategy == "median":
+        return df.fillna(df.median())
+    elif strategy == "mode":
+        return df.fillna(df.mode().iloc[0])
+    else
+        return df.fillna(0)
+    
+def scale(df, s="robust", **kwargs):
     """
     Scale values in a Data Frame using the relevant sklearn preprocessing method
     Valid options for the scaler are: standard, minmax, maxabs, robust, quantile
