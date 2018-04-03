@@ -98,7 +98,7 @@ class ExtensionService(SSE.ConnectorServicer):
         
         # Values are then structured as SSE.Rows
         # The response is then converted to a list
-        response_rows = response_rows.apply(lambda duals: SSE.Row(duals=duals)).tolist()        
+        response_rows = response_rows.apply(lambda duals: SSE.Row(duals=duals)).values.tolist()        
         
         # Iterate over bundled rows
         for request_rows in request_list:
@@ -128,7 +128,7 @@ class ExtensionService(SSE.ConnectorServicer):
         
         # Values are then structured as SSE.Rows
         # The response is then converted to a list
-        response_rows = response_rows.apply(lambda duals: SSE.Row(duals=duals)).tolist()        
+        response_rows = response_rows.apply(lambda duals: SSE.Row(duals=duals)).values.tolist()        
         
         # Iterate over bundled rows
         for request_rows in request_list:
@@ -157,7 +157,7 @@ class ExtensionService(SSE.ConnectorServicer):
         
         # Values are then structured as SSE.Rows
         # The response is then converted to a list
-        response_rows = response_rows.apply(lambda duals: SSE.Row(duals=duals)).tolist()   
+        response_rows = response_rows.apply(lambda duals: SSE.Row(duals=duals)).values.tolist()   
         
         # Iterate over bundled rows
         for request_rows in request_list:
