@@ -88,16 +88,16 @@ class ExtensionService(SSE.ConnectorServicer):
                        
         # Create an instance of the HDBSCANForQlik class
         # This will take the request data from Qlik and prepare it for clustering
-        clusterer = HDBSCANForQlik(request_list)
+        clusterer = HDBSCANForQlik(request_list, context)
         
-        # Calculate the clusters and store in a Pandas series
-        clusters = clusterer.cluster()
+        # Calculate the clusters and store in a Pandas series (or DataFrame in the case of a load script call)
+        clusters = clusterer.scan()
         
-        # Values in the series are converted to type SSE.Dual
+        # Values in the response object are converted to type SSE.Dual
         response_rows = clusters.apply(lambda result: iter([SSE.Dual(numData=result)]))
         
-        # Values in the series are converted to type SSE.Row
-        # The series is then converted to a list
+        # Values are then structured as SSE.Rows
+        # The response is then converted to a list
         response_rows = response_rows.apply(lambda duals: SSE.Row(duals=duals)).tolist()        
         
         # Iterate over bundled rows
@@ -118,16 +118,16 @@ class ExtensionService(SSE.ConnectorServicer):
                        
         # Create an instance of the HDBSCANForQlik class
         # This will take the request data from Qlik and prepare it for clustering
-        clusterer = HDBSCANForQlik(request_list, variant="two_dims")
+        clusterer = HDBSCANForQlik(request_list, context, variant="two_dims")
         
-        # Calculate the clusters and store in a Pandas series
-        clusters = clusterer.cluster()
+        # Calculate the clusters and store in a Pandas series (or DataFrame in the case of a load script call)
+        clusters = clusterer.scan()
         
-        # Values in the series are converted to type SSE.Dual
+        # Values in the response object are converted to type SSE.Dual
         response_rows = clusters.apply(lambda result: iter([SSE.Dual(numData=result)]))
         
-        # Values in the series are converted to type SSE.Row
-        # The series is then converted to a list
+        # Values are then structured as SSE.Rows
+        # The response is then converted to a list
         response_rows = response_rows.apply(lambda duals: SSE.Row(duals=duals)).tolist()        
         
         # Iterate over bundled rows
@@ -147,17 +147,17 @@ class ExtensionService(SSE.ConnectorServicer):
                        
         # Create an instance of the HDBSCANForQlik class
         # This will take the request data from Qlik and prepare it for clustering
-        clusterer = HDBSCANForQlik(request_list, variant="lat_long")
+        clusterer = HDBSCANForQlik(request_list, context, variant="lat_long")
         
-        # Calculate the clusters and store in a Pandas series
-        clusters = clusterer.cluster()
+        # Calculate the clusters and store in a Pandas series (or DataFrame in the case of a load script call)
+        clusters = clusterer.scan()
         
-        # Values in the series are converted to type SSE.Dual
+        # Values in the response object are converted to type SSE.Dual
         response_rows = clusters.apply(lambda result: iter([SSE.Dual(numData=result)]))
         
-        # Values in the series are converted to type SSE.Row
-        # The series is then converted to a list
-        response_rows = response_rows.apply(lambda duals: SSE.Row(duals=duals)).tolist()        
+        # Values are then structured as SSE.Rows
+        # The response is then converted to a list
+        response_rows = response_rows.apply(lambda duals: SSE.Row(duals=duals)).tolist()   
         
         # Iterate over bundled rows
         for request_rows in request_list:

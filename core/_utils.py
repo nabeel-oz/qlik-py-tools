@@ -46,14 +46,12 @@ def fillna(df, method="zeros"):
     Fill empty values in a Data Frame with the chosen method.
     Valid options for method are: zeros, mean, median, mode
     """
-    
-    strategy = method.lower()
-    
-    if strategy == "mean":
+
+    if method == "mean":
         return df.fillna(df.mean())
-    elif strategy == "median":
+    elif method == "median":
         return df.fillna(df.median())
-    elif strategy == "mode":
+    elif method == "mode":
         return df.fillna(df.mode().iloc[0])
     else
         return df.fillna(0)

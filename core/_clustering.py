@@ -20,16 +20,19 @@ class HDBSCANForQlik:
     # Counter used to name log files for instances of the class
     log_no = 0
     
-    def __init__(self, request, variant="standard"):
+    def __init__(self, request, context, variant="standard"):
         """
         Class initializer.
         :param request: an iterable sequence of RowData
+        :param context:
+        :param variant: a string to indicate the request format
         :Sets up the input data frame and parameters based on the request
         """
                
-        # Set the request and variant variables for this object instance
+        # Set the request, context and variant variables for this object instance
         self.request = request
-        self.variant = variant       
+        self.context = context
+        self.variant = variant
         
         if variant == "two_dims":
             row_template = ['strData', 'strData', 'numData', 'strData']
@@ -57,7 +60,7 @@ class HDBSCANForQlik:
         self._set_params(kwargs)
         
         # Additional information is printed to the terminal and logs if the paramater debug = true
-        if self.debug == 'true':
+        if self.debug:
             self._print_log(1)
         
         # Set up an input Data Frame, excluding the arguments column
@@ -75,13 +78,15 @@ class HDBSCANForQlik:
                 self.input_df = pd.DataFrame([s.split(';') for r in self.input_df.values for s in r], index=self.input_df.index) 
                 self.input_df = self.input_df.apply(pd.to_numeric, errors='coerce')
         
-        # Consider if NaNs should be replaced with Zeros here
-        # self.input_df = self.input_df.fillna(0)
+        # Finally we prepare the data for the clustering algorithm
+        # Empty values in input_df are replaced based on the 'missing' parameter.
+        # The values are then scaled based on the 'scale' parameter.
+        self.input_df = utils.scale(self.input_df, missing=self.missing, scaler=self.scaler, **self.scaler_kwargs)
         
-        if self.debug == 'true':
+        if self.debug:
             self._print_log(2)
     
-    def cluster(self):
+    def scan(self):
         """
         Calculate clusters using the HDBSCAN library.
         """
@@ -89,21 +94,35 @@ class HDBSCANForQlik:
         # Instantiate a HDSCAN object and fit the input data frame:
         self.clusterer = hdbscan.HDBSCAN(**self.hdbscan_kwargs)
         
+        # Scan for clusters
         self.clusterer.fit(self.input_df)
              
-        # Prepare the output
-        self.clusters = pd.Series(getattr(self.clusterer, self.result_type))
+        # Prepare the output Data Frame
+        self.response = pd.DataFrame(getattr(self.clusterer, self.result_type), index=input_df.index, columns=['result'])
+        self.response['dim1'] = input_df.index      
         
-        if self.debug == 'true':
-            self._print_log(4)
+        # Add the null value rows back to the response
+        self.response = self.response.append(pd.DataFrame([(np.NaN, np.NaN) for i in range(len(self.NaN_df))],\
+                                                          columns=self.response.columns))
         
-        return self.clusters
+        if self.debug:
+            self._print_log(3)
+        
+        # If the function was called through the load script we return a Data Frame
+        if self.load_script:
+            self._send_table_description()
+            
+            return self.response
+            
+        # If the function was called through a chart expression we return a Series
+        else:
+            return self.response.loc[:,'result']
     
     def _set_params(self, kwargs):
         """
         Set input parameters based on the request.
         Parameters implemented for the HDBSCAN() function are: 
-        Parameters implemented for preprocessing data are: scaler
+        Parameters implemented for preprocessing data are: missing, scaler
         Additional parameters used are: load_script, result_type, debug
         """
         
@@ -111,10 +130,14 @@ class HDBSCANForQlik:
         self.request_row_count = len(self.request_df) + len(self.NaN_df)
         
         # Set default values which will be used if arguments are not passed
+        
+        # SSE parameters:
         self.load_script = False
         self.result_type = 'labels_'
+        self.missing = 'zeros'
         self.scaler = 'robust'
-        self.debug = 'false'
+        self.debug = False
+        # HDBSCAN parameters:
         self.algorithm = None
         self.metric = None
         self.min_cluster_size = None
@@ -124,6 +147,21 @@ class HDBSCANForQlik:
         self.cluster_selection_method = None
         self.allow_single_cluster = None
         self.match_reference_implementation = None
+        # Standard scaler parameters:
+        self.with_mean = None
+        self.with_std = None
+        # MinMaxScaler scaler parameters:
+        self.feature_range = None
+        # Robust scaler parameters:
+        self.with_centering = None
+        self.with_scaling = None
+        self.quantile_range = None
+        # Quantile Transformer parameters:
+        self.n_quantiles = None
+        self.output_distribution = None
+        self.ignore_implicit_zeros = None
+        self.subsample = None
+        self.random_state = None
         
         # Set optional parameters
         
@@ -147,6 +185,11 @@ class HDBSCANForQlik:
             if 'return' in self.kwargs:
                 self.result_type = self.kwargs['return'].lower() + '_'
             
+            # Set the strategy for missing data
+            # Valid values are: zeros, mean, median, mode
+            if 'missing' in self.kwargs:
+                self.missing = self.kwargs['missing'].lower()
+            
             # Set the standardization strategy for the data
             # Valid values are: standard, minmax, maxabs, robust, quantile
             if 'scale' in self.kwargs:
@@ -155,9 +198,9 @@ class HDBSCANForQlik:
             # Set the debug option for generating execution logs
             # Valid values are: true, false
             if 'debug' in self.kwargs:
-                self.debug = self.kwargs['debug'].lower()
+                self.debug = bool(self.kwargs['debug'].lower())
             
-            # Set optional parameters for teh HDBSCAN algorithmn
+            # Set optional parameters for the HDBSCAN algorithmn
             # For documentation see here: https://hdbscan.readthedocs.io/en/latest/api.html#id20
             
             # Options are: best, generic, prims_kdtree, prims_balltree, boruvka_kdtree, boruvka_balltree
@@ -203,39 +246,102 @@ class HDBSCANForQlik:
             # Note that there is a performance cost for setting this to True.
             if 'match_reference_implementation' in self.kwargs:
                 self.match_reference_implementation = bool(self.kwargs['match_reference_implementation'])
+            
+            # Set optional parameters for the scaler functions
+            
+            # Parameters for the Standard scaler
+            # http://scikit-learn.org/stable/modules/generated/sklearn.preprocessing.StandardScaler.html
+            if self.scaler == 'standard':
+                if 'with_mean' in self.kwargs:
+                    self.with_mean = bool(self.kwargs['with_mean'].lower())
+                if 'with_std' in self.kwargs:
+                    self.with_std = bool(self.kwargs['with_std'].lower())
+            
+            # Parameters for the MinMax scaler
+            # http://scikit-learn.org/stable/modules/generated/sklearn.preprocessing.MinMaxScaler.html
+            if self.scaler == 'minmax':
+                if 'feature_range' in self.kwargs:
+                    self.feature_range = (int(self.kwargs['feature_range'][1]),int(self.kwargs['feature_range'][3]))
+            
+            # Parameters for the Robust scaler
+            # http://scikit-learn.org/stable/modules/generated/sklearn.preprocessing.RobustScaler.html
+            if self.scaler == 'robust':
+                if 'with_centering' in self.kwargs:
+                    self.with_centering = bool(self.kwargs['with_centering'].lower())
+                if 'with_scaling' in self.kwargs:
+                    self.with_scaling = bool(self.kwargs['with_scaling'].lower())
+                if 'quantile_range' in self.kwargs:
+                    self.quantile_range = ''.join(c for c in self.kwargs['quantile_range'] if c not in '()').split(',')
+                    self.quantile_range = (float(self.quantile_range[0]),float(self.quantile_range[1]))
+            
+            # Parameters for the Quantile Transformer
+            # http://scikit-learn.org/stable/modules/generated/sklearn.preprocessing.QuantileTransformer.html
+            if self.scaler == 'quantile':
+                if 'n_quantiles' in self.kwargs:
+                    self.n_quantiles = int(self.kwargs['n_quantiles'])
+                if 'output_distribution' in self.kwargs:
+                    self.output_distribution = self.kwargs['output_distribution'].lower()
+                if 'ignore_implicit_zeros' in self.kwargs:
+                    self.ignore_implicit_zeros = bool(self.kwargs['ignore_implicit_zeros'].lower())
+                if 'subsample' in self.kwargs:
+                    self.subsample = int(self.kwargs['subsample'])
+                if 'random_state' in self.kwargs:
+                    self.random_state = int(self.kwargs['random_state'])
         
-        # Create dictionary of arguments for the HDBSCAN() function
-        self.hdbscan_kwargs = {}
+        # Set up a list of possible key word arguments for the HDBSCAN() function
+        hdbscan_params = ['algorithm', 'metric', 'min_cluster_size', 'min_samples', 'p', 'alpha',\
+                          'cluster_selection_method', 'allow_single_cluster', 'match_reference_implementation']
         
-        # Populate the parameters in the dictionary:
+        # Create dictionary of key word arguments for the HDBSCAN() function
+        self.hdbscan_kwargs = self._populate_dict(hdbscan_params)
+               
+        # Set up a list of possible key word arguments for the sklearn preprocessing functions
+        scaler_params = ['with_mean', 'with_std', 'feature_range', 'with_centering', 'with_scaling',\
+                        'quantile_range', 'n_quantiles', 'output_distribution', 'ignore_implicit_zeros'\
+                        'subsample', 'random_state']
         
-        if self.algorithm is not None:
-            self.hdbscan_kwargs['algorithm'] = self.algorithm
+        # Create dictionary of key word arguments for the scaler functions
+        self.scaler_kwargs = self._populate_dict(scaler_params)
         
-        if self.metric is not None:
-            self.hdbscan_kwargs['metric'] = self.metric
+    def _populate_dict(self, params):
+        """
+        Populate a dictionary based on a list of parameters. 
+        The parameters should already exist in this object.
+        """
         
-        if self.min_cluster_size is not None:
-            self.hdbscan_kwargs['min_cluster_size'] = self.min_cluster_size
+        output_dict = {}
         
-        if self.min_samples is not None:
-            self.hdbscan_kwargs['min_samples'] = self.min_samples
+        for prop in params:
+            if getattr(self, prop) is not None:
+                output_dict[prop] = getattr(self, prop)
         
-        if self.p is not None:
-            self.hdbscan_kwargs['p'] = self.p
+        return output_dict
+    
+    def _send_table_description(self):
+        """
+        Send the table description to Qlik as meta data.
+        Only used when the SSE is called from the Qlik load script.
+        """
         
-        if self.alpha is not None:
-            self.hdbscan_kwargs['alpha'] = self.alpha
+        # Set up the table description to send as metadata to Qlik
+        self.table = SSE.TableDescription()
+        self.table.name = "ClusteringResults"
+
+        # Set up fields for the table
+        dim1 = table.fields.add()
+        dim1.name = "Dimension_as_str"
+        dim1.dataType = 0
+        label = table.fields.add()
+        label.name = self.result_type
+        dim1.dataType = 1
         
-        if self.cluster_selection_method is not None:
-            self.hdbscan_kwargs['cluster_selection_method'] = self.cluster_selection_method
+        if self.debug:
+            self._print_log(4)
         
-        if self.allow_single_cluster is not None:
-            self.hdbscan_kwargs['allow_single_cluster'] = self.allow_single_cluster
-        
-        if self.match_reference_implementation is not None:
-            self.hdbscan_kwargs['match_reference_implementation'] = self.match_reference_implementation
-        
+        # Send table description
+        table_header = (('qlik-tabledescription-bin', table.SerializeToString()),)
+        self.context.send_initial_metadata(table_header)
+    
     def _print_log(self, step):
         """
         Output useful information to stdout and the log file if debugging is required.
@@ -259,18 +365,20 @@ class HDBSCANForQlik:
             # Output the request and input data frames to the terminal
             sys.stdout.write("Additional parameters: {0}\n\n".format(self.kwargs))
             sys.stdout.write("HDBSCAN parameters: {0}\n\n".format(self.hdbscan_kwargs))
+            sys.stdout.write("{0} scaler parameters: {1}\n\n".format(self.scaler.capitalize(), self.scaler_kwargs))
             sys.stdout.write("REQUEST DATA FRAME: {0} rows x cols\n\n".format(self.request_df.shape))
             sys.stdout.write("{0} \n\n".format(self.request_df.to_string()))
             if len(self.NaN_df) > 0:
                 sys.stdout.write("REQUEST NULL VALUES DATA FRAME: {0} rows x cols\n\n".format(self.NaN_df.shape))
                 sys.stdout.write("{0} \n\n".format(self.NaN_df.to_string()))
             sys.stdout.write("INPUT DATA FRAME: {0} rows x cols\n\n".format(self.input_df.shape))
-            sys.stdout.write("{} \n\n".format(self.input_df.to_string()))
+            sys.stdout.write("{0} \n\n".format(self.input_df.to_string()))
                         
             # Output the request and input data frames to the log file 
             with open(self.logfile,'a') as f:
                 f.write("Additional parameters: {0}\n\n".format(self.kwargs))
                 f.write("HDBSCAN parameters: {0}\n\n".format(self.hdbscan_kwargs))
+                f.write("{0} scaler parameters: {1}\n\n".format(self.scaler.capitalize(), self.scaler_kwargs))
                 f.write("REQUEST DATA FRAME: {0} rows x cols\n\n".format(self.request_df.shape))
                 f.write("{0} \n\n".format(self.request_df.to_string()))
                 if len(self.NaN_df) > 0:
@@ -281,11 +389,20 @@ class HDBSCANForQlik:
         
         elif step == 3:         
             # Print the output series to the terminal
-            sys.stdout.write("\nCLUSTERING RESULTS: \n\n")
-            sys.stdout.write("\n{0}\n\n".format(self.clusters.to_string()))
+            sys.stdout.write("\nCLUSTERING RESULTS: {0} rows x cols\n\n".format(self.response.shape))
+            sys.stdout.write("{0} \n\n".format(self.response.to_string()))
             
             # Write the output data frame and returned series to the log file
             with open(self.logfile,'a') as f:
-                f.stdout.write("\nCLUSTERING RESULTS: \n\n")
-                f.stdout.write("\n{0}\n\n".format(self.clusters.to_string()))
+                f.write("\nCLUSTERING RESULTS: {0} rows x cols\n\n".format(self.response.shape))
+                f.write("{0} \n\n".format(self.response.to_string()))
+        
+        elif step == 4:
+            # Print the table description if the call was made from the load script
+            sys.stdout.write("\nTABLE DESCRIPTION SENT TO QLIK:\n\n{0} \n\n".format(self.table))
+            
+            # Write the table description to the log file
+            with open(self.logfile,'a') as f:
+                f.write("\nTABLE DESCRIPTION SENT TO QLIK:\n\n{0} \n\n".format(self.table))
+            
     
