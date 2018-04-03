@@ -329,11 +329,11 @@ class HDBSCANForQlik:
 
         # Set up fields for the table
         dim1 = table.fields.add()
-        dim1.name = "Dimension_as_str"
+        dim1.name = "dim_as_str"
         dim1.dataType = 0
         label = table.fields.add()
         label.name = self.result_type
-        dim1.dataType = 1
+        label.dataType = 1
         
         if self.debug:
             self._print_log(4)
