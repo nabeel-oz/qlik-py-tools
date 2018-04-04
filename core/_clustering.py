@@ -78,10 +78,25 @@ class HDBSCANForQlik:
                 self.input_df = pd.DataFrame([s.split(';') for r in self.input_df.values for s in r], index=self.input_df.index) 
                 self.input_df = self.input_df.apply(pd.to_numeric, errors='coerce')
         
-        # Finally we prepare the data for the clustering algorithm
-        # Empty values in input_df are replaced based on the 'missing' parameter.
-        # The values are then scaled based on the 'scale' parameter.
-        self.input_df = utils.scale(self.input_df, missing=self.missing, scaler=self.scaler, **self.scaler_kwargs)
+        # Finally we prepare the data for the clustering algorithm:
+        
+        # If scaling does not need to be applied, we just fill in missing values
+        if self.scaler == "none":
+            self.input_df = utils.fillna(self.input_df, method=self.missing)
+        # Otherwise we apply strategies for both filling missing values and then scaling the data
+        else:
+            self.input_df = utils.scale(self.input_df, missing=self.missing, scaler=self.scaler, **self.scaler_kwargs)
+        
+        # For the lat_long variant we do some additional transformations
+        if self.variant == "lat_long":
+            # The input values are converted to radians
+            self.input_df = self.input_df.apply(np.radians)
+            
+            # And we format the coordinates as a [lat, long] pair
+            self.input_df.loc[:,'lat_long'] = self.input_df.apply(lambda x : [x[0],x[1]], axis=1)
+            
+            # Finally we drop the lat and long columns and will only use the new column for clustering
+            self.input_df = self.input_df.drop(columns=['lat', 'long'])
         
         if self.debug:
             self._print_log(2)
@@ -99,7 +114,8 @@ class HDBSCANForQlik:
              
         # Prepare the output Data Frame
         self.response = pd.DataFrame(getattr(self.clusterer, self.result_type), index=input_df.index, columns=['result'])
-        self.response['dim1'] = input_df.index      
+        self.response['dim1'] = input_df.index
+        self.response = self.response.loc[:, ['dim1', 'result']]
         
         # Add the null value rows back to the response
         self.response = self.response.append(pd.DataFrame([(np.NaN, np.NaN) for i in range(len(self.NaN_df))],\
@@ -121,9 +137,16 @@ class HDBSCANForQlik:
     def _set_params(self, kwargs):
         """
         Set input parameters based on the request.
-        Parameters implemented for the HDBSCAN() function are: 
-        Parameters implemented for preprocessing data are: missing, scaler
-        Additional parameters used are: load_script, result_type, debug
+        :
+        :Parameters implemented for the HDBSCAN() function are: algorithm, metric, min_cluster_size, min_samples,
+        :p, alpha, cluster_selection_method, allow_single_cluster, match_reference_implementation.
+        :More information here: https://hdbscan.readthedocs.io/en/latest/api.html#hdbscan
+        :
+        :Scaler types implemented for preprocessing data are: StandardScaler, MinMaxScaler, MaxAbsScaler,
+        :RobustScaler and QuantileTransformer.
+        :More information here: http://scikit-learn.org/stable/modules/preprocessing.html
+        :
+        :Additional parameters used are: load_script, result_type, missing, scaler, debug
         """
         
         # Set the row count in the original request
@@ -163,6 +186,11 @@ class HDBSCANForQlik:
         self.subsample = None
         self.random_state = None
         
+        # Adjust default options if variant is lat_long
+        if self.variant == "lat_long":
+            self.scaler = "none"
+            self.metric = "haversine"
+        
         # Set optional parameters
         
         # If the key word arguments were included in the request, get the parameters and values
@@ -191,9 +219,9 @@ class HDBSCANForQlik:
                 self.missing = self.kwargs['missing'].lower()
             
             # Set the standardization strategy for the data
-            # Valid values are: standard, minmax, maxabs, robust, quantile
-            if 'scale' in self.kwargs:
-                self.scaler = self.kwargs['scale'].lower()
+            # Valid values are: standard, minmax, maxabs, robust, quantile, none
+            if 'scaler' in self.kwargs:
+                self.scaler = self.kwargs['scaler'].lower()
             
             # Set the debug option for generating execution logs
             # Valid values are: true, false
@@ -210,7 +238,8 @@ class HDBSCANForQlik:
             
             # The metric to use when calculating distance between instances in a feature array.
             # More information here: https://hdbscan.readthedocs.io/en/latest/basic_hdbscan.html#what-about-different-metrics
-            # Default is 'euclidean'.
+            # And here: http://scikit-learn.org/stable/modules/generated/sklearn.neighbors.DistanceMetric.html
+            # Default is 'euclidean' for 'standard' and 'two_dims' variants, and 'haversine' for the lat_long variant.
             if 'metric' in self.kwargs:
                 self.metric = self.kwargs['metric'].lower()
             
@@ -261,7 +290,8 @@ class HDBSCANForQlik:
             # http://scikit-learn.org/stable/modules/generated/sklearn.preprocessing.MinMaxScaler.html
             if self.scaler == 'minmax':
                 if 'feature_range' in self.kwargs:
-                    self.feature_range = (int(self.kwargs['feature_range'][1]),int(self.kwargs['feature_range'][3]))
+                    self.feature_range = ''.join(c for c in self.kwargs['feature_range'] if c not in '()').split(';')
+                    self.feature_range = (int(self.feature_range[0]),int(self.feature_range[1]))
             
             # Parameters for the Robust scaler
             # http://scikit-learn.org/stable/modules/generated/sklearn.preprocessing.RobustScaler.html
@@ -271,7 +301,7 @@ class HDBSCANForQlik:
                 if 'with_scaling' in self.kwargs:
                     self.with_scaling = bool(self.kwargs['with_scaling'].lower())
                 if 'quantile_range' in self.kwargs:
-                    self.quantile_range = ''.join(c for c in self.kwargs['quantile_range'] if c not in '()').split(',')
+                    self.quantile_range = ''.join(c for c in self.kwargs['quantile_range'] if c not in '()').split(';')
                     self.quantile_range = (float(self.quantile_range[0]),float(self.quantile_range[1]))
             
             # Parameters for the Quantile Transformer
@@ -326,26 +356,23 @@ class HDBSCANForQlik:
         # Set up the table description to send as metadata to Qlik
         self.table = SSE.TableDescription()
         self.table.name = "ClusteringResults"
+        self.table.numberOfRows = len(self.response)
 
         # Set up fields for the table
-        dim1 = table.fields.add()
-        dim1.name = "dim_as_str"
-        dim1.dataType = 0
-        label = table.fields.add()
-        label.name = self.result_type
-        label.dataType = 1
+        self.table.fields.add(name="dim_as_str", dataType=0)
+        self.table.fields.add(name=self.result_type[:-1], dataType=1)
         
         if self.debug:
             self._print_log(4)
         
         # Send table description
-        table_header = (('qlik-tabledescription-bin', table.SerializeToString()),)
+        table_header = (('qlik-tabledescription-bin', self.table.SerializeToString()),)
         self.context.send_initial_metadata(table_header)
     
     def _print_log(self, step):
         """
         Output useful information to stdout and the log file if debugging is required.
-        step: Print the corresponding step in the log
+        :step: Print the corresponding step in the log
         """
         
         if step == 1:
