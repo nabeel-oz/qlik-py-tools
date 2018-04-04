@@ -53,7 +53,7 @@ def fillna(df, method="zeros"):
         return df.fillna(df.median())
     elif method == "mode":
         return df.fillna(df.mode().iloc[0])
-    else
+    else:
         return df.fillna(0)
     
 def scale(df, missing="zeros", scaler="robust", **kwargs):
