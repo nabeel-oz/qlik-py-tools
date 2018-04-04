@@ -113,8 +113,8 @@ class HDBSCANForQlik:
         self.clusterer.fit(self.input_df)
              
         # Prepare the output Data Frame
-        self.response = pd.DataFrame(getattr(self.clusterer, self.result_type), index=input_df.index, columns=['result'])
-        self.response['dim1'] = input_df.index
+        self.response = pd.DataFrame(getattr(self.clusterer, self.result_type), index=self.input_df.index, columns=['result'])
+        self.response['dim1'] = self.input_df.index
         self.response = self.response.loc[:, ['dim1', 'result']]
         
         # Add the null value rows back to the response
@@ -327,7 +327,7 @@ class HDBSCANForQlik:
                
         # Set up a list of possible key word arguments for the sklearn preprocessing functions
         scaler_params = ['with_mean', 'with_std', 'feature_range', 'with_centering', 'with_scaling',\
-                        'quantile_range', 'n_quantiles', 'output_distribution', 'ignore_implicit_zeros'\
+                        'quantile_range', 'n_quantiles', 'output_distribution', 'ignore_implicit_zeros',\
                         'subsample', 'random_state']
         
         # Create dictionary of key word arguments for the scaler functions
@@ -390,7 +390,7 @@ class HDBSCANForQlik:
         
         elif step == 2:
             # Output the request and input data frames to the terminal
-            sys.stdout.write("Additional parameters: {0}\n\n".format(self.kwargs))
+            sys.stdout.write("Key word arguments: {0}\n\n".format(self.kwargs))
             sys.stdout.write("HDBSCAN parameters: {0}\n\n".format(self.hdbscan_kwargs))
             sys.stdout.write("{0} scaler parameters: {1}\n\n".format(self.scaler.capitalize(), self.scaler_kwargs))
             sys.stdout.write("REQUEST DATA FRAME: {0} rows x cols\n\n".format(self.request_df.shape))
@@ -403,7 +403,7 @@ class HDBSCANForQlik:
                         
             # Output the request and input data frames to the log file 
             with open(self.logfile,'a') as f:
-                f.write("Additional parameters: {0}\n\n".format(self.kwargs))
+                f.write("Key word arguments: {0}\n\n".format(self.kwargs))
                 f.write("HDBSCAN parameters: {0}\n\n".format(self.hdbscan_kwargs))
                 f.write("{0} scaler parameters: {1}\n\n".format(self.scaler.capitalize(), self.scaler_kwargs))
                 f.write("REQUEST DATA FRAME: {0} rows x cols\n\n".format(self.request_df.shape))

@@ -22,7 +22,7 @@ from _prophet_forecast import ProphetForQlik
 from _clustering import HDBSCANForQlik
 
 # Set the default port for this SSE Extension
-_DEFAULT_PORT = '50054'
+_DEFAULT_PORT = '50055'
 
 _ONE_DAY_IN_SECONDS = 60 * 60 * 24
 _MINFLOAT = float('-inf')
@@ -93,8 +93,16 @@ class ExtensionService(SSE.ConnectorServicer):
         # Calculate the clusters and store in a Pandas series (or DataFrame in the case of a load script call)
         clusters = clusterer.scan()
         
-        # Values in the response object are converted to type SSE.Dual
-        response_rows = clusters.apply(lambda result: iter([SSE.Dual(numData=result)]))
+        if isinstance(clusters, pd.DataFrame):
+            # If the output is a dataframe the columns returned will be ['dim1', 'result']
+            response_rows = pd.DataFrame(columns=clusters.columns)
+            
+            # Values in these columns are converted to type SSE.Dual
+            response_rows.loc[:,'dim1'] = clusters.loc[:,'dim1'].apply(lambda s: iter([SSE.Dual(strData=s)]))
+            response_rows.loc[:,'result'] = clusters.loc[:,'result'].apply(lambda n: iter([SSE.Dual(numData=n)]))
+        else:
+            # Values in the response object are converted to type SSE.Dual
+            response_rows = clusters.apply(lambda n: iter([SSE.Dual(numData=n)]))
         
         # Values are then structured as SSE.Rows
         # The response is then converted to a list
@@ -123,8 +131,16 @@ class ExtensionService(SSE.ConnectorServicer):
         # Calculate the clusters and store in a Pandas series (or DataFrame in the case of a load script call)
         clusters = clusterer.scan()
         
-        # Values in the response object are converted to type SSE.Dual
-        response_rows = clusters.apply(lambda result: iter([SSE.Dual(numData=result)]))
+        if isinstance(clusters, pd.DataFrame):
+            # If the output is a dataframe the columns returned will be ['dim1', 'result']
+            response_rows = pd.DataFrame(columns=clusters.columns)
+            
+            # Values in these columns are converted to type SSE.Dual
+            response_rows.loc[:,'dim1'] = clusters.loc[:,'dim1'].apply(lambda s: iter([SSE.Dual(strData=s)]))
+            response_rows.loc[:,'result'] = clusters.loc[:,'result'].apply(lambda n: iter([SSE.Dual(numData=n)]))
+        else:
+            # Values in the response object are converted to type SSE.Dual
+            response_rows = clusters.apply(lambda n: iter([SSE.Dual(numData=n)]))
         
         # Values are then structured as SSE.Rows
         # The response is then converted to a list
@@ -152,8 +168,16 @@ class ExtensionService(SSE.ConnectorServicer):
         # Calculate the clusters and store in a Pandas series (or DataFrame in the case of a load script call)
         clusters = clusterer.scan()
         
-        # Values in the response object are converted to type SSE.Dual
-        response_rows = clusters.apply(lambda result: iter([SSE.Dual(numData=result)]))
+        if isinstance(clusters, pd.DataFrame):
+            # If the output is a dataframe the columns returned will be ['dim1', 'result']
+            response_rows = pd.DataFrame(columns=clusters.columns)
+            
+            # Values in these columns are converted to type SSE.Dual
+            response_rows.loc[:,'dim1'] = clusters.loc[:,'dim1'].apply(lambda s: iter([SSE.Dual(strData=s)]))
+            response_rows.loc[:,'result'] = clusters.loc[:,'result'].apply(lambda n: iter([SSE.Dual(numData=n)]))
+        else:
+            # Values in the response object are converted to type SSE.Dual
+            response_rows = clusters.apply(lambda n: iter([SSE.Dual(numData=n)]))
         
         # Values are then structured as SSE.Rows
         # The response is then converted to a list

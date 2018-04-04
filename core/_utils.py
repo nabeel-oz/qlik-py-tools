@@ -71,5 +71,6 @@ def scale(df, missing="zeros", scaler="robust", **kwargs):
     s = s(**kwargs)
     
     df = fillna(df, method=missing)
+    df = pd.DataFrame(s.fit_transform(df), index=df.index, columns=df.columns)
     
-    return s.fit_transform(df)
+    return df
