@@ -77,8 +77,8 @@ class ExtensionService(SSE.ConnectorServicer):
         """
         Look for clusters within a dimension using the given features. Scalar function.
         Three variants are implemented:
-        :0: one dimension and a string of features.
-        :1: two dimensions and one measure. This will only work when used in the load script.
+        :0: one dimension and a string of numeric features.
+        :1: two dimensions and one measure. This will only work when used in the Qlik load script.
         :2: one dimension, the latitude and longitude.
         :
         :param request: an iterable sequence of RowData
@@ -92,19 +92,20 @@ class ExtensionService(SSE.ConnectorServicer):
         
         # Get the function id from the header to determine the variant being called
         function = ExtensionService._get_function_id(context)
+               
+        if function == 0:
+            # The standard variant takes in one dimension and a string of semi-colon separated features.
+            variant = "standard"
+        elif function == 1:
+            # In the second variant features for clustering are produced by pivoting the measure for the second dimension.
+            variant = "two_dims"
+        elif function == 2:
+            # The third variant if for finding clusters in geospatial coordinates.
+            variant = "lat_long"
         
         # Create an instance of the HDBSCANForQlik class
         # This will take the request data from Qlik and prepare it for clustering
-        
-        if function == 0:
-            # The standard variant takes in one dimension and a string of semi-colon separated features.
-            clusterer = HDBSCANForQlik(request_list, context)
-        elif function == 1:
-            # In the second variant features for clustering are produced by pivoting the data for the second dimension.
-            clusterer = HDBSCANForQlik(request_list, context, variant="two_dims")
-        elif function == 2:
-            # The third variant if for finding clusters in geospatial coordinates.
-            clusterer = HDBSCANForQlik(request_list, context, variant="lat_long")
+        clusterer = HDBSCANForQlik(request_list, context, variant=variant)
         
         # Calculate the clusters and store in a Pandas series (or DataFrame in the case of a load script call)
         clusters = clusterer.scan()
