@@ -58,8 +58,8 @@ class ExtensionService(SSE.ConnectorServicer):
         """
         return {
             0: '_cluster',
-            1: '_cluster_by_dim',
-            2: '_cluster_geo',
+            1: '_cluster',
+            2: '_cluster',
             3: '_correlation',
             4: '_correlation',
             5: '_prophet',
@@ -76,7 +76,11 @@ class ExtensionService(SSE.ConnectorServicer):
     def _cluster(request, context):
         """
         Look for clusters within a dimension using the given features. Scalar function.
-        This variant takes in one dimension and a string of features.
+        Three variants are implemented:
+        :0: one dimension and a string of features.
+        :1: two dimensions and one measure. This will only work when used in the load script.
+        :2: one dimension, the latitude and longitude.
+        :
         :param request: an iterable sequence of RowData
         :param context:
         :return: the clustering classification for each row
@@ -85,108 +89,44 @@ class ExtensionService(SSE.ConnectorServicer):
         """
         # Get a list from the generator object so that it can be iterated over multiple times
         request_list = [request_rows for request_rows in request]
-                       
+        
+        # Get the function id from the header to determine the variant being called
+        function = ExtensionService._get_function_id(context)
+        
         # Create an instance of the HDBSCANForQlik class
         # This will take the request data from Qlik and prepare it for clustering
-        clusterer = HDBSCANForQlik(request_list, context)
+        
+        if function == 0:
+            # The standard variant takes in one dimension and a string of semi-colon separated features.
+            clusterer = HDBSCANForQlik(request_list, context)
+        elif function == 1:
+            # In the second variant features for clustering are produced by pivoting the data for the second dimension.
+            clusterer = HDBSCANForQlik(request_list, context, variant="two_dims")
+        elif function == 2:
+            # The third variant if for finding clusters in geospatial coordinates.
+            clusterer = HDBSCANForQlik(request_list, context, variant="lat_long")
         
         # Calculate the clusters and store in a Pandas series (or DataFrame in the case of a load script call)
         clusters = clusterer.scan()
         
-        if isinstance(clusters, pd.DataFrame):
-            # If the output is a dataframe the columns returned will be ['dim1', 'result']
-            response_rows = pd.DataFrame(columns=clusters.columns)
-            
-            # Values in these columns are converted to type SSE.Dual
-            response_rows.loc[:,'dim1'] = clusters.loc[:,'dim1'].apply(lambda s: iter([SSE.Dual(strData=s)]))
-            response_rows.loc[:,'result'] = clusters.loc[:,'result'].apply(lambda n: iter([SSE.Dual(numData=n)]))
+        # Check if the response is a DataFrame. 
+        # This occurs when the load_script=true argument is passed in the Qlik expression.
+        response_is_df = isinstance(clusters, pd.DataFrame)
+        
+        # Convert the response to a list of rows
+        clusters = clusters.values.tolist()
+        
+        # We convert values to type SSE.Dual, and group columns into a iterable
+        if response_is_df:
+            response_rows = [iter([SSE.Dual(strData=row[0]),SSE.Dual(numData=row[1])]) for row in clusters]
         else:
-            # Values in the response object are converted to type SSE.Dual
-            response_rows = clusters.apply(lambda n: iter([SSE.Dual(numData=n)]))
+            response_rows = [iter([SSE.Dual(numData=row)]) for row in clusters]
         
         # Values are then structured as SSE.Rows
-        # The response is then converted to a list
-        response_rows = response_rows.apply(lambda duals: SSE.Row(duals=duals)).values.tolist()        
+        response_rows = [SSE.Row(duals=duals) for duals in response_rows]      
         
-        # Iterate over bundled rows
-        for request_rows in request_list:
-            # Yield Row data as Bundled rows
-            yield SSE.BundledRows(rows=response_rows)
-    
-    @staticmethod
-    def _cluster_by_dim(request, context):
-        """
-        Look for clusters within a dimension using the given features. Scalar function.
-        This variant can only be used in the load script, not in chart expressions.
-        It takes in two dimensions and one measure.
-        Features for the clustering are produced by pivoting the data for the second dimension.
-        """
-        # Get a list from the generator object so that it can be iterated over multiple times
-        request_list = [request_rows for request_rows in request]
-                       
-        # Create an instance of the HDBSCANForQlik class
-        # This will take the request data from Qlik and prepare it for clustering
-        clusterer = HDBSCANForQlik(request_list, context, variant="two_dims")
-        
-        # Calculate the clusters and store in a Pandas series (or DataFrame in the case of a load script call)
-        clusters = clusterer.scan()
-        
-        if isinstance(clusters, pd.DataFrame):
-            # If the output is a dataframe the columns returned will be ['dim1', 'result']
-            response_rows = pd.DataFrame(columns=clusters.columns)
-            
-            # Values in these columns are converted to type SSE.Dual
-            response_rows.loc[:,'dim1'] = clusters.loc[:,'dim1'].apply(lambda s: iter([SSE.Dual(strData=s)]))
-            response_rows.loc[:,'result'] = clusters.loc[:,'result'].apply(lambda n: iter([SSE.Dual(numData=n)]))
-        else:
-            # Values in the response object are converted to type SSE.Dual
-            response_rows = clusters.apply(lambda n: iter([SSE.Dual(numData=n)]))
-        
-        # Values are then structured as SSE.Rows
-        # The response is then converted to a list
-        response_rows = response_rows.apply(lambda duals: SSE.Row(duals=duals)).values.tolist()        
-        
-        # Iterate over bundled rows
-        for request_rows in request_list:
-            # Yield Row data as Bundled rows
-            yield SSE.BundledRows(rows=response_rows)
-    
-    @staticmethod
-    def _cluster_geo(request, context):
-        """
-        Look for clusters using geospatial coordinates. Scalar function.
-        This variant can only be used when latitude and longitude fields are avaialble.
-        It takes in one dimension, the latitude and longitude.
-        """
-        # Get a list from the generator object so that it can be iterated over multiple times
-        request_list = [request_rows for request_rows in request]
-                       
-        # Create an instance of the HDBSCANForQlik class
-        # This will take the request data from Qlik and prepare it for clustering
-        clusterer = HDBSCANForQlik(request_list, context, variant="lat_long")
-        
-        # Calculate the clusters and store in a Pandas series (or DataFrame in the case of a load script call)
-        clusters = clusterer.scan()
-        
-        if isinstance(clusters, pd.DataFrame):
-            # If the output is a dataframe the columns returned will be ['dim1', 'result']
-            response_rows = pd.DataFrame(columns=clusters.columns)
-            
-            # Values in these columns are converted to type SSE.Dual
-            response_rows.loc[:,'dim1'] = clusters.loc[:,'dim1'].apply(lambda s: iter([SSE.Dual(strData=s)]))
-            response_rows.loc[:,'result'] = clusters.loc[:,'result'].apply(lambda n: iter([SSE.Dual(numData=n)]))
-        else:
-            # Values in the response object are converted to type SSE.Dual
-            response_rows = clusters.apply(lambda n: iter([SSE.Dual(numData=n)]))
-        
-        # Values are then structured as SSE.Rows
-        # The response is then converted to a list
-        response_rows = response_rows.apply(lambda duals: SSE.Row(duals=duals)).values.tolist()   
-        
-        # Iterate over bundled rows
-        for request_rows in request_list:
-            # Yield Row data as Bundled rows
-            yield SSE.BundledRows(rows=response_rows)
+        # Yield Row data as Bundled rows
+        yield SSE.BundledRows(rows=response_rows)
     
     @staticmethod
     def _correlation(request, context):

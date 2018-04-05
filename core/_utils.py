@@ -20,14 +20,14 @@ def _string_to_float(s):
     except ValueError:
         return None
 
-def request_df(request, row_template, col_headers):
+def request_df(request_list, row_template, col_headers):
     """
     This function takes in a SSE request as a list together with a row template and column headers as lists of strings.
     Returns a Data Frame for the request.
-    e.g. request_df(request, ['strData', 'numData', 'strData'], ['dim1', 'measure', 'kwargs'])
+    e.g. request_df(request_list, ['strData', 'numData', 'strData'], ['dim1', 'measure', 'kwargs'])
     """
     
-    rows = [row for request_rows in request for row in request_rows.rows]
+    rows = [row for request_rows in request_list for row in request_rows.rows]
     outer = []
     
     for i in range(len(rows)):

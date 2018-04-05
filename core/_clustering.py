@@ -2,15 +2,19 @@ import os
 import sys
 import time
 import string
+import locale
 import numpy as np
 import pandas as pd
 import hdbscan
 import _utils as utils
 import ServerSideExtension_pb2 as SSE
 
-# Add Generated folder to module path.
+# Add Generated folder to module path
 PARENT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.append(os.path.join(PARENT_DIR, 'generated'))
+
+# Set the locale for number formatting based on user settings
+locale.setlocale(locale.LC_NUMERIC, '')
 
 class HDBSCANForQlik:
     """
@@ -48,11 +52,11 @@ class HDBSCANForQlik:
         self.request_df = utils.request_df(request, row_template, col_headers)
         
         # Handle null value rows in the request dataset
-        self.NaN_df = self.request_df.loc[self.request_df.dim1.isnull()].copy()
+        self.NaN_df = self.request_df.loc[self.request_df['dim1'].str.len() == 0].copy()
         
         # If null rows exist they will be sliced off and then added back to the response
         if len(self.NaN_df) > 0:
-            self.request_df = self.request_df.loc[self.request_df.dim1.notnull()]               
+            self.request_df = self.request_df.loc[self.request_df['dim1'].str.len() != 0]               
         
         # Get additional arguments from the 'kwargs' column in the request data
         # Arguments should take the form of a comma separated string: 'arg1=value1, arg2=value2'
@@ -72,11 +76,13 @@ class HDBSCANForQlik:
         # For the other two variants we also set the index as the 'dim1' column
         else:
             self.input_df = self.input_df.set_index('dim1')
-            
-            # For the standard variant we split the measures string into multiple columns and make these values numeric
+               
+            # For the standard variant we split the measures string into multiple columns and make the values numeric
             if variant == "standard":
-                self.input_df = pd.DataFrame([s.split(';') for r in self.input_df.values for s in r], index=self.input_df.index) 
-                self.input_df = self.input_df.apply(pd.to_numeric, errors='coerce')
+                self.input_df = pd.DataFrame([s.split(';') for r in self.input_df.values for s in r], index=self.input_df.index)
+        
+                # Convert strings to numbers using locale settings
+                self.input_df = self.input_df.applymap(lambda s: locale.atof(s) if s else np.NaN)
         
         # Finally we prepare the data for the clustering algorithm:
         
@@ -186,8 +192,12 @@ class HDBSCANForQlik:
         self.subsample = None
         self.random_state = None
         
+        # Adjust default options if variant is two_dims
+        if self.variant == "two_dims":
+            self.load_script = True
+        
         # Adjust default options if variant is lat_long
-        if self.variant == "lat_long":
+        elif self.variant == "lat_long":
             self.scaler = "none"
             self.metric = "haversine"
         
@@ -392,7 +402,10 @@ class HDBSCANForQlik:
             # Output the request and input data frames to the terminal
             sys.stdout.write("Key word arguments: {0}\n\n".format(self.kwargs))
             sys.stdout.write("HDBSCAN parameters: {0}\n\n".format(self.hdbscan_kwargs))
-            sys.stdout.write("{0} scaler parameters: {1}\n\n".format(self.scaler.capitalize(), self.scaler_kwargs))
+            if self.scaler == "none":
+                sys.stdout.write("No scaling applied\n\n")
+            else:
+                sys.stdout.write("{0} scaler parameters: {1}\n\n".format(self.scaler.capitalize(), self.scaler_kwargs))
             sys.stdout.write("REQUEST DATA FRAME: {0} rows x cols\n\n".format(self.request_df.shape))
             sys.stdout.write("{0} \n\n".format(self.request_df.to_string()))
             if len(self.NaN_df) > 0:
@@ -405,7 +418,10 @@ class HDBSCANForQlik:
             with open(self.logfile,'a') as f:
                 f.write("Key word arguments: {0}\n\n".format(self.kwargs))
                 f.write("HDBSCAN parameters: {0}\n\n".format(self.hdbscan_kwargs))
-                f.write("{0} scaler parameters: {1}\n\n".format(self.scaler.capitalize(), self.scaler_kwargs))
+                if self.scaler == "none":
+                    f.write("No scaling applied\n\n")
+                else:
+                    f.write("{0} scaler parameters: {1}\n\n".format(self.scaler.capitalize(), self.scaler_kwargs))
                 f.write("REQUEST DATA FRAME: {0} rows x cols\n\n".format(self.request_df.shape))
                 f.write("{0} \n\n".format(self.request_df.to_string()))
                 if len(self.NaN_df) > 0:
