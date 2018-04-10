@@ -40,23 +40,23 @@ class HDBSCANForQlik:
         
         if variant == "two_dims":
             row_template = ['strData', 'strData', 'numData', 'strData']
-            col_headers = ['dim1', 'dim2', 'measure', 'kwargs']
+            col_headers = ['key', 'dim', 'measure', 'kwargs']
         elif variant == "lat_long":
             row_template = ['strData', 'numData', 'numData', 'strData']
-            col_headers = ['dim1', 'lat', 'long', 'kwargs']
+            col_headers = ['key', 'lat', 'long', 'kwargs']
         else:
             row_template = ['strData', 'strData', 'strData']
-            col_headers = ['dim1', 'measures', 'kwargs']
+            col_headers = ['key', 'measures', 'kwargs']
         
         # Create a Pandas Data Frame for the request data
         self.request_df = utils.request_df(request, row_template, col_headers)
         
         # Handle null value rows in the request dataset
-        self.NaN_df = self.request_df.loc[self.request_df['dim1'].str.len() == 0].copy()
+        self.NaN_df = self.request_df.loc[self.request_df['key'].str.len() == 0].copy()
         
         # If null rows exist they will be sliced off and then added back to the response
         if len(self.NaN_df) > 0:
-            self.request_df = self.request_df.loc[self.request_df['dim1'].str.len() != 0]               
+            self.request_df = self.request_df.loc[self.request_df['key'].str.len() != 0]               
         
         # Get additional arguments from the 'kwargs' column in the request data
         # Arguments should take the form of a comma separated string: 'arg1=value1, arg2=value2'
@@ -70,12 +70,12 @@ class HDBSCANForQlik:
         # Set up an input Data Frame, excluding the arguments column
         self.input_df = self.request_df.loc[:, self.request_df.columns.difference(['kwargs'])]
                
-        # For the two_dims variant we pivot the data to change dim2 into columns and with dim1 as the index
+        # For the two_dims variant we pivot the data to change dim into columns and with key as the index
         if variant == "two_dims":
-            self.input_df = self.input_df.pivot(index='dim1', columns='dim2')
-        # For the other two variants we also set the index as the 'dim1' column
+            self.input_df = self.input_df.pivot(index='key', columns='dim')
+        # For the other two variants we also set the index as the 'key' column
         else:
-            self.input_df = self.input_df.set_index('dim1')
+            self.input_df = self.input_df.set_index('key')
                
             # For the standard variant we split the measures string into multiple columns and make the values numeric
             if variant == "standard":
@@ -97,12 +97,6 @@ class HDBSCANForQlik:
         if self.variant == "lat_long":
             # The input values are converted to radians
             self.input_df = self.input_df.apply(np.radians)
-            
-            # And we format the coordinates as a [lat, long] pair
-            self.input_df.loc[:,'lat_long'] = self.input_df.apply(lambda x : [x[0],x[1]], axis=1)
-            
-            # Finally we drop the lat and long columns and will only use the new column for clustering
-            self.input_df = self.input_df.drop(columns=['lat', 'long'])
         
         if self.debug:
             self._print_log(2)
@@ -120,8 +114,8 @@ class HDBSCANForQlik:
              
         # Prepare the output Data Frame
         self.response = pd.DataFrame(getattr(self.clusterer, self.result_type), index=self.input_df.index, columns=['result'])
-        self.response['dim1'] = self.input_df.index
-        self.response = self.response.loc[:, ['dim1', 'result']]
+        self.response['key'] = self.input_df.index
+        self.response = self.response.loc[:, ['key', 'result']]
         
         # Add the null value rows back to the response
         self.response = self.response.append(pd.DataFrame([(np.NaN, np.NaN) for i in range(len(self.NaN_df))],\
@@ -369,7 +363,7 @@ class HDBSCANForQlik:
         self.table.numberOfRows = len(self.response)
 
         # Set up fields for the table
-        self.table.fields.add(name="dim_as_str", dataType=0)
+        self.table.fields.add(name="key")
         self.table.fields.add(name=self.result_type[:-1], dataType=1)
         
         if self.debug:
