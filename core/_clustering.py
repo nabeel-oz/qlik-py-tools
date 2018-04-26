@@ -118,7 +118,7 @@ class HDBSCANForQlik:
         self.response = self.response.loc[:, ['key', 'result']]
         
         # Add the null value rows back to the response
-        self.response = self.response.append(pd.DataFrame([(np.NaN, np.NaN) for i in range(len(self.NaN_df))],\
+        self.response = self.response.append(pd.DataFrame([('\x00', np.NaN) for i in range(len(self.NaN_df))],\
                                                           columns=self.response.columns))
         
         if self.debug:
@@ -210,7 +210,7 @@ class HDBSCANForQlik:
             # Set the load_script parameter to determine the output format 
             # Set to 'true' if calling the functions from the load script in the Qlik app
             if 'load_script' in self.kwargs:
-                self.load_script = bool(self.kwargs['load_script'].lower())
+                self.load_script = 'true' == self.kwargs['load_script'].lower()
             
             # Set the return type 
             # Valid values are: labels, probabilities, cluster_persistence, outlier_scores
@@ -230,7 +230,7 @@ class HDBSCANForQlik:
             # Set the debug option for generating execution logs
             # Valid values are: true, false
             if 'debug' in self.kwargs:
-                self.debug = bool(self.kwargs['debug'].lower())
+                self.debug = 'true' == self.kwargs['debug'].lower()
             
             # Set optional parameters for the HDBSCAN algorithmn
             # For documentation see here: https://hdbscan.readthedocs.io/en/latest/api.html#id20
@@ -272,13 +272,13 @@ class HDBSCANForQlik:
             # By default HDBSCAN* will not produce a single cluster.
             # Setting this to True will override this and allow single cluster results.
             if 'allow_single_cluster' in self.kwargs:
-                self.allow_single_cluster = bool(self.kwargs['allow_single_cluster'].lower())
+                self.allow_single_cluster = 'true' == self.kwargs['allow_single_cluster'].lower()
             
             # There exist some interpretational differences between this HDBSCAN implementation 
             # and the original authors reference implementation in Java. 
             # Note that there is a performance cost for setting this to True.
             if 'match_reference_implementation' in self.kwargs:
-                self.match_reference_implementation = bool(self.kwargs['match_reference_implementation'])
+                self.match_reference_implementation = 'true' == self.kwargs['match_reference_implementation']
             
             # Set optional parameters for the scaler functions
             
@@ -286,9 +286,9 @@ class HDBSCANForQlik:
             # http://scikit-learn.org/stable/modules/generated/sklearn.preprocessing.StandardScaler.html
             if self.scaler == 'standard':
                 if 'with_mean' in self.kwargs:
-                    self.with_mean = bool(self.kwargs['with_mean'].lower())
+                    self.with_mean = 'true' == self.kwargs['with_mean'].lower()
                 if 'with_std' in self.kwargs:
-                    self.with_std = bool(self.kwargs['with_std'].lower())
+                    self.with_std = 'true' == self.kwargs['with_std'].lower()
             
             # Parameters for the MinMax scaler
             # http://scikit-learn.org/stable/modules/generated/sklearn.preprocessing.MinMaxScaler.html
@@ -301,9 +301,9 @@ class HDBSCANForQlik:
             # http://scikit-learn.org/stable/modules/generated/sklearn.preprocessing.RobustScaler.html
             if self.scaler == 'robust':
                 if 'with_centering' in self.kwargs:
-                    self.with_centering = bool(self.kwargs['with_centering'].lower())
+                    self.with_centering = 'true' == self.kwargs['with_centering'].lower()
                 if 'with_scaling' in self.kwargs:
-                    self.with_scaling = bool(self.kwargs['with_scaling'].lower())
+                    self.with_scaling = 'true' == self.kwargs['with_scaling'].lower()
                 if 'quantile_range' in self.kwargs:
                     self.quantile_range = ''.join(c for c in self.kwargs['quantile_range'] if c not in '()').split(';')
                     self.quantile_range = (float(self.quantile_range[0]),float(self.quantile_range[1]))
@@ -316,7 +316,7 @@ class HDBSCANForQlik:
                 if 'output_distribution' in self.kwargs:
                     self.output_distribution = self.kwargs['output_distribution'].lower()
                 if 'ignore_implicit_zeros' in self.kwargs:
-                    self.ignore_implicit_zeros = bool(self.kwargs['ignore_implicit_zeros'].lower())
+                    self.ignore_implicit_zeros = 'true' == self.kwargs['ignore_implicit_zeros'].lower()
                 if 'subsample' in self.kwargs:
                     self.subsample = int(self.kwargs['subsample'])
                 if 'random_state' in self.kwargs:

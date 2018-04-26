@@ -74,3 +74,17 @@ def scale(df, missing="zeros", scaler="robust", **kwargs):
     df = pd.DataFrame(s.fit_transform(df), index=df.index, columns=df.columns)
     
     return df
+
+def count_placeholders(series):
+    """
+    Count the number of null or zero values at the bottom of a series.
+    """
+    count = 0
+
+    for i in range(series.size-1, -1, -1):
+        if pd.isnull(series[i]) or series[i] == 0:
+            count += 1
+        else:
+            break
+
+    return count

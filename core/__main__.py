@@ -274,19 +274,19 @@ class ExtensionService(SSE.ConnectorServicer):
         predictor = ProphetForQlik(request_list)
         
         # Calculate the forecast and store in a Pandas series
-        forecast = predictor.predict()
+        forecast = predictor.predict()  
         
-        # Values in the series are converted to type SSE.Dual
-        response_rows = forecast.apply(lambda result: iter([SSE.Dual(numData=result)]))
+        # Convert the response to a list of rows
+        forecast = forecast.values.tolist()
         
-        # Values in the series are converted to type SSE.Row
-        # The series is then converted to a list
-        response_rows = response_rows.apply(lambda duals: SSE.Row(duals=duals)).tolist()        
+        # We convert values to type SSE.Dual, and group columns into a iterable
+        response_rows = [iter([SSE.Dual(numData=row)]) for row in forecast]
         
-        # Iterate over bundled rows
-        for request_rows in request_list:
-            # Yield Row data as Bundled rows
-            yield SSE.BundledRows(rows=response_rows)     
+        # Values are then structured as SSE.Rows
+        response_rows = [SSE.Row(duals=duals) for duals in response_rows]                
+        
+        # Yield Row data as Bundled rows
+        yield SSE.BundledRows(rows=response_rows)     
     
     @staticmethod
     def _prophet_seasonality(request, context):
