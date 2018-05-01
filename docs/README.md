@@ -5,6 +5,7 @@ This repository provides a server side extension for Qlik Sense built using Pyth
 
 The current implementation includes:
 
+- Clustering : Implemented using [HDBSCAN](https://hdbscan.readthedocs.io/en/latest/comparing_clustering_algorithms.html), a modern clustering algorithm that is great for exploratory data analysis. 
 - Time series forecasting : Implemented using [Facebook Prophet](https://research.fb.com/prophet-forecasting-at-scale/), a modern library for easily generating good quality forecasts.
 - Seasonality and holiday analysis: Also using Facebook Prophet.
 - Linear correlations : Implemented using Pandas.
@@ -27,20 +28,20 @@ For more information on Qlik Server Side Extensions see [qlik-oss](https://githu
 
 1. Get Python from [here](https://www.python.org/downloads/). Remember to select the option to add Python to your PATH environment variable.
 
-2. You'll also need a recent C++ compiler such as [Microsoft Visual C++ Build Tools](http://landinghub.visualstudio.com/visual-cpp-build-tools)
+2. You'll also need a recent C++ compiler such as [Microsoft Visual C++ Build Tools](http://landinghub.visualstudio.com/visual-cpp-build-tools). If you are having trouble finding the correct installer try [this direct link](https://www.visualstudio.com/thank-you-downloading-visual-studio/?sku=BuildTools&rel=15).
 
 3. Download this git repository and extract it to a location of your choice. The machine where you are placing this repository should have access to a local or remote Qlik Sense instance.
 
-4. Double click `Qlik-Py-Init.bat` in the repository files and let it do it's thing. You can open this file in a text editor to review the commands that will be executed. If everything goes smoothly you will see a Python virtual environment being set up and some packages being installed. Once the execution completes, do a quick scan of the log to see everything installed correctly. The libraries imported are: `grpcio`, `numpy`, `scipy`, `pandas`, `fbprophet`.
+4. Double click `Qlik-Py-Init.bat` in the repository files and let it do it's thing. You can open this file in a text editor to review the commands that will be executed. If everything goes smoothly you will see a Python virtual environment being set up and some packages being installed. Once the execution completes, do a quick scan of the log to see everything installed correctly. The libraries imported are: `grpcio`, `numpy`, `scipy`, `pandas`, `fbprophet`, `scikit-learn`, `hdbscan`.
 
-5. Now whenever you want to start this Python service you can run `Qlik-Py-Start.bat`. You should see the message below once the service is up. If you get an error or no output check your firewall's inbound settings. You may need an inbound rule to open up port `50055`. If you need to change the port you can do so in the file `core\__main__.py` by opening the file with a text editor and changing the value of the `_DEFAULT_PORT` variable.
+5. Now whenever you want to start this Python service you can run `Qlik-Py-Start.bat`. If you get an error or no output in the terminal, check your firewall's inbound settings. You may need an inbound rule to open up port `50055`. If you need to change the port you can do so in the file `core\__main__.py` by opening the file with a text editor, changing the value of the `_DEFAULT_PORT` variable, and then saving the file.
 
 6. Now you need to [set up an Analytics Connection in Qlik Sense Enterprise](https://help.qlik.com/en-US/sense/February2018/Subsystems/ManagementConsole/Content/create-analytic-connection.htm) or [update the Settings.ini file in Qlik Sense Desktop](https://help.qlik.com/en-US/sense/February2018/Subsystems/Hub/Content/Introduction/configure-analytic-connection-desktop.htm).
 
-7. Finally restart the Qlik Sense engine service for Qlik Sense Enterprise or close and reopen Qlik Sense Desktop.
-The Python service must be up before the Qlik Sense engine comes up. If a connection between Python and Qlik is established you should see the capabilities listed in the terminal.
+7. Finally restart the Qlik Sense engine service for Qlik Sense Enterprise or close and reopen Qlik Sense Desktop. This step may not be required if you are using Qlik Sense April 2018. If a connection between Python and Qlik is established you should see the capabilities listed in the terminal.
 
 ![handshake log](images/Run-02.png)
+###### Capabilities may change as this is an ongoing project.
 
 
 ## Usage
@@ -51,5 +52,6 @@ Sample Qlik Sense apps are provided and each app includes a series of Bookmarks 
 
 | Documentation | Sample App | App Dependencies |
 | --- | --- | --- |
+| [Clustering](docs/Clustering.md) | [Sample App - Clustering with HDBSCAN](Sample_App_Clustering.qvf) | Qlik Sense April 2018 or later to view the multi-layered maps. <br/><br/>The [qsVariable](https://github.com/erikwett/qsVariable) extension. |
 | [Prophet](Prophet.md) | [Sample App - Facebook Prophet](Sample_App_Prophet.qvf) | The [qsVariable](https://github.com/erikwett/qsVariable) extension. <br/><br/>Use the bookmarks to step through the sheets with relevant selections. |
 | [Correlations](Correlation.md) | [Sample App - Correlations](Sample_App_Correlations.qvf) | None. |
