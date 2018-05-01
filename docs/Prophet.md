@@ -117,7 +117,7 @@ The `Prophet_Seasonality` function also allows you to add holidays to the foreca
 
 You should have completed the installation instructions in the master README.md.
 
-The sample app can be used as a template for the instructions below.
+The [sample app](Sample_App_Prophet.qvf) can be used as a template for the instructions below.
 
 Firstly, you need to set up your Qlik data model with a forecasting calendar. These instructions work with daily and monthly forecasts, but should teach you enough to build a sub daily forecast as well.
 
