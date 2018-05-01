@@ -41,7 +41,7 @@ For more information on Qlik Server Side Extensions see [qlik-oss](https://githu
 7. Finally restart the Qlik Sense engine service for Qlik Sense Enterprise or close and reopen Qlik Sense Desktop. This step may not be required if you are using Qlik Sense April 2018. If a connection between Python and Qlik is established you should see the capabilities listed in the terminal.
 
 ![handshake log](images/Run-02.png)
-###### Capabilities may change as this is an ongoing project.
+*Capabilities may change as this is an ongoing project.*
 
 
 ## Usage
@@ -52,6 +52,6 @@ Sample Qlik Sense apps are provided and each app includes a series of Bookmarks 
 
 | Documentation | Sample App | App Dependencies |
 | --- | --- | --- |
-| [Clustering](docs/Clustering.md) | [Sample App - Clustering with HDBSCAN](Sample_App_Clustering.qvf) | Qlik Sense April 2018 or later to view the multi-layered maps. <br/><br/>The [qsVariable](https://github.com/erikwett/qsVariable) extension. |
+| [Clustering](docs/Clustering.md) | [Sample App - Clustering with HDBSCAN](Sample_App_Clustering.qvf) | The [qsVariable](https://github.com/erikwett/qsVariable) extension. <br/><br/>Qlik Sense April 2018 or later to view the multi-layered maps. |
 | [Prophet](Prophet.md) | [Sample App - Facebook Prophet](Sample_App_Prophet.qvf) | The [qsVariable](https://github.com/erikwett/qsVariable) extension. <br/><br/>Use the bookmarks to step through the sheets with relevant selections. |
 | [Correlations](Correlation.md) | [Sample App - Correlations](Sample_App_Correlations.qvf) | None. |
