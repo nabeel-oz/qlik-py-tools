@@ -5,7 +5,7 @@ This repository provides a server side extension for Qlik Sense built using Pyth
 
 The current implementation includes:
 
-- Clustering : Implemented using [HDBSCAN](https://hdbscan.readthedocs.io/en/latest/comparing_clustering_algorithms.html), a modern clustering algorithm that is great for exploratory data analysis. 
+- Clustering : Implemented using [HDBSCAN](https://hdbscan.readthedocs.io/en/latest/comparing_clustering_algorithms.html), a high performance algorithm that is great for exploratory data analysis. 
 - Time series forecasting : Implemented using [Facebook Prophet](https://research.fb.com/prophet-forecasting-at-scale/), a modern library for easily generating good quality forecasts.
 - Seasonality and holiday analysis: Also using Facebook Prophet.
 - Linear correlations : Implemented using Pandas.
