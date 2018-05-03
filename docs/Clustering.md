@@ -26,4 +26,4 @@ The [sample app](Sample_App_Clustering.qvf) can be used as a template for the in
 ## Attribution
 The data used in the sample app was obtained from https://www.data.vic.gov.au/:
 - [Crime Statistics Agency Data Tables](https://www.data.vic.gov.au/data/dataset/crime-by-location-data-table) 
-- [Crash Stats - Data Extract](https://www.data.vic.gov.au/data/dataset/crash-stats-data-extract) 
+- [Crash Stats Data Extract](https://www.data.vic.gov.au/data/dataset/crash-stats-data-extract)
