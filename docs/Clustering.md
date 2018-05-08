@@ -6,6 +6,8 @@ The Cluster functions in this SSE provides the capabilities of HDBSCAN in Qlik t
 
 ## Quick Start
 
+The HDBSCAN algorithm will classify the input dimension into clusters. The labels are the default output of the functions below, with `-1` representing outliers and labels `0` and above representing clusters.
+
 ### Clustering with multiple features
 
 The `Cluster` function takes in three parameters: the dimension to be clustered, the set of features as a concatenated string, and a string where we can supply optional key word arguments.
