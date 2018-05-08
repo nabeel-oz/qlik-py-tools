@@ -8,6 +8,20 @@ The Cluster functions in this SSE provides the capabilities of HDBSCAN in Qlik t
 
 ### Clustering with multiple features
 
+The `Cluster` function takes in three parameters: the dimension to be clustered, the set of features as a concatenated string, and a string where we can supply optional arguments.
+
+```
+<Analytic connection name>.Cluster([Dimension], [Measure 1] & ';' & [Meaure n], 'arg1=value1, arg2=value2, ...')
+```
+
+The features need to be a semi-colon separated string. Optional parameters are covered in more detail in the Additional Parameters section below.
+
+Here's an example of an actual expression:
+
+```
+PyTools.Cluster([Local Government Area], sum([Incidents Recorded]) & ';' & avg(ERP), 'return=labels,scaler=robust,min_cluster_size=3')
+```
+
 ### Clustering by a second dimension
 
 ### Geospatial clustering
