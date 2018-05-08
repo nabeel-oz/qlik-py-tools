@@ -18,7 +18,7 @@ For more information on Qlik Server Side Extensions see [qlik-oss](https://githu
 
 
 ## Note on the approach
-In this project we expose open source algorithms to Qlik using pre-defined functions. Each function allows the user to define input data and parameters to control the underlying algorithm's output. 
+In this project we have defined functions that expose open source algorithms to Qlik using the [gRPC framework](http://github.com/grpc/grpc). Each function allows the user to define input data and parameters to control the underlying algorithm's output. 
 
 While native Python script evaluation is possible as demonstrated in the [qlik-oss Python examples](https://github.com/qlik-oss/server-side-extension/blob/master/examples/python/GetStarted.md), I have disabled this functionality in this project. 
 
