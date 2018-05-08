@@ -29,7 +29,7 @@ In this example we are clustering Local Government Areas in Victoria, Australia 
 If clusters are being classified as data is loaded into Qlik we can use a second dimension to create features based on an expression. This can be done using the `Cluster_by_Dim` function:
 
 ```
-<Analytic connection name>.Cluster([Dimension 1], [Dimension 2], [Expression], 'arg1=value1, arg2=value2, ...')
+<Analytic connection name>.Cluster_by_Dim(TableName{[Dimension 1], [Dimension 2], [Expression], 'arg1=value1, arg2=value2, ...'})
 ```
 
 This function can only be used in the Qlik Load Script as the [input and output number of rows will be different](https://github.com/qlik-oss/server-side-extension/blob/master/docs/limitations.md#expressions-using-sse-must-persist-the-cardinality). The function will pivot the data using this second dimension, before scanning for clusters.
