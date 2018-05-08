@@ -1,7 +1,7 @@
 # Python data science tools for Qlik
 Qlik's advanced analytics integration provides a path to making modern algorithms more accessible to the wider business audience. This project is an attempt to show what's possible.
 
-This repository provides a server side extension for Qlik Sense built using Python. The intention is to provide a set of functions for data science that can be used as expressions in Qlik. Sample Qlik Sense apps are also included and explained so that the techniques shown here can be easily replicated.
+This repository provides a server side extension (SSE) for Qlik Sense built using Python. The intention is to provide a set of functions for data science that can be used as expressions in Qlik. Sample Qlik Sense apps are also included and explained so that the techniques shown here can be easily replicated.
 
 The current implementation includes:
 
@@ -15,6 +15,16 @@ Further information on these features is available through the Usage section bel
 For more information on Qlik Server Side Extensions see [qlik-oss](https://github.com/qlik-oss/server-side-extension).
 
 **Disclaimer:** This project has been started by me in a personal capacity and is not supported by Qlik. 
+
+
+## Note on the approach
+In this project we expose pre-defined functions that can be used in Qlik. Each function allows the user to define input data and the parameters to control the algorithm's output. 
+
+While native Python script evaluation is possible as demonstrated in the [qlik-oss Python examples](https://github.com/qlik-oss/server-side-extension/blob/master/examples/python/GetStarted.md), I have disabled this functionality in this project. 
+
+I prefer this approach for two key reasons:
+- Separation of the Python implementation from usage in Qlik: App authors in Qlik just need to be able to use the functions, and understand the algorithms at a high level. Any complexity such as handling missing values or scaling the data is abstracted to simple parameters passed in the Qlik expression.
+- Security: This server side extension can not be used to execute arbitrary code from Qlik. Users are restricted to the algorithms exposed through this SSE. Security can be further enhanced by running the SSE on a separate, sandboxed machine, and [securing communication with certificates](https://github.com/qlik-oss/server-side-extension/blob/master/generate_certs_guide/README.md).
 
 
 ## Pre-requisites
