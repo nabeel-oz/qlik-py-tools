@@ -2,11 +2,11 @@
 
 ## Table of Contents
 
-[Introduction](https://github.com/nabeel-qlik/qlik-py-tools/blob/clustering/README.md#introduction)
-[Note on the approach](https://github.com/nabeel-qlik/qlik-py-tools/blob/clustering/README.md#note-on-the-approach)
-[Pre-requisites](https://github.com/nabeel-qlik/qlik-py-tools/blob/clustering/README.md#pre-requisites)
-[Installation](https://github.com/nabeel-qlik/qlik-py-tools/blob/clustering/README.md#installation)
-[Usage](https://github.com/nabeel-qlik/qlik-py-tools/blob/clustering/README.md#usage)
+- [Introduction](https://github.com/nabeel-qlik/qlik-py-tools/blob/clustering/README.md#introduction)
+- [Note on the approach](https://github.com/nabeel-qlik/qlik-py-tools/blob/clustering/README.md#note-on-the-approach)
+- [Pre-requisites](https://github.com/nabeel-qlik/qlik-py-tools/blob/clustering/README.md#pre-requisites)
+- [Installation](https://github.com/nabeel-qlik/qlik-py-tools/blob/clustering/README.md#installation)
+- [Usage](https://github.com/nabeel-qlik/qlik-py-tools/blob/clustering/README.md#usage)
 
 
 ## Introduction
