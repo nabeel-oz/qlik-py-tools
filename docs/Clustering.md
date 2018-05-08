@@ -26,27 +26,47 @@ In this example we are clustering Local Government Areas in Victoria, Australia 
 
 ### Clustering by a second dimension
 
-If clusters are being classified as data is loaded into Qlik we can use a second dimension to create features based on an expression. This can be done using the `Cluster_by_Dim` function:
+If clusters are being classified as data is loaded into Qlik we can use a second dimension to create features based on an expression. The function will pivot the data using this second dimension, before scanning for clusters.
+
+This is done using the `Cluster_by_Dim` function:
 
 ```
-<Analytic connection name>.Cluster_by_Dim(TableName{[Dimension 1], [Dimension 2], [Expression], 'arg1=value1, arg2=value2, ...'})
+LOAD
+    key,
+    labels
+EXTENSION <Analytic connection name>.Cluster_by_Dim(TableName{[Dimension 1], [Dimension 2], [Expression], 'arg1=value1, arg2=value2, ...'})
 ```
 
-This function can only be used in the Qlik Load Script as the [input and output number of rows will be different](https://github.com/qlik-oss/server-side-extension/blob/master/docs/limitations.md#expressions-using-sse-must-persist-the-cardinality). The function will pivot the data using this second dimension, before scanning for clusters.
+This function can only be used in the Qlik Load Script as the [input and output number of rows will be different](https://github.com/qlik-oss/server-side-extension/blob/master/docs/limitations.md#expressions-using-sse-must-persist-the-cardinality).
 
 Here's an example where we use the `Cluster_by_Dim` function using the [LOAD...EXTENSION](https://help.qlik.com/en-US/sense/April2018/Subsystems/Hub/Content/Scripting/ScriptRegularStatements/Load.htm) syntax:
 
 ```
 [LGA Clusters by Subgroup]:
 LOAD
-	  key as [Local Government Area],
+    key as [Local Government Area],
     labels as [Clusters by Subgroup]
 EXTENSION PyTools.Cluster_by_Dim(TempInputsTwoDims{LGA, SubGroup, Rate, Args});
 ```
 
-The function returns two fields; the first dimension in the input parameters and the clustering labels. 
+The function returns a table with two fields; the first dimension in the input parameters and the corresponding clustering labels.
 
 ### Geospatial clustering
+
+The HDBSCAN algorithm works well with geospatial coordinates as well. For this you can use the `Cluster_Geo` function:
+
+```
+<Analytic connection name>.Cluster_Geo([Dimension], [Latitude], [Longitude], 'arg1=value1, arg2=value2, ...')
+```
+
+The latitude and longitude need to be provided as separate fields in decimal format. 
+
+Here's an example where we cluster accidents by location:
+
+```
+PyTools.Cluster_Geo(ACCIDENT_NO, Lat, Long, '')
+```
+
 
 ## Additional Parameters
 
