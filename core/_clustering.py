@@ -146,7 +146,7 @@ class HDBSCANForQlik:
         :RobustScaler and QuantileTransformer.
         :More information here: http://scikit-learn.org/stable/modules/preprocessing.html
         :
-        :Additional parameters used are: load_script, result_type, missing, scaler, debug
+        :Additional parameters used are: load_script, return, missing, scaler, debug
         """
         
         # Set the row count in the original request
