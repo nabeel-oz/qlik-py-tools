@@ -30,7 +30,7 @@ As you can see, without any tweaking, we have a pretty accurate forecast.
 
 The additional arguments provided through the last parameter let you use the different features of Prophet.
 
-Any of these arguments can be included in the final string parameter for the Prophet function using the syntax: 'argument=value'. Separate arguments with a comma and use single quotes around the entire string.
+Any of these arguments can be included in the final string parameter for the Prophet function using the syntax: `argument=value`. Separate arguments with a comma and use single quotes around the entire string.
 
 | Keyword | Description | Sample Values | Remarks |
 | --- | --- | --- | --- |
