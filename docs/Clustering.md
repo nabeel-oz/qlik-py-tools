@@ -107,6 +107,20 @@ The scaling options provided in this implementation make use of the scikit-learn
 
 ### HDBSCAN Parameters
 
+Most of the options available for the HDBSCAN class documented in the [API Reference](https://hdbscan.readthedocs.io/en/latest/api.html) are included in this implementation.
+
+| Keyword | Description | Sample Values | Remarks |
+| --- | --- | --- | --- |
+| algorithm | Exactly which algorithm to use; HDBSCAN has variants specialised for different characteristics of the data. By default this is set to `best` which chooses the “best” algorithm given the nature of the data. You can force other options if you believe you know better. | `best`, `generic`, `prims_kdtree`, `prims_balltree`, `boruvka_kdtree`, `boruvka_balltree` | The default value is `best`. |
+| metric | The metric to use when calculating distance between instances in a feature array.  | `euclidean`, `manhattan`, `canberra`, `precomputed` | A large number of distance metrics are avaialble. For a full list see [here](https://hdbscan.readthedocs.io/en/latest/basic_hdbscan.html#what-about-different-metrics). For a better understanding of distance metrics refer to the [sklearn documentation](http://scikit-learn.org/stable/modules/generated/sklearn.neighbors.DistanceMetric.html). <br/><br/>The default value is `euclidean`. For the `Cluster_Geo` function the default value is `haversine`. |
+| min_cluster_size | The minimum size of clusters. | `3` | More information [here](https://hdbscan.readthedocs.io/en/latest/parameter_selection.html#selecting-min-cluster-size). <br/><br/>The default value is `5`. |
+| min_samples | The number of samples in a neighbourhood for a point to be considered a core point. | `5` | More information [here](https://hdbscan.readthedocs.io/en/latest/parameter_selection.html#selecting-min-samples). <br/><br/>The default value is None. |
+| p | p value to use if using the minkowski metric. | `2` | The default value is None. |
+| alpha | A distance scaling parameter as used in robust single linkage. | `1.0` | In practice it is best not to mess with this parameter. More information [here](https://hdbscan.readthedocs.io/en/latest/parameter_selection.html#selecting-alpha). <br/><br/>The default value is `1.0`. |
+| cluster_selection_method | The method used to select clusters from the condensed tree. | `eom`, `leaf` | If you are more interested in having small homogeneous clusters then you may find the default option, Excess of Mass, has a tendency to pick one or two large clusters and then a number of small extra clusters. You can use the `leaf` option to select leaf nodes from the tree, producing many small homogeneous clusters. Note that you can still get variable density clusters via this method, and it is also still possible to get large clusters, but there will be a tendency to produce a more fine grained clustering than Excess of Mass can provide. More information [here](https://hdbscan.readthedocs.io/en/latest/parameter_selection.html#leaf-clustering). <br/><br/>The default value is `eom`. |
+| allow_single_cluster | By default HDBSCAN* will not produce a single cluster. Setting this to `true` will override this and allow single cluster results. | `true`, `false` | More information [here](https://hdbscan.readthedocs.io/en/latest/parameter_selection.html#allowing-a-single-cluster). <br/><br/>The default value is `false`. |
+| match_reference_implementation | Flag to switch between the standard HDBSCAN implementation and the original authors reference implementation in Java. | `true`, `false` | This can result in very minor differences in clustering results. Setting this flag to `true` will, at a some performance cost, ensure that the clustering results match the reference implementation. <br/><br/>The default value is `false`. |
+
 ## Use Clustering with your own app
 
 You should have completed the installation instructions in the master README.md.
