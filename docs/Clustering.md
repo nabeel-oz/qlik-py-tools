@@ -67,6 +67,7 @@ Here's an example where we cluster accidents by location:
 PyTools.Cluster_Geo(ACCIDENT_NO, Lat, Long, '')
 ```
 
+![geospatial clustering](images/Clustering-01.png)
 
 ## Additional Parameters
 
