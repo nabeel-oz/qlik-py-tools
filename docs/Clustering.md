@@ -8,21 +8,43 @@ The Cluster functions in this SSE provides the capabilities of HDBSCAN in Qlik t
 
 ### Clustering with multiple features
 
-The `Cluster` function takes in three parameters: the dimension to be clustered, the set of features as a concatenated string, and a string where we can supply optional arguments.
+The `Cluster` function takes in three parameters: the dimension to be clustered, the set of features as a concatenated string, and a string where we can supply optional key word arguments.
 
 ```
-<Analytic connection name>.Cluster([Dimension], [Measure 1] & ';' & [Meaure n], 'arg1=value1, arg2=value2, ...')
+<Analytic connection name>.Cluster([Dimension], [Measure 1] & ';' & [Meaure 2] ..., 'arg1=value1, arg2=value2, ...')
 ```
 
-The features need to be a semi-colon separated string. Optional parameters are covered in more detail in the Additional Parameters section below.
+The features need to be a semi-colon separated string. Optional key word arguments are covered in more detail in the Additional Parameters section below.
 
 Here's an example of an actual expression:
 
 ```
-PyTools.Cluster([Local Government Area], sum([Incidents Recorded]) & ';' & avg(ERP), 'return=labels,scaler=robust,min_cluster_size=3')
+PyTools.Cluster([Local Government Area], sum([Incidents Recorded]) & ';' & avg(ERP), 'scaler=robust, min_cluster_size=3')
 ```
 
+In this example we are clustering Local Government Areas in Victoria, Australia by the number of crimes and the estimated residential population. We are also using the key word arguments to specify that we want to apply scaling to our features using the scikit-learn RobustScaler and we want the minimum cluster to be at least 3 LGAs.
+
 ### Clustering by a second dimension
+
+If clusters are being classified as data is loaded into Qlik we can use a second dimension to create features based on an expression. This can be done using the `Cluster_by_Dim` function:
+
+```
+<Analytic connection name>.Cluster([Dimension 1], [Dimension 2], [Expression], 'arg1=value1, arg2=value2, ...')
+```
+
+This function can only be used in the Qlik Load Script as the [input and output number of rows will be different](https://github.com/qlik-oss/server-side-extension/blob/master/docs/limitations.md#expressions-using-sse-must-persist-the-cardinality). The function will pivot the data using this second dimension, before scanning for clusters.
+
+Here's an example where we use the `Cluster_by_Dim` function using the [LOAD...EXTENSION](https://help.qlik.com/en-US/sense/April2018/Subsystems/Hub/Content/Scripting/ScriptRegularStatements/Load.htm) syntax:
+
+```
+[LGA Clusters by Subgroup]:
+LOAD
+	  key as [Local Government Area],
+    labels as [Clusters by Subgroup]
+EXTENSION PyTools.Cluster_by_Dim(TempInputsTwoDims{LGA, SubGroup, Rate, Args});
+```
+
+The function returns two fields; the first dimension in the input parameters and the clustering labels. 
 
 ### Geospatial clustering
 
