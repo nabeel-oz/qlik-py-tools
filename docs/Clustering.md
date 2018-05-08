@@ -2,7 +2,7 @@
 
 Clustering is an unsupervised machine learning technique that involves grouping of data points based on the similarity of input features. There are several clustering algorithms avaialble, but I've picked [HDBSCAN](https://hdbscan.readthedocs.io/en/latest/basic_hdbscan.html) for this implementation as it gives good quality results for exploratory data analysis and performs really well. A good comparison of several clustering algorithms in Python is covered in the [HDBSCAN documentation](https://hdbscan.readthedocs.io/en/latest/comparing_clustering_algorithms.html). 
 
-The Cluster functions in this SSE provides the capabilities of HDBSCAN in Qlik through simple expressions.
+The clustering functions in this SSE provide the capabilities of HDBSCAN in Qlik through simple expressions.
 
 ## Quick Start
 
