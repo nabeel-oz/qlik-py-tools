@@ -2,11 +2,11 @@
 
 ## Table of Contents
 
-- [Introduction](https://github.com/nabeel-qlik/qlik-py-tools/tree/clustering#introduction)
-- [Note on the approach](https://github.com/nabeel-qlik/qlik-py-tools/tree/clustering#note-on-the-approach)
-- [Pre-requisites](https://github.com/nabeel-qlik/qlik-py-tools/tree/clustering#pre-requisites)
-- [Installation](https://github.com/nabeel-qlik/qlik-py-tools/tree/clustering#installation)
-- [Usage](https://github.com/nabeel-qlik/qlik-py-tools/tree/clustering#usage)
+- [Introduction](https://github.com/nabeel-qlik/qlik-py-tools#introduction)
+- [Note on the approach](https://github.com/nabeel-qlik/qlik-py-tools#note-on-the-approach)
+- [Pre-requisites](https://github.com/nabeel-qlik/qlik-py-tools#pre-requisites)
+- [Installation](https://github.com/nabeel-qlik/qlik-py-tools#installation)
+- [Usage](https://github.com/nabeel-qlik/qlik-py-tools#usage)
 
 
 ## Introduction
