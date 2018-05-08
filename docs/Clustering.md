@@ -6,7 +6,7 @@ The Cluster functions in this SSE provides the capabilities of HDBSCAN in Qlik t
 
 ## Quick Start
 
-The HDBSCAN algorithm will classify the input dimension into clusters. The labels are the default output of the functions below, with `-1` representing outliers and labels `0` and above representing clusters.
+The HDBSCAN algorithm will classify the input dimension into clusters. The labels are the default output, with `-1` representing outliers and labels `0` and above representing clusters.
 
 ### Clustering with multiple features
 
@@ -73,10 +73,23 @@ PyTools.Cluster_Geo(ACCIDENT_NO, Lat, Long, '')
 
 ## Additional Parameters
 
+The additional arguments provided through the last parameter in the clustering functions give you control over the clustering output. If you don't need to specify any additional arguments you can pass an empty string.
+
+Any of these arguments below can be included in the final string parameter for the clustering functions defined above using the syntax: 'argument=value'. Separate arguments with a comma and use single quotes around the entire string.
+
+### Basic Parameters
+
 | Keyword | Description | Sample Values | Remarks |
 | --- | --- | --- | --- |
-| return | The output of the expression | `labels`, `probabilities` | `labels` refers to the clustering classification. This is the default value. |
+| return | The output of the expression | `labels`, `probabilities` | `labels` refers to the clustering classification. This is the default value if the parameter is not specified. |
 | debug | Flag to output additional information to the terminal and logs | `true`, `false` | Information will be printed to the terminal as well to a log file: `..\qlik-py-env\core\logs\Cluster Log <n>.txt`. Particularly useful is looking at the input and output Data Frames. |
+| load_script | Flag to set the output format for the function | `true`, `false` | Set to `true` if calling the functions from the load script in the Qlik app. This will change the output to a table consisting of two fields the `key` which is the first dimension being clustered, and the specified return value (`labels` or `probabilities`). <br/><br/>You do not need to specify this parameter for the `Cluster_by_Dim` function as that can only be used through the load script. |
+| missing | Strategy for handling missing / null values | `zeros`, `mean`, `median`, `mode` | Any missing values in the data need to be handled before the clustering algorithm can be executed. The strategy will depend on the type of data. The default value is `zeros` |
+| scaler | Strategy for standardizing the data so that certain features don't skew the results | `standard`, `minmax`, `maxabs`, `robust`, `quantile`, `none` | Standardizing the data is a common requirement for machine learning algorithmns. In this implementation we use the [sklearn.preprocessing](http://scikit-learn.org/stable/modules/preprocessing.html) package |
+
+### Scaler Parameters
+
+### HDBSCAN Parameters
 
 ## Use Clustering with your own app
 
