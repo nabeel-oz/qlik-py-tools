@@ -12,11 +12,14 @@ call activate
 cd ..
 echo.
 echo Installing required packages... & echo.
+python -m pip install --upgrade pip
 pip install grpcio
 pip install numpy
 pip install scipy
 pip install pandas
 pip install fbprophet
+pip install -U scikit-learn
+pip install hdbscan
 echo.
 echo All done. Run Qlik-Py-Start.bat to start the SSE Extension Service. & echo.
 pause

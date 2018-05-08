@@ -30,9 +30,9 @@ As you can see, without any tweaking, we have a pretty accurate forecast.
 
 The additional arguments provided through the last parameter let you use the different features of Prophet.
 
-Any of these arguments can be included in the final string parameter for the Prophet function using the syntax: 'argument=value'. Separate arguments with a comma and use single quotes around the entire string.
+Any of these arguments can be included in the final string parameter for the Prophet function using the syntax: `argument=value`. Separate arguments with a comma and use single quotes around the entire string.
 
-| Key word | Description | Sample Values | Remarks |
+| Keyword | Description | Sample Values | Remarks |
 | --- | --- | --- | --- |
 | return | The output of the expression | `yhat`, `yhat_upper`, `yhat_lower`, `y_then_yhat`, `y_then_yhat_upper`, `y_then_yhat_lower`, `trend`, `trend_upper`, `trend_lower`, `seasonal`, `seasonal_upper`, `seasonal_lower`, `yearly`, `yearly_upper`, `yearly_lower` & any other column in the forecast output | `yhat` refers to the forecast values. This is the default value. The `y_then_yhat` options allow you to plot the actual values for historical data and forecast values only for future dates. Upper and lower limits are available for each type of output. |
 | freq | The frequency of the time series | `D`, `MS`, `M`, `H`, `T`, `S`, `ms`, `us` | The most common options would be D for Daily, MS for Month Start and M for Month End. The default value is D, however this will mess up results if you provide the values in a different frequency, so always specify the frequency. See the full set of options [here](http://pandas.pydata.org/pandas-docs/stable/timeseries.html#offset-aliases). |
@@ -117,7 +117,7 @@ The `Prophet_Seasonality` function also allows you to add holidays to the foreca
 
 You should have completed the installation instructions in the master README.md.
 
-The sample app can be used as a template for the instructions below.
+The [sample app](Sample_App_Prophet.qvf) can be used as a template for the instructions below.
 
 Firstly, you need to set up your Qlik data model with a forecasting calendar. These instructions work with daily and monthly forecasts, but should teach you enough to build a sub daily forecast as well.
 

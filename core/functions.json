@@ -2,17 +2,52 @@
   "Functions": [
     {
       "Id": 0,
+      "Name": "Cluster",
+      "Type": 0,
+      "ReturnType": 1,
+      "Params": {
+        "a_dimension": 2,
+        "b_features": 0,
+        "c_other_args": 0
+      }
+    },
+    {
+      "Id": 1,
+      "Name": "Cluster_by_Dim",
+      "Type": 0,
+      "ReturnType": 1,
+      "Params": {
+        "a_dimension1": 2,
+        "b_dimension2": 2,
+        "c_measure": 1,
+        "d_other_args": 0
+      }
+    },
+    {
+      "Id": 2,
+      "Name": "Cluster_Geo",
+      "Type": 0,
+      "ReturnType": 1,
+      "Params": {
+        "a_dimension1": 2,
+        "b_latitude": 1,
+        "c_longitude": 1,
+        "d_other_args": 0
+      }
+    },
+    {
+      "Id": 3,
       "Name": "Correlation",
       "Type": 0,
       "ReturnType": 1,
       "Params": {
         "a_series1": 0,
         "b_series2": 0,
-		"c_corr_type": 0
+        "c_corr_type": 0
       }
     },
-	{
-      "Id": 1,
+    {
+      "Id": 4,
       "Name": "Pearson",
       "Type": 0,
       "ReturnType": 1,
@@ -21,19 +56,19 @@
         "b_series2": 0
       }
     },
-	{
-      "Id": 2,
+    {
+      "Id": 5,
       "Name": "Prophet",
       "Type": 0,
       "ReturnType": 1,
       "Params": {
         "a_date": 2,
         "b_value": 1,
-		"c_other_args": 0
+        "c_other_args": 0
       }
     },
-	{
-      "Id": 3,
+    {
+      "Id": 6,
       "Name": "Prophet_Basic",
       "Type": 0,
       "ReturnType": 1,
@@ -42,28 +77,28 @@
         "b_value": 1
       }
     },
-	{
-      "Id": 4,
+    {
+      "Id": 7,
       "Name": "Prophet_Holidays",
       "Type": 0,
       "ReturnType": 1,
       "Params": {
         "a_date": 2,
         "b_value": 1,
-		"c_holidays": 2,
-		"d_other_args": 0
+        "c_holidays": 2,
+        "d_other_args": 0
       }
     },
-	{
-      "Id": 5,
+    {
+      "Id": 8,
       "Name": "Prophet_Seasonality",
       "Type": 0,
       "ReturnType": 1,
       "Params": {
         "a_season": 2,
         "b_time_series": 0,
-		"c_holidays": 0,
-		"d_other_args": 0
+        "c_holidays": 0,
+        "d_other_args": 0
       }
     }
   ]

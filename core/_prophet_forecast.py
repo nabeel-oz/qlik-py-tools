@@ -5,6 +5,7 @@ import string
 import numpy as np
 import pandas as pd
 from fbprophet import Prophet
+import _utils as utils
 import ServerSideExtension_pb2 as SSE
 
 # Add Generated folder to module path.
@@ -67,7 +68,7 @@ class ProphetForQlik:
                 self.holidays_df.loc[:, 'upper_window'] = self.upper_window
         
         # Additional information is printed to the terminal and logs if the paramater debug = true
-        if self.debug == 'true':
+        if self.debug:
             self._print_log(1)
         
         # Convert numerical date values to datetime
@@ -102,7 +103,7 @@ class ProphetForQlik:
         self.request_index = self.request_df.loc[:,'ds']
         
         # Ignore the placeholder rows which will be filled with forecasted figures later
-        self.input_df = self.request_df.iloc[:-self.forecast_periods].copy()
+        self.input_df = self.request_df.iloc[:-self.periods].copy()
         
         # Reset the indexes for the input data frame. 
         # Not doing this interferes with correct ordering of the output from Prophet
@@ -110,7 +111,7 @@ class ProphetForQlik:
         
         # If take_log = true take logarithm of relevant input values.
         # This is usually to make the timeseries more stationary
-        if self.take_log == 'true':
+        if self.take_log:
             self.input_df.loc[:,'y'] = np.log(self.input_df.loc[:,'y'])
             
             if self.cap is not None:
@@ -126,7 +127,7 @@ class ProphetForQlik:
             if self.floor is not None:
                 self.input_df.loc[:,'floor'] = self.floor
             
-        if self.debug == 'true':
+        if self.debug:
             self._print_log(2)
     
     @classmethod
@@ -226,7 +227,7 @@ class ProphetForQlik:
         # If the input data frame contains less than 2 non-Null rows, prediction is not possible
         if len(self.input_df) - self.input_df.y.isnull().sum() <= 2:
             
-            if self.debug == 'true':
+            if self.debug:
                 self._print_log(3)
             
             # A series of null values is returned to avoid an error in Qlik
@@ -240,7 +241,7 @@ class ProphetForQlik:
             self.model = Prophet()
         
         # Add custom seasonalities if defined in the arguments
-        if self.add_seasonality is not None and len(self.add_seasonality_kwargs) > 0:
+        if self.name is not None and len(self.add_seasonality_kwargs) > 0:
             self.model.add_seasonality(**self.add_seasonality_kwargs)
         
         self.model.fit(self.input_df)
@@ -258,7 +259,7 @@ class ProphetForQlik:
         # Prepare the forecast
         self._forecast()
         
-        if self.debug == 'true':
+        if self.debug:
             self._print_log(4)
         
         return self.forecast.loc[:,self.result_type]
@@ -275,24 +276,25 @@ class ProphetForQlik:
         """
         
         # Calculate the forecast periods based on the number of placeholders in the data
-        self.forecast_periods = ProphetForQlik._count_placeholders(self.request_df.loc[:,'y'])
+        self.periods = utils.count_placeholders(self.request_df.loc[:,'y'])
         
         # Set the row count in the original request
         self.request_row_count = len(self.request_df) + len(self.NaT_df)
         
         # Set default values which will be used if an argument is not passed
         self.result_type = 'yhat'
-        self.take_log  = 'false'
+        self.take_log  = False
         self.seasonality = 'yearly'
-        self.debug = 'false'
+        self.debug = False
         self.freq = 'D'
         self.cap = None
         self.floor = None
+        self.growth = None
         self.changepoint_prior_scale = None
         self.interval_width = None
-        self.add_seasonality = None
-        self.seasonality_period = None
-        self.seasonality_fourier = None
+        self.name = None
+        self.period = None
+        self.fourier_order = None
         self.seasonality_prior_scale = None
         self.holidays_prior_scale = None
         self.is_seasonality_request = False
@@ -341,7 +343,7 @@ class ProphetForQlik:
             # Set the option to take a logarithm of y values before forecast calculations
             # Valid values are: true, false
             if 'take_log' in self.kwargs:
-                self.take_log = self.kwargs['take_log'].lower()
+                self.take_log = 'true' == self.kwargs['take_log'].lower()
                 
             # Set the type of seasonlity requested. Used only for seasonality requests
             # Valid values are: yearly, weekly, monthly, holidays
@@ -351,7 +353,7 @@ class ProphetForQlik:
             # Set the debug option for generating execution logs
             # Valid values are: true, false
             if 'debug' in self.kwargs:
-                self.debug = self.kwargs['debug'].lower()
+                self.debug = 'true' == self.kwargs['debug'].lower()
             
             # Set the frequency of the timeseries
             # Any valid frequency for pd.date_range, such as 'D' or 'M' 
@@ -363,11 +365,12 @@ class ProphetForQlik:
             # This changes the default linear growth model to a logistic growth model
             if 'cap' in self.kwargs:
                 self.cap = float(self.kwargs['cap'])
+                self.growth = 'logistic'
             
-            # Set the floor which adds a lower limit at which the forecast will saturate
-            # To use a logistic growth trend with a floor, a cap must also be specified
-            if 'floor' in self.kwargs:
-                self.floor = float(self.kwargs['floor'])
+                # Set the floor which adds a lower limit at which the forecast will saturate
+                # To use a logistic growth trend with a floor, a cap must also be specified
+                if 'floor' in self.kwargs:
+                    self.floor = float(self.kwargs['floor'])
             
             # Set the changepoint_prior_scale to adjust the trend flexibility
             # If the trend changes are being overfit (too much flexibility) or underfit (not enough flexibility), 
@@ -384,18 +387,18 @@ class ProphetForQlik:
             # Set additional seasonality to be added to the model
             # Default seasonalities are yearly and weekly, as well as daily for sub daily data
             if 'add_seasonality' in self.kwargs:
-                self.add_seasonality = self.kwargs['add_seasonality'].lower()
+                self.name = self.kwargs['add_seasonality'].lower()
             
             # Set the seasonality period 
             # e.g. 30.5 for 'monthly' seasonality
             if 'seasonality_period' in self.kwargs:
-                self.seasonality_period = float(self.kwargs['seasonality_period'])
+                self.period = float(self.kwargs['seasonality_period'])
             
             # Set the seasonality fourier terms 
             # Increasing the number of Fourier terms allows the seasonality to fit faster changing cycles, 
             # but can also lead to overfitting
             if 'seasonality_fourier' in self.kwargs:
-                self.seasonality_fourier = int(self.kwargs['seasonality_fourier'])
+                self.fourier_order = int(self.kwargs['seasonality_fourier'])
             
             # Set the seasonality prior scale to smooth seasonality effects. 
             # Reducing this parameter dampens seasonal effects
@@ -427,38 +430,46 @@ class ProphetForQlik:
             if 'upper_window' in self.kwargs:
                 self.upper_window = int(self.kwargs['upper_window'])
         
-        # Create dictionary of arguments for the Prophet() and make_future_dataframe() functions
+        # Create dictionary of arguments for the Prophet(), make_future_dataframe() and add_seasonality() functions
         self.prophet_kwargs = {}
         self.make_kwargs = {}
         self.add_seasonality_kwargs = {}
         
         # Populate the parameters in the corresponding dictionary:
         
-        self.make_kwargs['periods'] = self.forecast_periods
+        # Set up a list of possible key word arguments for the Prophet() function
+        prophet_params = ['growth', 'changepoint_prior_scale', 'interval_width', 'seasonality_prior_scale',\
+                          'holidays_prior_scale']
         
-        if self.freq is not None:
-            self.make_kwargs['freq'] = self.freq
+        # Create dictionary of key word arguments for the Prophet() function
+        self.prophet_kwargs = self._populate_dict(prophet_params)
         
-        if self.cap is not None:
-            self.prophet_kwargs['growth'] = 'logistic'
+        # Set up a list of possible key word arguments for the make_future_dataframe() function
+        make_params = ['periods', 'freq']
         
-        if self.changepoint_prior_scale is not None:
-            self.prophet_kwargs['changepoint_prior_scale'] = self.changepoint_prior_scale
+        # Create dictionary of key word arguments for the make_future_dataframe() function
+        self.make_kwargs = self._populate_dict(make_params)
         
-        if self.interval_width is not None:
-            self.prophet_kwargs['interval_width'] = self.interval_width
+        # Set up a list of possible key word arguments for the add_seasonality() function
+        seasonality_params = ['name', 'period', 'fourier_order']
         
-        if self.add_seasonality is not None:
-            self.add_seasonality_kwargs['name'] = self.add_seasonality
-            self.add_seasonality_kwargs['period'] = self.seasonality_period
-            self.add_seasonality_kwargs['fourier_order'] = self.seasonality_fourier
-        
-        if self.seasonality_prior_scale is not None:
-            self.prophet_kwargs['seasonality_prior_scale'] = self.seasonality_prior_scale
-        
-        if self.holidays_prior_scale is not None:
-            self.prophet_kwargs['holidays_prior_scale'] = self.holidays_prior_scale
+        # Create dictionary of key word arguments for the add_seasonality() function
+        self.add_seasonality_kwargs = self._populate_dict(seasonality_params)
             
+    def _populate_dict(self, params):
+        """
+        Populate a dictionary based on a list of parameters. 
+        The parameters should already exist in this object.
+        """
+        
+        output_dict = {}
+        
+        for prop in params:
+            if getattr(self, prop) is not None:
+                output_dict[prop] = getattr(self, prop)
+        
+        return output_dict
+    
     def _forecast(self):
         """
         Execute the forecast algorithm according to the request type
@@ -518,12 +529,12 @@ class ProphetForQlik:
 
                 if 'upper' in self.result_type or 'lower' in self.result_type:
                     # Overwrite historic values with Nulls
-                    self.forecast.loc[:len(self.forecast) - self.forecast_periods - 1, self.result_type] \
+                    self.forecast.loc[:len(self.forecast) - self.periods - 1, self.result_type] \
                     = np.NaN
                 else:
                     # Overwrite with y values for historic data
-                    self.forecast.loc[:len(self.forecast) - self.forecast_periods - 1, self.result_type] \
-                    = self.request_df.loc[:len(self.request_df) - self.forecast_periods - 1, 'y']
+                    self.forecast.loc[:len(self.forecast) - self.periods - 1, self.result_type] \
+                    = self.request_df.loc[:len(self.request_df) - self.periods - 1, 'y']
             
             # Update to the original index from the request data frame
             self.forecast.index = self.request_index.index
@@ -532,7 +543,7 @@ class ProphetForQlik:
             self.forecast = self.forecast.sort_index()
 
         # Undo the logarithmic conversion if it was applied during initialization
-        if self.take_log == 'true':
+        if self.take_log:
             self.forecast.loc[:,self.result_type] = np.exp(self.forecast.loc[:,self.result_type])
 
         # Add back the null row if it was received in the request
@@ -604,7 +615,7 @@ class ProphetForQlik:
             sys.stdout.write("\nFORECAST DATA FRAME: {0} rows x cols\n\n".format(self.forecast.shape))
             sys.stdout.write("RESULT COLUMNS:\n\n")
             [sys.stdout.write("{}\n".format(col)) for col in self.forecast]
-            sys.stdout.write("\nSAMPLE RESULTS:\n{0} \n\n".format(self.forecast.tail(self.forecast_periods).to_string()))
+            sys.stdout.write("\nSAMPLE RESULTS:\n{0} \n\n".format(self.forecast.tail(self.periods).to_string()))
             sys.stdout.write("FORECAST RETURNED:\n{0}\n\n".format(self.forecast.loc[:,self.result_type].to_string()))
             
             # Output the forecast data frame and returned series to the log file
@@ -612,23 +623,8 @@ class ProphetForQlik:
                 f.write("\nFORECAST DATA FRAME: {0} rows x cols\n\n".format(self.forecast.shape))
                 f.write("RESULT COLUMNS:\n\n")
                 [f.write("{}\n".format(col)) for col in self.forecast]
-                f.write("\nSAMPLE RESULTS:\n{0} \n\n".format(self.forecast.tail(self.forecast_periods).to_string()))
+                f.write("\nSAMPLE RESULTS:\n{0} \n\n".format(self.forecast.tail(self.periods).to_string()))
                 f.write("FORECAST RETURNED:\n{0}\n\n".format(self.forecast.loc[:,self.result_type].to_string()))
-    
-    @staticmethod
-    def _count_placeholders(series):
-        """
-        Count the number of null or zero values at the bottom of a series.
-        """
-        count = 0
-
-        for i in range(series.size-1, -1, -1):
-            if pd.isnull(series[i]) or series[i] == 0:
-                count += 1
-            else:
-                break
-
-        return count
     
     @staticmethod
     def timeit(request):

@@ -1,4 +1,3 @@
-#! /usr/bin/env python3
 import argparse
 import json
 import logging
@@ -18,10 +17,12 @@ import grpc
 # Import libraries for added functions
 import numpy as np
 import pandas as pd
+import _utils as utils
 from _prophet_forecast import ProphetForQlik
+from _clustering import HDBSCANForQlik
 
 # Set the default port for this SSE Extension
-_DEFAULT_PORT = '50054'
+_DEFAULT_PORT = '50055'
 
 _ONE_DAY_IN_SECONDS = 60 * 60 * 24
 _MINFLOAT = float('-inf')
@@ -56,12 +57,15 @@ class ExtensionService(SSE.ConnectorServicer):
         :return: Mapping of function id and implementation
         """
         return {
-            0: '_correlation',
-            1: '_correlation',
-            2: '_prophet',
-            3: '_prophet',
-            4: '_prophet',
-            5: '_prophet_seasonality'
+            0: '_cluster',
+            1: '_cluster',
+            2: '_cluster',
+            3: '_correlation',
+            4: '_correlation',
+            5: '_prophet',
+            6: '_prophet',
+            7: '_prophet',
+            8: '_prophet_seasonality'
         }
 
     """
@@ -69,16 +73,61 @@ class ExtensionService(SSE.ConnectorServicer):
     """
     
     @staticmethod
-    def _string_to_float(s):
+    def _cluster(request, context):
         """
-        Utility function
-        :return: Float for the String parameter s, or None in the case of a ValueError exception
+        Look for clusters within a dimension using the given features. Scalar function.
+        Three variants are implemented:
+        :0: one dimension and a string of numeric features.
+        :1: two dimensions and one measure. This will only work when used in the Qlik load script.
+        :2: one dimension, the latitude and longitude.
+        :
+        :param request: an iterable sequence of RowData
+        :param context:
+        :return: the clustering classification for each row
+        :Qlik expression examples:
+        :<AAI Connection Name>.Cluster(dimension, sum(value1) & ';' & sum(value2), 'scaler=standard')
         """
-        try:
-            f = float(s)
-            return f
-        except ValueError:
-            return None
+        # Get a list from the generator object so that it can be iterated over multiple times
+        request_list = [request_rows for request_rows in request]
+        
+        # Get the function id from the header to determine the variant being called
+        function = ExtensionService._get_function_id(context)
+               
+        if function == 0:
+            # The standard variant takes in one dimension and a string of semi-colon separated features.
+            variant = "standard"
+        elif function == 1:
+            # In the second variant features for clustering are produced by pivoting the measure for the second dimension.
+            variant = "two_dims"
+        elif function == 2:
+            # The third variant if for finding clusters in geospatial coordinates.
+            variant = "lat_long"
+        
+        # Create an instance of the HDBSCANForQlik class
+        # This will take the request data from Qlik and prepare it for clustering
+        clusterer = HDBSCANForQlik(request_list, context, variant=variant)
+        
+        # Calculate the clusters and store in a Pandas series (or DataFrame in the case of a load script call)
+        clusters = clusterer.scan()
+        
+        # Check if the response is a DataFrame. 
+        # This occurs when the load_script=true argument is passed in the Qlik expression.
+        response_is_df = isinstance(clusters, pd.DataFrame)
+        
+        # Convert the response to a list of rows
+        clusters = clusters.values.tolist()
+        
+        # We convert values to type SSE.Dual, and group columns into a iterable
+        if response_is_df:
+            response_rows = [iter([SSE.Dual(strData=row[0]),SSE.Dual(numData=row[1])]) for row in clusters]
+        else:
+            response_rows = [iter([SSE.Dual(numData=row)]) for row in clusters]
+        
+        # Values are then structured as SSE.Rows
+        response_rows = [SSE.Row(duals=duals) for duals in response_rows]      
+        
+        # Yield Row data as Bundled rows
+        yield SSE.BundledRows(rows=response_rows)
     
     @staticmethod
     def _correlation(request, context):
@@ -142,8 +191,8 @@ class ExtensionService(SSE.ConnectorServicer):
                 # Check that the lists are of equal length
                 if len(x) == len(y) and len(x) > 0:
                     # Create a Pandas data frame using the lists
-                    df = pd.DataFrame({'x': [ExtensionService._string_to_float(d) for d in x], \
-                                       'y': [ExtensionService._string_to_float(d) for d in y]})
+                    df = pd.DataFrame({'x': [utils._string_to_float(d) for d in x], \
+                                       'y': [utils._string_to_float(d) for d in y]})
                 
                     # Calculate the correlation matrix for the two series in the data frame
                     corr_matrix = df.corr(method=corr_type)
@@ -220,24 +269,24 @@ class ExtensionService(SSE.ConnectorServicer):
         # The request_list line above is not timed as the generator can only be iterated once
         # ProphetForQlik.timeit(request_list)
                        
-        # Create an instance of the _prophet_forecast class
+        # Create an instance of the ProphetForQlik class
         # This will take the request data from Qlik and prepare it for forecasting
         predictor = ProphetForQlik(request_list)
         
         # Calculate the forecast and store in a Pandas series
-        forecast = predictor.predict()
+        forecast = predictor.predict()  
         
-        # Values in the series are converted to type SSE.Dual
-        response_rows = forecast.apply(lambda result: iter([SSE.Dual(numData=result)]))
+        # Convert the response to a list of rows
+        forecast = forecast.values.tolist()
         
-        # Values in the series are converted to type SSE.Row
-        # The series is then converted to a list
-        response_rows = response_rows.apply(lambda duals: SSE.Row(duals=duals)).tolist()        
+        # We convert values to type SSE.Dual, and group columns into a iterable
+        response_rows = [iter([SSE.Dual(numData=row)]) for row in forecast]
         
-        # Iterate over bundled rows
-        for request_rows in request_list:
-            # Yield Row data as Bundled rows
-            yield SSE.BundledRows(rows=response_rows)     
+        # Values are then structured as SSE.Rows
+        response_rows = [SSE.Row(duals=duals) for duals in response_rows]                
+        
+        # Yield Row data as Bundled rows
+        yield SSE.BundledRows(rows=response_rows)     
     
     @staticmethod
     def _prophet_seasonality(request, context):
@@ -281,7 +330,7 @@ class ExtensionService(SSE.ConnectorServicer):
         # Get a list from the generator object so that it can be iterated over multiple times
         request_list = [request_rows for request_rows in request]
                               
-        # Create an instance of the _prophet_forecast class
+        # Create an instance of the ProphetForQlik class
         # This will take the request data from Qlik and prepare it for forecasting
         predictor = ProphetForQlik.init_seasonality(request_list)
         
