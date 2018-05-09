@@ -129,7 +129,7 @@ class HDBSCANForQlik:
             self.response = pd.DataFrame([-1 for i in range(len(self.request_df))], index=self.input_df.index, columns=['result'])
             
             # Print error message
-            self._print_exception(e)
+            self._print_exception('ValueError when scanning for clusters', e)
         
         self.response['key'] = self.input_df.index
         self.response = self.response.loc[:, ['key', 'result']]
@@ -398,7 +398,7 @@ class HDBSCANForQlik:
         
         if step == 1:
             # Output log header
-            sys.stdout.write("HDBSCANForQlik Log: {0} \n\n".format(time.ctime(time.time())))
+            sys.stdout.write("\nHDBSCANForQlik Log: {0} \n\n".format(time.ctime(time.time())))
             with open(self.logfile,'w') as f:
                 f.write("HDBSCANForQlik Log: {0} \n\n".format(time.ctime(time.time())))
         
@@ -452,17 +452,18 @@ class HDBSCANForQlik:
             with open(self.logfile,'a') as f:
                 f.write("\nTABLE DESCRIPTION SENT TO QLIK:\n\n{0} \n\n".format(self.table))
     
-    def _print_exception(self, e):
+    def _print_exception(self, s, e):
         """
         Output exception message to stdout and also to the log file if debugging is required.
+        :s: A description for the error
         :e: The exception
         """
         
         # Output exception message
-        sys.stdout.write("ValueError when scanning for clusters: {0} \n\n".format(e))
+        sys.stdout.write("\n{0}: {1} \n\n".format(s, e))
         
         if self.debug:
             with open(self.logfile,'a') as f:
-                f.write("ValueError when scanning for clusters: {0} \n\n".format(e))
+                f.write("\n{0}: {1} \n\n".format(s, e))
             
     
