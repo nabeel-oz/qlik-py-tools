@@ -1,5 +1,21 @@
 # Clustering with HDBSCAN
 
+## Table of Contents
+
+- [Introduction](#introduction)
+- [Quick Start](#quick-start)
+...- [Clustering with multiple features](#clustering-with-multiple-features)
+...- [Clustering by a second dimension](#clustering-by-a-second-dimension)
+...- [Geospatial clustering](#geospatial-clustering)
+- [Additional Parameters](#additional-parameters)
+...- [Basic Parameters](#basic-parameters)
+...- [Scaler Parameters](#scaler-parameters)
+...- [HDBSCAN Parameters](#hdbscan-parameters)
+- [Use Clustering with your own app](#use-clustering-with-your-own-app)
+- [Attribution](#attribution)
+
+## Introduction
+
 Clustering is an unsupervised machine learning technique that involves grouping of data points based on the similarity of input features. There are several clustering algorithms avaialble, but I've picked [HDBSCAN](https://hdbscan.readthedocs.io/en/latest/basic_hdbscan.html) for this implementation as it gives good quality results for exploratory data analysis and performs really well. A good comparison of several clustering algorithms in Python is covered in the [HDBSCAN documentation](https://hdbscan.readthedocs.io/en/latest/comparing_clustering_algorithms.html). 
 
 The clustering functions in this SSE provide the capabilities of HDBSCAN in Qlik through simple expressions.
