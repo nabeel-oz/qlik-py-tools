@@ -65,6 +65,13 @@ class HDBSCANForQlik:
         
         # Additional information is printed to the terminal and logs if the paramater debug = true
         if self.debug:
+            # Increment log counter for the class. Each instance of the class generates a new log.
+            self.__class__.log_no += 1
+             
+            # Create a log file for the instance
+            # Logs will be stored in ..\logs\Cluster Log <n>.txt
+            self.logfile = os.path.join(os.getcwd(), 'logs', 'Cluster Log {}.txt'.format(self.log_no))
+            
             self._print_log(1)
         
         # Set up an input Data Frame, excluding the arguments column
@@ -109,11 +116,21 @@ class HDBSCANForQlik:
         # Instantiate a HDSCAN object and fit the input data frame:
         self.clusterer = hdbscan.HDBSCAN(**self.hdbscan_kwargs)
         
-        # Scan for clusters
-        self.clusterer.fit(self.input_df)
-             
-        # Prepare the output Data Frame
-        self.response = pd.DataFrame(getattr(self.clusterer, self.result_type), index=self.input_df.index, columns=['result'])
+        # Handle exceptions raised by the fit method with some grace
+        try:
+            # Scan for clusters
+            self.clusterer.fit(self.input_df)
+            
+            # Prepare the output Data Frame
+            self.response = pd.DataFrame(getattr(self.clusterer, self.result_type), index=self.input_df.index, columns=['result'])
+            
+        except ValueError as e:
+            # Prepare output Data Frame if clusters can't be generated
+            self.response = pd.DataFrame([-1 for i in range(len(self.request_df))], index=self.input_df.index, columns=['result'])
+            
+            # Print error message
+            self._print_exception(e)
+        
         self.response['key'] = self.input_df.index
         self.response = self.response.loc[:, ['key', 'result']]
         
@@ -380,13 +397,6 @@ class HDBSCANForQlik:
         """
         
         if step == 1:
-            # Increment log counter for the class. Each instance of the class generates a new log.
-            self.__class__.log_no += 1
-             
-            # Create a log file for the instance
-            # Logs will be stored in ..\logs\Cluster Log <n>.txt
-            self.logfile = os.path.join(os.getcwd(), 'logs', 'Cluster Log {}.txt'.format(self.log_no))
-            
             # Output log header
             sys.stdout.write("HDBSCANForQlik Log: {0} \n\n".format(time.ctime(time.time())))
             with open(self.logfile,'w') as f:
@@ -441,5 +451,18 @@ class HDBSCANForQlik:
             # Write the table description to the log file
             with open(self.logfile,'a') as f:
                 f.write("\nTABLE DESCRIPTION SENT TO QLIK:\n\n{0} \n\n".format(self.table))
+    
+    def _print_exception(self, e):
+        """
+        Output exception message to stdout and also to the log file if debugging is required.
+        :e: The exception
+        """
+        
+        # Output exception message
+        sys.stdout.write("ValueError when scanning for clusters: {0} \n\n".format(e))
+        
+        if self.debug:
+            with open(self.logfile,'a') as f:
+                f.write("ValueError when scanning for clusters: {0} \n\n".format(e))
             
     
