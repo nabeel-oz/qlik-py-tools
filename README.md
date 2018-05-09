@@ -2,11 +2,11 @@
 
 ## Table of Contents
 
-- [Introduction](https://github.com/nabeel-qlik/qlik-py-tools#introduction)
-- [Note on the approach](https://github.com/nabeel-qlik/qlik-py-tools#note-on-the-approach)
-- [Pre-requisites](https://github.com/nabeel-qlik/qlik-py-tools#pre-requisites)
-- [Installation](https://github.com/nabeel-qlik/qlik-py-tools#installation)
-- [Usage](https://github.com/nabeel-qlik/qlik-py-tools#usage)
+- [Introduction](#introduction)
+- [Note on the approach](#note-on-the-approach)
+- [Pre-requisites](#pre-requisites)
+- [Installation](#installation)
+- [Usage](#usage)
 
 
 ## Introduction
