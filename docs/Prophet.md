@@ -1,5 +1,18 @@
 # Time series forecasting with Facebook Prophet
 
+## Table of Contents
+
+- [Introduction](#introduction)
+- [Quick Start](#quick-start)
+- [Additional Parameters](#additional-parameters)
+- [Tweaking the forecast](#tweaking-the-forecast)
+- [Seasonality](#seasonality)
+- [Holidays](#holidays)
+- [Use Prophet with your own app](#use-prophet-with-your-own-app)
+- [Attribution](#attribution)
+
+## Introduction
+
 Last year Facebook's data science team released an open source forecasting tool for Python and R. There is no shortage of forecasting algorithms out there, but this one is impressive in how effortlessly it produces high quality forecasts. I recommend a quick read of [Facebook's post](https://research.fb.com/prophet-forecasting-at-scale/).
 
 While this is a great tool, there is a scarcity of people with the skills to use such tools at most organizations. Qlik's advanced analytics integration can bridge this gap by providing a simple, interactive experience for generating quality forecasts.
@@ -56,7 +69,7 @@ Any of these arguments can be included in the final string parameter for the Pro
 
 Prophet is meant to require little or no tweaking. Just make sure you provide the correct frequency in the arguments. If the forecast is overfitting (too much flexibility) or underfitting (not enough flexibility), you can adjust the changepoint_prior_scale argument described above.
 
-Other ways to adjust forecasts may be to use the take_log argument or to apply custom seasonality (see key word arguments above) or holidays (described below).
+Other ways to adjust forecasts may be to use the take_log argument or to apply custom seasonality (see key word arguments above) or holidays (described below). You may also get better results by simply considering your selections in Qlik on the actual and forecasting periods.
 
 ## Seasonality
 
