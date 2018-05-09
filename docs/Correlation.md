@@ -1,5 +1,15 @@
 # Correlations
 
+## Table of Contents
+
+- [Introduction](#introduction)
+- [How's this different from the Qlik "Correl" function?](#hows-this-different-from-the-qlik-correl-function)
+- [Quick Start](#quick-start)
+- [Use Correlations in your own app](#use-correlations-in-your-own-app)
+- [Attribution](#attribution)
+
+## Introduction
+
 The correlation methods in this Server Side Extension (SSE) take in two columns of data and compute the linear correlation. 
 
 The methods are implemented using Pandas, specifically the [pandas.DataFrame.corr](https://pandas.pydata.org/pandas-docs/stable/generated/pandas.DataFrame.corr.html) method.
