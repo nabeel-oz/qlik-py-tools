@@ -18,7 +18,7 @@ import grpc
 import numpy as np
 import pandas as pd
 import _utils as utils
-from _prophet_forecast import ProphetForQlik
+from _prophet import ProphetForQlik
 from _clustering import HDBSCANForQlik
 
 # Set the default port for this SSE Extension
