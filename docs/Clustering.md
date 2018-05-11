@@ -254,7 +254,7 @@ Note the use of the `load_script=true` argument to get the function to include t
 
 ### Clustering geospatial data
 
-The density based clustering performed by HDBSCAN performs well for geospatial data as well. In our sample app we demonstrate this with road accident data from Victoria, Australia. 
+HDBSCAN's density based clustering performs well for geospatial data as well. In our sample app we demonstrate this with road accident data from Victoria, Australia. 
 
 The `On the fly Geospatial clustering` sheet performs clustering for accidents based on the latitude and longitude. 
 
@@ -264,7 +264,7 @@ PyTools.Cluster_Geo(ACCIDENT_NO, Lat, Long, '')
 
 This function will by default apply the `haversine` distance metric and convert the decimal values for latitude and longitude to radians as required by HDBSCAN. 
 
-This technique works best for a limited number of points so that the clusters can be explored. Here we provide filters for the user to drill down to the accidents of interest, and then activate the scanning using the `Scan` button. The map visualization switches between two point layers based on the buttons, with the clustering layer using the `Cluster_Geo` function for the colour expression and labels.
+This technique works best for a limited number of points so that the clusters can be explored. Here we provide filters for the user to drill down to the accidents of interest, and then activate clustering using the `Scan` button. The map visualization switches between two point layers based on the buttons, with the clustering layer using the `Cluster_Geo` function for the colour expression and labels.
 
 The scatter plot can be used to select particular clusters by clicking and dragging along the x-axis. For example, you can remove outliers by selecting clusters with labels 0 and above.
 
