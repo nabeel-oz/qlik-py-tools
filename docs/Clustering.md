@@ -12,6 +12,9 @@
    - [Scaler Parameters](#scaler-parameters)
    - [HDBSCAN Parameters](#hdbscan-parameters)
 - [Use Clustering with your own app](#use-clustering-with-your-own-app)
+   - [Clustering with multiple measures](#clustering-with-multiple-measures)
+   - [Clustering with many features](#clustering-with-many-features)
+   - [Clustering geospatial data](#clustering-geospatial-data)
 - [Attribution](#attribution)
 
 ## Introduction
@@ -105,6 +108,8 @@ Any of these arguments below can be included in the final string parameter for t
 
 ### Scaler Parameters
 
+In most cases, we need to standardize the data so that all features provided to the clustering algorithm are treated equally. This is a common step in machine learning and is automated in this implementation by specifying a `scaler` as described in the Basic Parameters section above.
+
 The scaling options provided in this implementation make use of the scikit-learn library. For a better understanding of the options please refer to the documentation [here](http://scikit-learn.org/stable/modules/preprocessing.html).
 
 | Keyword | Description | Sample Values | Remarks |
@@ -122,6 +127,10 @@ The scaling options provided in this implementation make use of the scikit-learn
 | random_state | An option for the [QuantileTransformer](http://scikit-learn.org/stable/modules/generated/sklearn.preprocessing.QuantileTransformer.html#sklearn.preprocessing.QuantileTransformer). <br/><br/>If int, random_state is the seed used by the random number generator. If this is not specified, the random number generator is the RandomState instance used by np.random. Note that this is used by subsampling and smoothing noise. | `1` | The default value is None. |
 
 ### HDBSCAN Parameters
+
+You may want to adjust the result of the clustering algorithm to best fit your data. HDBSCAN makes this process simple by providing just a few intuitive parameters that you need to consider for improving the results. [This article](https://hdbscan.readthedocs.io/en/latest/parameter_selection.html) gives a good explanation on how to choose these parameters effectively. 
+
+On top of these parameters you may also need to consider the metric being used to calculate distance between instances of each feature. HDBSCAN borrows these metrics from the Scikit-Learn library and you can find more information on the options [here](http://scikit-learn.org/stable/modules/generated/sklearn.neighbors.DistanceMetric.html).
 
 Most of the options available for the HDBSCAN class documented in the [API Reference](https://hdbscan.readthedocs.io/en/latest/api.html) are included in this implementation.
 
@@ -142,6 +151,192 @@ Most of the options available for the HDBSCAN class documented in the [API Refer
 You should have completed the installation instructions in the master README.md.
 
 The [sample app](Sample_App_Clustering.qvf) can be used as a template for the instructions below.
+
+You can choose to use the clustering functions in chart expressions or in the load script. The first option allows for clustering on the fly in the context of user's selections and is obviously very powerful. However, there are good reasons why you may want to apply clustering during the data load:
+- Handle large data volumes by running the algorithm in batches
+- Prepare a large number of features to send to the algorithm
+- Add clusters as dimensions in the data model
+
+The sample app includes examples for all three functions using both chart expressions and the load script.
+
+### Clustering with multiple measures
+
+If the number of measures is relatively small you can simply concatenate them into a string when passing the measures to the `Cluster` function. 
+
+In the example below we are clustering Local Government Areas by the number of incidents and the average population. The two measures are concatenated into a string according to the Qlik expression syntax. You must use a semi-colon to separate the measures, as the numbers may contain comma separators. 
+
+```
+PyTools.Cluster([Local Government Area], sum([Incidents Recorded]) & ';' & avg(ERP), 'scaler=quantile, min_cluster_size=3, min_samples=2')
+```
+
+The function will break down the string into individual features based on the locale settings of the machine where the SSE is running. To check that the inputs are being read correctly you can use the `debug=true` argument.
+
+The expression above is used to colour the scatter plot below:
+
+![colored by cluster](images/Clustering-02.png)
+
+You may want to make the clustering more dynamic by letting the user select several values in a particular dimension and then generating measures for each value in the selection using set analysis. 
+
+For example the set analysis expression for the first selected value in the `Offence Subdivision` field would be:
+
+```
+{$<[Offence Subdivision] = {"$(=SubField(Concat(Distinct [Offence Subdivision],';'),';',1))"}>}
+```
+
+You can get the second selected value in the field simply by incrementing the third argument in the `Subfield` expression. Using such set analysis you can then calculate multiple measures based on the selected values in `Offence Subdivision` and combine them into a string. 
+
+Refer to the `Clusters using a dynamic expression` sheet and the `vRatesBySubdivision` variable in the sample app for a complete example.
+
+### Clustering with many features
+
+The techniques above may not be practical if you want to use a large number of features for clustering. This is best handled through the Data Load Editor. 
+
+In the sample app's load script we show two techniques to run the clustering algorithm with a large number of features. In our example we want to cluster incident rates per 100,000 population by offence subgroup. To do this we need to run the clustering with 112 features; one column per offence subgroup. 
+
+The simpler technique is to use the `Cluster_by_Dim` function. This function takes in two dimensions and one measure. The first dimension is the field we want to check for clusters, while the second dimension is the field for which we want to create features based on the measure. The function will pivot the data using this second dimension, before scanning for clusters.
+
+We first create a table that gives us the incident rates by Local Government Area and Offence Subgroup:
+
+```
+LOAD
+	 "Local Government Area",
+	 "Offence Subgroup",
+	 Num(("Incidents Recorded"/"ERP") * 100000, '#,###.00') as "2017 Offence Rate"
+RESIDENT [Temp_SG_Rates_2017];
+```
+
+We can then prepare a temporary table that will be used as input for the clustering function:
+
+```
+[TempInputsTwoDims]:
+LOAD
+	 [Local Government Area] as LGA, // Dimension to scan for clusters
+	 SubField("Offence Subgroup", ' ', 1) as SubGroup, // Dimension for creating features
+	 "2017 Offence Rate" as Rate, // Measure to use in the feature columns
+	 'scaler=quantile,min_cluster_size=3,min_samples=2,cluster_selection_method=leaf' as Args // Additional arguments to pass to the function
+RESIDENT [Temp_SG_Rates_2017];
+```
+
+Then we use the `LOAD...EXTENSION` syntax to call the `Cluster_By_Dim` function:
+
+```
+[LGA Clusters by Subgroup]:
+LOAD
+	 key as [Local Government Area],
+	 labels as [Clusters by Subgroup]
+EXTENSION PyTools.Cluster_by_Dim(TempInputsTwoDims{LGA, SubGroup, Rate, Args});
+
+Drop table [TempInputsTwoDims];
+````
+
+Alternatively, the feature columns can be prepared using the native ETL capabilities of Qlik. This is demonstrated in the `Subgroup Features` section where we pivot the data and then concatenate the measures by offence subgroup into a string of 112 features. With this approach we can just use the `Cluster` function.
+
+```
+// First we prepare a table for use in the function call
+[TempInputsStandard]:
+LOAD
+    "Local Government Area" as LGA,
+    SubGroup_Features as Features,
+    'load_script=true,scaler=quantile,min_cluster_size=3,min_samples=2,cluster_selection_method=leaf' as Args
+RESIDENT [2017 Rate by Subgroup Pivot];
+
+// Then we use the LOAD...EXTENSION syntax to call the Cluster function
+[LGA Clusters by Subgroup (Standard)]:
+LOAD 
+    key as [Local Government Area],
+    labels as [Clusters by Subgroup (Standard)]
+EXTENSION PyTools.Cluster(TempInputsStandard{LGA, Features, Args});
+
+Drop tables [TempInputsStandard];
+```
+
+Note the use of the `load_script=true` argument to get the function to include the key field in the output. This is done by default for the `Cluster_by_Dim` function as it is only meant to be used in the load script.
+
+### Clustering geospatial data
+
+The density based clustering performed by HDBSCAN performs well for geospatial data as well. In our sample app we demonstrate this with road accident data from Victoria, Australia. 
+
+The `On the fly Geospatial clustering` sheet performs clustering for accidents based on the latitude and longitude. 
+
+```
+PyTools.Cluster_Geo(ACCIDENT_NO, Lat, Long, '')
+```
+
+This function will by default apply the `haversine` distance metric and convert the decimal values for latitude and longitude to radians as required by HDBSCAN. 
+
+This technique works best for a limited number of points so that the clusters can be explored. Here we provide filters for the user to drill down to the accidents of interest, and then activate the scanning using the `Scan` button. The map visualization switches between two point layers based on the buttons, with the clustering layer using the `Cluster_Geo` function for the colour expression and labels.
+
+The scatter plot can be used to select particular clusters by clicking and dragging along the x-axis. For example, you can remove outliers by selecting clusters with labels 0 and above.
+
+![removing outliers](images/Clustering-03.png)
+
+Geospatial clustering across a large number of points can be performed during the data load. This also gives us the ability to create polygons for the clusters.
+
+The clustering may need to be performed in batches to avoid memory issues. Choosing a logical dimension to iterate over and perform the clustering should also help with the quality of results. In our example we cluster accidents by road route.
+
+```
+// We will scan for clusters along each route in the data
+For Each vRoad in FieldValueList('ROAD_ROUTE_1')
+
+  // We prepare a table for use in the function call
+  [TempInputsStandard]:
+  LOAD DISTINCT
+      ACCIDENT_NODE_ID,
+      Lat,
+      Long,
+      'load_script=true' as Args
+  RESIDENT [Temp Nodes]
+  WHERE ROAD_ROUTE_1 = '$(vRoad)' and Len(Trim(ROAD_ROUTE_1)) > 0; // We restrict the execution to known routes
+
+  // If there are more than 5 accidents along the route, we scan for clusters
+  If NoOfRows('TempInputsStandard') > 5 then
+  	  
+      // Then we use the LOAD...EXTENSION syntax to call the Cluster_Geo function
+      [Accident Clusters by Route]:
+      LOAD 
+          key as [ACCIDENT_NODE_ID],
+          '$(vRoad) ' & labels as [Clusters by Route] // We add the Route name to the cluster label to differentiate the clusters
+      EXTENSION PyTools.Cluster_Geo(TempInputsStandard{ACCIDENT_NODE_ID, Lat, Long, Args});
+
+  End If	
+    
+  Drop tables [TempInputsStandard];
+
+Next vRoad
+```
+
+We can create polygons for the clusters using the native Qlik function `GeoBoundingBox`. This is demonstrated in the `Create Cluster Polygons` sheet in our sample app.
+
+```
+// The polygons are created by formatting the bounding box points in the following format:
+// [[[[qLeft,qTop],[qRight,qTop],[qRight,qBottom],[qLeft,qBottom],[qLeft,qTop]]]]
+[Cluster Polygons by Route]:
+LOAD 
+    [Clusters by Route],
+    '[[[[' 
+      & Subfield(KeepChar(GeoBoundingBox(LatLong), '-1234567890.,'), ',', 2) 
+      & ',' & Subfield(KeepChar(GeoBoundingBox(LatLong), '-1234567890.,'), ',', 1)
+      & '],[' & Subfield(KeepChar(GeoBoundingBox(LatLong), '-1234567890.,'), ',', 4)
+      & ',' & Subfield(KeepChar(GeoBoundingBox(LatLong), '-1234567890.,'), ',', 1)
+      & '],[' & Subfield(KeepChar(GeoBoundingBox(LatLong), '-1234567890.,'), ',', 4)
+      & ',' & Subfield(KeepChar(GeoBoundingBox(LatLong), '-1234567890.,'), ',', 3)
+      & '],[' & Subfield(KeepChar(GeoBoundingBox(LatLong), '-1234567890.,'), ',', 2)
+      & ',' & Subfield(KeepChar(GeoBoundingBox(LatLong), '-1234567890.,'), ',', 3)
+      & '],[' & Subfield(KeepChar(GeoBoundingBox(LatLong), '-1234567890.,'), ',', 2)
+      & ',' & Subfield(KeepChar(GeoBoundingBox(LatLong), '-1234567890.,'), ',', 1)
+      & ']]]]' as ClusterBoundingBoxRoute
+RESIDENT [Temp Nodes]
+GROUP BY [Clusters by Route];
+
+// We tag the fields for use in mapping visualizations
+TAG FIELDS [Clusters by Route] WITH $geoname;
+TAG FIELDS ClusterBoundingBoxRoute WITH $geomultipolygon;
+```
+
+Remember to remove outliers with the label -1 before creating the polygons.
+
+
+![accident clusters along Great Ocean Road](images/Clustering-04.png)
 
 ## Attribution
 The data used in the sample app was obtained from https://www.data.vic.gov.au/:
