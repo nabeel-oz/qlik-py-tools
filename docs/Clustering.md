@@ -12,6 +12,9 @@
    - [Scaler Parameters](#scaler-parameters)
    - [HDBSCAN Parameters](#hdbscan-parameters)
 - [Use Clustering with your own app](#use-clustering-with-your-own-app)
+   - [Clustering with multiple measures](#clustering-with-multiple-measures)
+   - [Clustering with many features](#clustering-with-many-features)
+   - [Clustering geospatial data](#clustering-geospatial-data)
 - [Attribution](#attribution)
 
 ## Introduction
@@ -148,6 +151,45 @@ Most of the options available for the HDBSCAN class documented in the [API Refer
 You should have completed the installation instructions in the master README.md.
 
 The [sample app](Sample_App_Clustering.qvf) can be used as a template for the instructions below.
+
+You can choose to use the clustering functions in chart expressions or in the load script. The first option allows for clustering on the fly in the context of user's selections and is obviously very powerful. However, there are good reasons why you may want to apply clustering during the data load:
+- Handle large data volumes by running the algorithm in batches
+- Prepare a large number of features to send to the algorithm
+- Add clusters as dimensions in the data model
+
+The sample app includes examples for all three functions using both chart expressions and the load script.
+
+### Clustering with multiple measures
+
+If the number of measures is relatively small you can simply concatenate them into a string when passing the measures to the `Cluster` function. 
+
+In the example below we are clustering Local Government Areas by the number of incidents and the average population. The two measures are concatenated into a string according to the Qlik expression syntax. You must use a semi-colon to separate the measures, as the numbers may contain comma separators. 
+
+```
+PyTools.Cluster([Local Government Area], sum([Incidents Recorded]) & ';' & avg(ERP), 'scaler=quantile, min_cluster_size=3, min_samples=2')
+```
+
+The function will break down the string into individual features based on the locale settings of the machine where the SSE is running. To check that the inputs are being read correctly you can use the `debug=true` argument.
+
+The expression above is used to colour the scatter plot below:
+
+![colored by cluster](images/Clustering-02.png)
+
+You may want to make the clustering more dynamic by letting the user select several values in a particular dimension and then generating measures for each value in the selection using set analysis. 
+
+For example the set analysis expression for the first value in the `Offence Subdivision` field would be:
+
+```
+{$<[Offence Subdivision] = {"$(=SubField(Concat(Distinct [Offence Subdivision],';'),';',1))"}>}
+```
+
+You can get the second value in the field simply by incrementing the third argument in the `Subfield` expression. Using such set analysis you can then calculate multiple measures based on the selected values in `Offence Subdivision` and combine them into a string. 
+
+Refer to the `Clusters using a dynamic expression` sheet and the `vRatesBySubdivision` variable in the sample app for a complete example.
+
+### Clustering with many features
+
+### Clustering geospatial data
 
 ## Attribution
 The data used in the sample app was obtained from https://www.data.vic.gov.au/:
