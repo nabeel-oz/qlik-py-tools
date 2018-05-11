@@ -250,9 +250,93 @@ EXTENSION PyTools.Cluster(TempInputsStandard{LGA, Features, Args});
 Drop tables [TempInputsStandard];
 ```
 
-Note the use of the `load_script=true` argument to get the function to include the key field in the output.
+Note the use of the `load_script=true` argument to get the function to include the key field in the output. This is done by default for the `Cluster_by_Dim` function as it is only meant to be used in the load script.
 
 ### Clustering geospatial data
+
+The density based clustering performed by HDBSCAN performs well for geospatial data as well. In our sample app we demonstrate this with road accident data from Victoria, Australia. 
+
+The `On the fly Geospatial clustering` sheet performs clustering for accidents based on the latitude and longitude. 
+
+```
+PyTools.Cluster_Geo(ACCIDENT_NO, Lat, Long, '')
+```
+
+This function will by default apply the `haversine` distance metric and convert the decimal values for latitude and longitude to radians as required by HDBSCAN. 
+
+This technique works best for a limited number of points so that the clusters can be explored. Here we provide filters for the user to drill down to the accidents of interest, and then activate the scanning using the `Scan` button. The map visualization switches between two point layers based on the buttons, with the clustering layer using the `Cluster_Geo` function for the colour expression and labels.
+
+The scatter plot can be used to select particular clusters by clicking and dragging along the x-axis. For example, you can remove outliers by selecting clusters with labels 0 and above.
+
+![removing outliers](images/Clustering-03.png)
+
+Geospatial clustering across a large number of points can be performed during the data load. This also gives us the ability to create polygons for the clusters.
+
+The clustering may need to be performed in batches to avoid memory issues. Choosing a logical dimension to iterate over and perform the clustering should also help with the quality of results. In our example we cluster accidents by road route.
+
+```
+// We will scan for clusters along each route in the data
+For Each vRoad in FieldValueList('ROAD_ROUTE_1')
+
+  // We prepare a table for use in the function call
+  [TempInputsStandard]:
+  LOAD DISTINCT
+      ACCIDENT_NODE_ID,
+      Lat,
+      Long,
+      'load_script=true' as Args
+  RESIDENT [Temp Nodes]
+  WHERE ROAD_ROUTE_1 = '$(vRoad)' and Len(Trim(ROAD_ROUTE_1)) > 0; // We restrict the execution to known routes
+
+  // If there are more than 5 accidents along the route, we scan for clusters
+  If NoOfRows('TempInputsStandard') > 5 then
+  	  
+      // Then we use the LOAD...EXTENSION syntax to call the Cluster_Geo function
+      [Accident Clusters by Route]:
+      LOAD 
+          key as [ACCIDENT_NODE_ID],
+          '$(vRoad) ' & labels as [Clusters by Route] // We add the Route name to the cluster label to differentiate the clusters
+      EXTENSION PyTools.Cluster_Geo(TempInputsStandard{ACCIDENT_NODE_ID, Lat, Long, Args});
+
+  End If	
+    
+  Drop tables [TempInputsStandard];
+
+Next vRoad
+```
+
+We can create polygons for the clusters using the native Qlik function `GeoBoundingBox`. This is demonstrated in the `Create Cluster Polygons` sheet in our sample app.
+
+```
+// The polygons are created by formatting the bounding box points in the following format:
+// [[[[qLeft,qTop],[qRight,qTop],[qRight,qBottom],[qLeft,qBottom],[qLeft,qTop]]]]
+[Cluster Polygons by Route]:
+LOAD 
+    [Clusters by Route],
+    '[[[[' 
+      & Subfield(KeepChar(GeoBoundingBox(LatLong), '-1234567890.,'), ',', 2) 
+      & ',' & Subfield(KeepChar(GeoBoundingBox(LatLong), '-1234567890.,'), ',', 1)
+      & '],[' & Subfield(KeepChar(GeoBoundingBox(LatLong), '-1234567890.,'), ',', 4)
+      & ',' & Subfield(KeepChar(GeoBoundingBox(LatLong), '-1234567890.,'), ',', 1)
+      & '],[' & Subfield(KeepChar(GeoBoundingBox(LatLong), '-1234567890.,'), ',', 4)
+      & ',' & Subfield(KeepChar(GeoBoundingBox(LatLong), '-1234567890.,'), ',', 3)
+      & '],[' & Subfield(KeepChar(GeoBoundingBox(LatLong), '-1234567890.,'), ',', 2)
+      & ',' & Subfield(KeepChar(GeoBoundingBox(LatLong), '-1234567890.,'), ',', 3)
+      & '],[' & Subfield(KeepChar(GeoBoundingBox(LatLong), '-1234567890.,'), ',', 2)
+      & ',' & Subfield(KeepChar(GeoBoundingBox(LatLong), '-1234567890.,'), ',', 1)
+      & ']]]]' as ClusterBoundingBoxRoute
+RESIDENT [Temp Nodes]
+GROUP BY [Clusters by Route];
+
+// We tag the fields for use in mapping visualizations
+TAG FIELDS [Clusters by Route] WITH $geoname;
+TAG FIELDS ClusterBoundingBoxRoute WITH $geomultipolygon;
+```
+
+Remember to remove outliers with the label -1 before creating the polygons.
+
+
+![accident clusters along Great Ocean Road](images/Clustering-04.png)
 
 ## Attribution
 The data used in the sample app was obtained from https://www.data.vic.gov.au/:
