@@ -333,8 +333,7 @@ TAG FIELDS [Clusters by Route] WITH $geoname;
 TAG FIELDS ClusterBoundingBoxRoute WITH $geomultipolygon;
 ```
 
-Remember to remove outliers with the label -1 before creating the polygons.
-
+Remember to remove outliers, which are labelled `-1` by the clustering, before creating the polygons.
 
 ![accident clusters along Great Ocean Road](images/Clustering-04.png)
 
