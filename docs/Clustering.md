@@ -105,6 +105,8 @@ Any of these arguments below can be included in the final string parameter for t
 
 ### Scaler Parameters
 
+In most cases, we need to standardize the data so that all features provided to the clustering algorithm are treated equally. This is a common step in machine learning and is automated in this implementation by specifying a `scaler` as described in the Basic Parameters section above.
+
 The scaling options provided in this implementation make use of the scikit-learn library. For a better understanding of the options please refer to the documentation [here](http://scikit-learn.org/stable/modules/preprocessing.html).
 
 | Keyword | Description | Sample Values | Remarks |
@@ -122,6 +124,10 @@ The scaling options provided in this implementation make use of the scikit-learn
 | random_state | An option for the [QuantileTransformer](http://scikit-learn.org/stable/modules/generated/sklearn.preprocessing.QuantileTransformer.html#sklearn.preprocessing.QuantileTransformer). <br/><br/>If int, random_state is the seed used by the random number generator. If this is not specified, the random number generator is the RandomState instance used by np.random. Note that this is used by subsampling and smoothing noise. | `1` | The default value is None. |
 
 ### HDBSCAN Parameters
+
+You may want to adjust the result of the clustering algorithm to best fit your data. HDBSCAN makes this process simple by providing just a few intuitive parameters that you need to consider for improving the results. [This article](https://hdbscan.readthedocs.io/en/latest/parameter_selection.html) gives a good explanation on how to choose these parameters effectively. 
+
+On top of these parameters you may also need to consider the metric being used to calculate distance between instances of each feature. HDBSCAN borrows these metrics from the Scikit-Learn library and you can find more information on the options [here](http://scikit-learn.org/stable/modules/generated/sklearn.neighbors.DistanceMetric.html).
 
 Most of the options available for the HDBSCAN class documented in the [API Reference](https://hdbscan.readthedocs.io/en/latest/api.html) are included in this implementation.
 
