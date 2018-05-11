@@ -177,17 +177,80 @@ The expression above is used to colour the scatter plot below:
 
 You may want to make the clustering more dynamic by letting the user select several values in a particular dimension and then generating measures for each value in the selection using set analysis. 
 
-For example the set analysis expression for the first value in the `Offence Subdivision` field would be:
+For example the set analysis expression for the first selected value in the `Offence Subdivision` field would be:
 
 ```
 {$<[Offence Subdivision] = {"$(=SubField(Concat(Distinct [Offence Subdivision],';'),';',1))"}>}
 ```
 
-You can get the second value in the field simply by incrementing the third argument in the `Subfield` expression. Using such set analysis you can then calculate multiple measures based on the selected values in `Offence Subdivision` and combine them into a string. 
+You can get the second selected value in the field simply by incrementing the third argument in the `Subfield` expression. Using such set analysis you can then calculate multiple measures based on the selected values in `Offence Subdivision` and combine them into a string. 
 
 Refer to the `Clusters using a dynamic expression` sheet and the `vRatesBySubdivision` variable in the sample app for a complete example.
 
 ### Clustering with many features
+
+The techniques above may not be practical if you want to use a large number of features for clustering. This is best handled through the Data Load Editor. 
+
+In the sample app's load script we show two techniques to run the clustering algorithm with a large number of features. In our example we want to cluster incident rates per 100,000 population by offence subgroup. To do this we need to run the clustering with 112 features; one column per offence subgroup. 
+
+The simpler technique is to use the `Cluster_by_Dim` function. This function takes in two dimensions and one measure. The first dimension is the field we want to check for clusters, while the second dimension is the field for which we want to create features based on the measure. The function will pivot the data using this second dimension, before scanning for clusters.
+
+We first create a table that gives us the incident rates by Local Government Area and Offence Subgroup:
+
+```
+LOAD
+	 "Local Government Area",
+	 "Offence Subgroup",
+	 Num(("Incidents Recorded"/"ERP") * 100000, '#,###.00') as "2017 Offence Rate"
+RESIDENT [Temp_SG_Rates_2017];
+```
+
+We can then prepare a temporary table that will be used as input for the clustering function:
+
+```
+[TempInputsTwoDims]:
+LOAD
+	 [Local Government Area] as LGA, // Dimension to scan for clusters
+	 SubField("Offence Subgroup", ' ', 1) as SubGroup, // Dimension for creating features
+	 "2017 Offence Rate" as Rate, // Measure to use in the feature columns
+	 'scaler=quantile,min_cluster_size=3,min_samples=2,cluster_selection_method=leaf' as Args // Additional arguments to pass to the function
+RESIDENT [Temp_SG_Rates_2017];
+```
+
+Then we use the `LOAD...EXTENSION` syntax to call the `Cluster_By_Dim` function:
+
+```
+[LGA Clusters by Subgroup]:
+LOAD
+	 key as [Local Government Area],
+	 labels as [Clusters by Subgroup]
+EXTENSION PyTools.Cluster_by_Dim(TempInputsTwoDims{LGA, SubGroup, Rate, Args});
+
+Drop table [TempInputsTwoDims];
+````
+
+Alternatively, the feature columns can be prepared using the native ETL capabilities of Qlik. This is demonstrated in the `Subgroup Features` section where we pivot the data and then concatenate the measures by offence subgroup into a string of 112 features. With this approach we can just use the `Cluster` function.
+
+```
+// First we prepare a table for use in the function call
+[TempInputsStandard]:
+LOAD
+    "Local Government Area" as LGA,
+    SubGroup_Features as Features,
+    'load_script=true,scaler=quantile,min_cluster_size=3,min_samples=2,cluster_selection_method=leaf' as Args
+RESIDENT [2017 Rate by Subgroup Pivot];
+
+// Then we use the LOAD...EXTENSION syntax to call the Cluster function
+[LGA Clusters by Subgroup (Standard)]:
+LOAD 
+    key as [Local Government Area],
+    labels as [Clusters by Subgroup (Standard)]
+EXTENSION PyTools.Cluster(TempInputsStandard{LGA, Features, Args});
+
+Drop tables [TempInputsStandard];
+```
+
+Note the use of the `load_script=true` argument to get the function to include the key field in the output.
 
 ### Clustering geospatial data
 
