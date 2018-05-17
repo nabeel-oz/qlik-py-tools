@@ -21,5 +21,8 @@ pip install fbprophet
 pip install -U scikit-learn
 pip install hdbscan
 echo.
+echo Creating a new firewall rule for TCP port 50055... & echo.
+netsh advfirewall firewall add rule name="Qlik PyTools" dir=in action=allow protocol=TCP localport=50055
+echo.
 echo All done. Run Qlik-Py-Start.bat to start the SSE Extension Service. & echo.
 pause
