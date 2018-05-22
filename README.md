@@ -55,7 +55,8 @@ I prefer this approach for two key reasons:
 
 4. Right click `Qlik-Py-Init.bat` and chose 'Run as Administrator'. You can open this file in a text editor to review the commands that will be executed. If everything goes smoothly you will see a Python virtual environment being set up, some packages being installed and TCP Port `50055` being opened for inbound communication. 
      - If you need to change the port you can do so in the file `core\__main__.py` by opening the file with a text editor, changing the value of the `_DEFAULT_PORT` variable, and then saving the file. You will also need to update `Qlik-Py-Init.bat` to use the same port in the `netsh` command. This command will only work if you run the batch file through an elevated command prompt (i.e. with administrator privileges).
-     - Once the execution completes, do a quick scan of the log to see everything installed correctly. The libraries imported are: `grpcio`, `numpy`, `scipy`, `pandas`, `fbprophet`, `scikit-learn`, `hdbscan`. Also, check that the `core` and `generated` directories have been moved successfully to the newly created `qlik-py-env` directory.
+     - Once the execution completes, do a quick scan of the log to see everything installed correctly. The libraries imported are: `grpcio`, `grpcio-tools`, `numpy`, `scipy`, `pandas`, `fbprophet`, `scikit-learn`, `hdbscan`. Also, check that the `core` and `generated` directories have been moved successfully to the newly created `qlik-py-env` directory.
+     - If the initialization fails for any reason, you can simply delete the `qlik-py-env` directory and re-run `Qlik-Py-Init.bat`.
 
 5. Now whenever you want to start this Python service you can run `Qlik-Py-Start.bat`.
 
