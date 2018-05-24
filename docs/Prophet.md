@@ -67,9 +67,9 @@ Any of these arguments can be included in the final string parameter for the Pro
 
 ## Tweaking the forecast
 
-Prophet is meant to require little or no tweaking. Just make sure you provide the correct frequency in the arguments. If the forecast is overfitting (too much flexibility) or underfitting (not enough flexibility), you can adjust the changepoint_prior_scale argument described above.
+Prophet is meant to require little or no tweaking. Just make sure you provide the correct frequency in the arguments. If the forecast is overfitting (too much flexibility) or underfitting (not enough flexibility), you can adjust the `changepoint_prior_scale` argument described above.
 
-Other ways to adjust forecasts may be to use the take_log argument or to apply custom seasonality (see key word arguments above) or holidays (described below). You may also get better results by simply considering your selections in Qlik on the actual and forecasting periods.
+Other ways to adjust forecasts may be to use the `take_log` argument or to apply custom seasonality (see key word arguments above) or holidays (described below). You may also get better results by simply considering your selections in Qlik on the actual and forecasting periods.
 
 ## Seasonality
 
