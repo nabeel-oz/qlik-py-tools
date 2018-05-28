@@ -255,22 +255,6 @@ vHolidayWindow
 
 In the same app you'll notice there are calculation conditions placed on all of the forecasting visualizations. This is a good practice as the user might want to make a series of selections and you can let them put forecasting on hold until they are ready. You can just copy the buttons, slider and KPI object to your app if you like.
 
-Next we set up additional variables that are used in our `Prophet_Seasonality` expressions:
-
-```
-vAccidentsByMonth
-// Accidents by month as a concatenated string. Months must be presented as numeric values based on the month start date.
-Concat(DISTINCT TOTAL Aggr(Num(FORECAST_MONTH) & ':' & Count({$<FORECAST_LINK_TYPE = {'Actual'}>} Distinct ACCIDENT_NO), FORECAST_MONTH), ';')
- 
-vAccidentsByDate
-// Accidents by date as a concatenated string. Dates must be presented as numeric values.
-Concat(DISTINCT TOTAL Aggr(Num(FORECAST_DATE) & ':' & Count({$<FORECAST_LINK_TYPE = {'Actual'}>} Distinct ACCIDENT_NO), FORECAST_DATE), ';')
- 
-vHolidays
-// Public holidays as a concatenated string. Dates must be presented as numeric values.
-Concat({$<HOLIDAY_NAME={*}>} Distinct Total Num(FORECAST_DATE) & ':' & HOLIDAY_NAME, ';')
-```
-
 Now we can create our dimensions and measures.
 
 The dimensions used in the Prophet visualizations are restricted to the number of forecast periods controlled by the slider at the bottom. Hence we use calculated dimensions:
@@ -330,6 +314,22 @@ Prediction (Daily Trend)
 PyTools.Prophet(if(FORECAST_MONTH <= AddMonths(Max(Total [Accident Month & Year]), $(vForecastPeriods)), FORECAST_DATE),
                 Count({$<FORECAST_LINK_TYPE = {'Actual'}>} Distinct ACCIDENT_NO),
                 'freq=D, return=trend')
+```
+
+For analyzing seasonality we need to set up additional variables which will be used in our `Prophet_Seasonality` expressions:
+
+```
+vAccidentsByMonth
+// Accidents by month as a concatenated string. Months must be presented as numeric values based on the month start date.
+Concat(DISTINCT TOTAL Aggr(Num(FORECAST_MONTH) & ':' & Count({$<FORECAST_LINK_TYPE = {'Actual'}>} Distinct ACCIDENT_NO), FORECAST_MONTH), ';')
+ 
+vAccidentsByDate
+// Accidents by date as a concatenated string. Dates must be presented as numeric values.
+Concat(DISTINCT TOTAL Aggr(Num(FORECAST_DATE) & ':' & Count({$<FORECAST_LINK_TYPE = {'Actual'}>} Distinct ACCIDENT_NO), FORECAST_DATE), ';')
+ 
+vHolidays
+// Public holidays as a concatenated string. Dates must be presented as numeric values.
+Concat({$<HOLIDAY_NAME={*}>} Distinct Total Num(FORECAST_DATE) & ':' & HOLIDAY_NAME, ';')
 ```
 
 For the seasonality visualizations we use special dimensions and the `Prophet_Seasonality` function. This is so we can plot the seasonalities against an intuitive scale.
