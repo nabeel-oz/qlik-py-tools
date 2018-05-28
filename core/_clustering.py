@@ -13,9 +13,6 @@ import ServerSideExtension_pb2 as SSE
 PARENT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.append(os.path.join(PARENT_DIR, 'generated'))
 
-# Set the locale for number formatting based on user settings
-locale.setlocale(locale.LC_NUMERIC, '')
-
 class HDBSCANForQlik:
     """
     A class to implement the HDBSCAN clustering library for Qlik.

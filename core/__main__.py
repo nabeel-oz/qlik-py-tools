@@ -5,6 +5,7 @@ import logging.config
 import os
 import sys
 import time
+import locale
 from concurrent import futures
 
 # Add Generated folder to module path.
@@ -27,6 +28,8 @@ _DEFAULT_PORT = '50055'
 _ONE_DAY_IN_SECONDS = 60 * 60 * 24
 _MINFLOAT = float('-inf')
 
+# Set the locale for number formatting based on user settings
+locale.setlocale(locale.LC_NUMERIC, '')
 
 class ExtensionService(SSE.ConnectorServicer):
     """

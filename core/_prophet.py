@@ -2,6 +2,7 @@ import os
 import sys
 import time
 import string
+import locale
 import numpy as np
 import pandas as pd
 from fbprophet import Prophet
@@ -165,7 +166,7 @@ class ProphetForQlik:
         request_df = pd.DataFrame([p.split(":") for p in pairs], columns=['ds', 'y'])
         
         # Convert strings to numeric values, replace conversion errors with Null values
-        request_df = request_df.apply(pd.to_numeric, errors='coerce')         
+        request_df = request_df.applymap(lambda s: locale.atof(s) if s else np.NaN)      
         
         # Check if the holidays column is populated
         if len(holidays) > 0:
