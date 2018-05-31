@@ -385,8 +385,8 @@ class ExtensionService(SSE.ConnectorServicer):
         # Enable(or disable) script evaluation
         # Set values for pluginIdentifier and pluginVersion
         capabilities = SSE.Capabilities(allowScript=False,
-                                        pluginIdentifier='NAF Python Toolbox',
-                                        pluginVersion='v1.2.0')
+                                        pluginIdentifier='Qlik Python Tools',
+                                        pluginVersion='v2.3.0')
 
         # If user defined functions supported, add the definitions to the message
         with open(self.function_definitions) as json_file:
