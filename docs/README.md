@@ -61,7 +61,10 @@ I prefer this approach for two key reasons:
 
 5. Now whenever you want to start this Python service you can run `Qlik-Py-Start.bat`.
 
-6. Now you need to [set up an Analytics Connection in Qlik Sense Enterprise](https://help.qlik.com/en-US/sense/February2018/Subsystems/ManagementConsole/Content/create-analytic-connection.htm) or [update the Settings.ini file in Qlik Sense Desktop](https://help.qlik.com/en-US/sense/February2018/Subsystems/Hub/Content/Introduction/configure-analytic-connection-desktop.htm).
+6. Now you need to [set up an Analytics Connection in Qlik Sense Enterprise](https://help.qlik.com/en-US/sense/February2018/Subsystems/ManagementConsole/Content/create-analytic-connection.htm) or [update the Settings.ini file in Qlik Sense Desktop](https://help.qlik.com/en-US/sense/February2018/Subsystems/Hub/Content/Introduction/configure-analytic-connection-desktop.htm). If you are using the sample apps make sure you use `PyTools` as the name for the analytics connection, or alternatively, update all of the expressions to use the new name.
+     - For Qlik Sense Desktop you need to update the `settings.ini` file:<br/><br/>![QSD Analytics Connection](images/Install-04.png)
+     - For Qlik Sense Enterprise you need to create an Analytics Connection through QMC:<br/><br/>![QSE Analytics Connection](images/Install-02.png)
+     - The Analytics Connection can point to a different machine and can be [secured with certificates](https://github.com/qlik-oss/server-side-extension/blob/master/generate_certs_guide/README.md):<br/><br/>![QSE Secure Analytics Connection](images/Install-03.png)
 
 7. Finally restart the Qlik Sense engine service for Qlik Sense Enterprise or close and reopen Qlik Sense Desktop. This step may not be required if you are using Qlik Sense April 2018. If a connection between Python and Qlik is established you should see the capabilities listed in the terminal.
 
