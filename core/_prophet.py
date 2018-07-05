@@ -535,7 +535,7 @@ class ProphetForQlik:
                 else:
                     # Overwrite with y values for historic data
                     self.forecast.loc[:len(self.forecast) - self.periods - 1, self.result_type] \
-                    = self.request_df.loc[:len(self.request_df) - self.periods - 1, 'y']
+                    = self.input_df.loc[:len(self.request_df) - self.periods - 1, 'y']
             
             # Update to the original index from the request data frame
             self.forecast.index = self.request_index.index
