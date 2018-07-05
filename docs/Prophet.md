@@ -164,6 +164,7 @@ drop table TempDateMinMax;
 [Forecast Calendar]:
 LOAD
     FORECAST_DATE,
+    FORECAST_WEEK,
     FORECAST_MONTH,
     FORECAST_YEAR,
     FORECAST_DATE_TYPE,
@@ -172,6 +173,7 @@ LOAD
 // Create month and year fields as well as a field to tell us if the date is historic or in the future:
 LOAD
     FORECAST_DATE,
+    Dual(Year([FORECAST_DATE]) & '-' & Week([FORECAST_DATE]), WeekStart([FORECAST_DATE])) as FORECAST_WEEK,
     Dual(Year([FORECAST_DATE]) & '-' & Month([FORECAST_DATE]), MonthStart([FORECAST_DATE])) as FORECAST_MONTH,
     Year([FORECAST_DATE]) as FORECAST_YEAR,
     if(FORECAST_DATE < $(vForecastStartDate), 'Historic', 'Future') as FORECAST_DATE_TYPE;
@@ -188,13 +190,15 @@ While $(vCalendarStartDate) + IterNo() - 1 <= $(vForecastEndDate);
 Concatenate([Forecast Calendar])
 LOAD
     FORECAST_DATE,
+    FORECAST_WEEK,
     FORECAST_MONTH,
     FORECAST_YEAR,
     FORECAST_DATE_TYPE,
     FORECAST_DATE as FORECAST_KEY
 RESIDENT [Forecast Calendar];
  
-// Add holidays to the Forecast Calendar. In this case we only have holidays from 2014-2019 so we should only use holiday functions for this range.
+// Optional bit if you want to consider specific holidays in the forecast.
+// Here we add holidays to the Forecast Calendar. In this case we only have holidays from 2014-2019 so we should only use holiday functions for this range.
 // With a left join we get NULL values in HOLIDAY_NAME if there was no holiday on that date. This is what we want.
 LEFT JOIN ([Forecast Calendar])
 LOAD
