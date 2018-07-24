@@ -286,6 +286,7 @@ class ProphetForQlik:
         self.result_type = 'yhat'
         self.take_log  = False
         self.seasonality = 'yearly'
+        self.seasonality_mode = None
         self.debug = False
         self.freq = 'D'
         self.cap = None
@@ -296,6 +297,7 @@ class ProphetForQlik:
         self.name = None
         self.period = None
         self.fourier_order = None
+        self.mode = None
         self.seasonality_prior_scale = None
         self.holidays_prior_scale = None
         self.is_seasonality_request = False
@@ -351,6 +353,11 @@ class ProphetForQlik:
             if 'seasonality' in self.kwargs:
                 self.seasonality = self.kwargs['seasonality'].lower()
             
+            # Set the seasonlity mode. Useful if the seasonality is not a constant additive factor as assumed by Prophet
+            # Valid values are: additive, multiplicative
+            if 'seasonality_mode' in self.kwargs:
+                self.seasonality_mode = self.kwargs['seasonality_mode'].lower()
+            
             # Set the debug option for generating execution logs
             # Valid values are: true, false
             if 'debug' in self.kwargs:
@@ -389,6 +396,11 @@ class ProphetForQlik:
             # Default seasonalities are yearly and weekly, as well as daily for sub daily data
             if 'add_seasonality' in self.kwargs:
                 self.name = self.kwargs['add_seasonality'].lower()
+            
+            # Set 'additive' or 'multiplicative' mode for the additional seasonality
+            # Default value follows the seasonality_mode parameter
+            if 'add_seasonality_mode' in self.kwargs:
+                self.mode = self.kwargs['add_seasonality_mode'].lower()
             
             # Set the seasonality period 
             # e.g. 30.5 for 'monthly' seasonality
@@ -439,8 +451,8 @@ class ProphetForQlik:
         # Populate the parameters in the corresponding dictionary:
         
         # Set up a list of possible key word arguments for the Prophet() function
-        prophet_params = ['growth', 'changepoint_prior_scale', 'interval_width', 'seasonality_prior_scale',\
-                          'holidays_prior_scale']
+        prophet_params = ['seasonality_mode', 'growth', 'changepoint_prior_scale', 'interval_width',\
+                          'seasonality_prior_scale', 'holidays_prior_scale']
         
         # Create dictionary of key word arguments for the Prophet() function
         self.prophet_kwargs = self._populate_dict(prophet_params)
@@ -452,7 +464,7 @@ class ProphetForQlik:
         self.make_kwargs = self._populate_dict(make_params)
         
         # Set up a list of possible key word arguments for the add_seasonality() function
-        seasonality_params = ['name', 'period', 'fourier_order']
+        seasonality_params = ['name', 'period', 'fourier_order', 'mode']
         
         # Create dictionary of key word arguments for the add_seasonality() function
         self.add_seasonality_kwargs = self._populate_dict(seasonality_params)
