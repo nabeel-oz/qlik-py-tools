@@ -53,6 +53,8 @@ def fillna(df, method="zeros"):
         return df.fillna(df.median())
     elif method == "mode":
         return df.fillna(df.mode().iloc[0])
+    elif method == "none":
+        return df
     else:
         return df.fillna(0)
     
