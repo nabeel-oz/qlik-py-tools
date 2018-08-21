@@ -25,13 +25,15 @@ You use the Prophet functions in Qlik with the syntax:
 
 `<Analytic connection name>.Prophet([Date Column], [Value Column], 'arg1=value1, arg2=value2, ...')`
 
+The `[Date Column]` must extend into the future to cover the periods you want to forecast. The `[Value Column]` should simply send `NULL` values for these future periods.
+
 There are a few variants of the Prophet function made available, but this is the main function and we'll look at the other ones later.
 
 Here's an example of an actual expression:
 
 `PyTools.Prophet(FORECAST_MONTH, Count({$<FORECAST_LINK_TYPE = {'Actual'}>} Distinct ACCIDENT_NO), 'freq=MS, return=yhat')`
 
-In this example the first column is the forecast month, the second column is the measure we want to forecast and the third column is a string of additional key word arguments.
+In this example the first column is the forecast month, the second column is the measure we want to forecast and the third column is a string of additional key word arguments. 
 
 Using this expression in a line chart, with the dimension as forecast month, and another measure to show the actual values, gives us this result:
 
@@ -134,7 +136,9 @@ You should have completed the installation instructions in the master README.md.
 
 The [sample app](Sample_App_Prophet.qvf) can be used as a template for the instructions below.
 
-Firstly, you need to set up your Qlik data model with a forecasting calendar. These instructions work with daily and monthly forecasts, but should teach you enough to build a sub daily forecast as well.
+Firstly, you should set up your Qlik data model with a forecasting calendar. These instructions work with daily and monthly forecasts, but should teach you enough to build a sub daily forecast as well. 
+
+_Note that it is not necessary to build a forecast calendar as explained below. We simply need to include the periods to be forecasted in the input dataset. You could have these columns created in the data source and simply left empty. However, building a forecast calendar as explained below is a robust approach that lets the user control the number of periods they want to forecast, and make selections and exclusions in the source dates without introducing gaps in the forecast._
 
 ![Qlik data model snippet](images/Data-01.png)
 
