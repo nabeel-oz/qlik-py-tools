@@ -100,6 +100,41 @@
         "c_holidays": 0,
         "d_other_args": 0
       }
+    },
+	{
+      "Id": 9,
+      "Name": "sklearn_Setup",
+      "Type": 0,
+      "ReturnType": 0,
+      "Params": {
+        "a_model_name": 0,
+        "b_estimator_args": 0,
+        "c_scaler_args": 0,
+        "d_execution_args": 0
+      }
+    },
+	{
+      "Id": 10,
+      "Name": "sklearn_Set_Features",
+      "Type": 0,
+      "ReturnType": 0,
+      "Params": {
+        "a_model_name": 0,
+        "b_feature_name": 0,
+		"c_var_type": 0,
+        "d_data_type": 0,
+        "e_strategy": 0,
+		"f_hash_length": 1
+      }
+    },
+	{
+      "Id": 11,
+      "Name": "sklearn_Get_Features",
+      "Type": 0,
+      "ReturnType": 0,
+      "Params": {
+        "a_model_name": 0
+      }
     }
   ]
 }

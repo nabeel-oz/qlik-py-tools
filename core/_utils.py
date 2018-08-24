@@ -90,3 +90,23 @@ def count_placeholders(series):
             break
 
     return count
+
+def get_kwargs(str_kwargs):
+    """
+    Take in a string of key word arguments and return as a dictionary of key, value pairs
+    The string should be in the form: 'arg1=value1,arg2=value2'
+    """
+    
+    # Remove any extra spaces and trailing commas
+    args = str_kwargs.strip()
+    if args[-1] == ',':
+        args = args[:-1]
+    
+    # The parameter and values are transformed into key value pairs
+    args = args.translate(str.maketrans('', '', string.whitespace)).split(",")
+    kwargs = dict([arg.split("=") for arg in args])
+
+    # Make sure the key words are in lower case
+    kwargs = {k.lower(): v for k, v in kwargs.items()}
+    
+    return kwargs

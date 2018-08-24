@@ -6,6 +6,7 @@ import os
 import sys
 import time
 import locale
+import warnings
 from concurrent import futures
 
 # Add Generated folder to module path.
@@ -15,12 +16,17 @@ sys.path.append(os.path.join(PARENT_DIR, 'generated'))
 import ServerSideExtension_pb2 as SSE
 import grpc
 
+# Turn off warnings by default
+if not sys.warnoptions:
+    warnings.simplefilter("ignore")
+
 # Import libraries for added functions
 import numpy as np
 import pandas as pd
 import _utils as utils
 from _prophet import ProphetForQlik
 from _clustering import HDBSCANForQlik
+from _sklearn import SKLearnForQlik
 
 # Set the default port for this SSE Extension
 _DEFAULT_PORT = '50055'
@@ -68,7 +74,10 @@ class ExtensionService(SSE.ConnectorServicer):
             5: '_prophet',
             6: '_prophet',
             7: '_prophet',
-            8: '_prophet_seasonality'
+            8: '_prophet_seasonality',
+            9: '_sklearn',
+            10: '_sklearn',
+            11: '_sklearn'
         }
 
     """
@@ -352,6 +361,62 @@ class ExtensionService(SSE.ConnectorServicer):
             # Yield Row data as Bundled rows
             yield SSE.BundledRows(rows=response_rows)  
     
+    @staticmethod
+    def _sklearn(request, context):
+        """
+        Setup the meta data for a sklearn machine learning model.
+        :param request: an iterable sequence of RowData
+        :param context:
+        :return: Refer to comments below as the response depends on the function called
+        :Qlik expression examples:
+        :<AAI Connection Name>.
+        """
+        # Get a list from the generator object so that it can be iterated over multiple times
+        request_list = [request_rows for request_rows in request]
+        
+        # Get the function id from the header to determine the variant being called
+        function = ExtensionService._get_function_id(context)
+        
+        # Create an instance of the SKLearnForQlik class
+        model = SKLearnForQlik(request_list, context)
+        
+        if function >= 9 and function <= 10:    
+            if function == 9:
+                # Set up the model and save to disk.
+                response = model.setup()
+            elif function == 10:
+                # Set feature definitions for an existing model
+                response = model.set_features()
+            
+            # Convert the response to a list of rows
+            response = response.values.tolist()
+
+            # We convert values to type SSE.Dual, and group columns into a iterable
+            response_rows = [iter([SSE.Dual(strData=row[0]),\
+                                  SSE.Dual(strData=row[1]),\
+                                  SSE.Dual(strData=row[2])]) for row in response]
+        
+        elif function == 11:
+            # Return the feature definitions for an existing model
+            response = model.get_features()
+            
+            # Convert the response to a list of rows
+            response = response.values.tolist()
+            
+            # We convert values to type SSE.Dual, and group columns into a iterable
+            response_rows = [iter([SSE.Dual(strData=row[0]),\
+                                   SSE.Dual(strData=row[1]),\
+                                   SSE.Dual(strData=row[2]),\
+                                   SSE.Dual(strData=row[3]),\
+                                   SSE.Dual(strData=row[4]),\
+                                   SSE.Dual(numData=row[5])]) for row in response]
+        
+        # Values are then structured as SSE.Rows
+        response_rows = [SSE.Row(duals=duals) for duals in response_rows] 
+        
+        # Yield Row data as Bundled rows
+        yield SSE.BundledRows(rows=response_rows)
+        
     @staticmethod
     def _get_function_id(context):
         """

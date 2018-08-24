@@ -1,6 +1,65 @@
+import time
+from pathlib import Path
 from sklearn import preprocessing
 from sklearn.base import TransformerMixin
+from sklearn.pipeline import Pipeline
+from sklearn.externals import joblib
 from sklearn.feature_extraction import FeatureHasher
+
+class PersistentModel:
+    """
+    A general class to manage persistent models
+    """
+    
+    def __init__(self):
+        """
+        Basic contructor
+        """
+        
+        self.name = None
+        self.state = None
+        self.state_timestamp = None
+        
+    def save(self, name, path, overwrite=False):
+        """
+        Save the model to disk at the specified path.
+        If the model already exists and exist_ok=False, throw an exception.
+        If exist_ok=True, replace any existing file.
+        """
+        
+        # Create string for path and file name
+        f = path + name + '.joblib'
+                
+        # Create the directory if required
+        try:
+            Path(path).mkdir(parents=True, exist_ok=False) 
+        except FileExistsError:
+            pass
+        
+        # If the file exists and overwriting is not allowed, raise an exception
+        if Path(f).exists() and not overwrite:
+            raise FileExistsError("The specified model name already exists: {0}.".format(name + '.joblib')\
+                                  +"\nPass overwrite=True if it is ok to overwrite.")
+        else:
+            # Store this instance to file
+            joblib.dump(self, filename=Path(f), compress=3)
+        
+        self.name = name
+        self.state = 'saved'
+        self.state_timestamp = time.time()
+                
+        return self
+    
+    def load(self, name, path):        
+        """
+        Check if the model exists at the specified path and return it to the caller.
+        If the model is not found throw an exception.
+        """
+        
+        with open(Path(path + name + '.joblib'), 'rb') as f:
+            self = joblib.load(f)
+        
+        return self
 
 class Preprocessor(TransformerMixin):
     """
@@ -8,13 +67,13 @@ class Preprocessor(TransformerMixin):
     This class automates One Hot Encoding, Hashing and Scaling.
     """
     
-    def __init__(self, features, return_type='np', scale_hashed=True, missing="zeros", scaler="standard", **kwargs):
+    def __init__(self, features, return_type='np', scale_hashed=True, missing="zeros", scaler="StandardScaler", **kwargs):
         """
         Initialize the Preprocessor object based on the features dataframe.
         
-        The features dataframe must include these columns: Name, Variable_Type, Feature_Strategy.      
-        If Feature_Strategy includes hashing, the Hash_Features column must also be included.
-        The dataframe must be indexed by Name.
+        The features dataframe must include these columns: name, variable_type, feature_strategy.      
+        If Feature_Strategy includes hashing, the hash_features column must also be included.
+        The dataframe must be indexed by name.
                 
         For further information on the columns refer to the project documentation: 
         https://github.com/nabeel-qlik/qlik-py-tools
@@ -240,20 +299,18 @@ class Preprocessor(TransformerMixin):
             return df.fillna(0)
     
     @staticmethod
-    def get_scaler(df, missing="zeros", scaler="standard", **kwargs):
+    def get_scaler(df, missing="zeros", scaler="StandardScaler", **kwargs):
         """
         Fit a sklearn scaler on a Data Frame and return the scaler.
-        Valid options for the scaler are: standard, minmax, maxabs, robust, quantile
+        Valid options for the scaler are: StandardScaler, MinMaxScaler, MaxAbsScaler, RobustScaler, QuantileTransformer
         Missing values must be dealt with before the scaling is applied. 
         Valid options specified through the missing parameter are: zeros, mean, median, mode
         """
 
-        scalers = {'standard':'StandardScaler', 'minmax':'MinMaxScaler', 'maxabs':'MaxAbsScaler',\
-                   'robust':'RobustScaler', 'quantile':'QuantileTransformer'}
-
-        s = getattr(preprocessing, scalers[scaler])
+        s = getattr(preprocessing, scaler)
         s = s(**kwargs)
 
         df = Preprocessor.fillna(df, missing=missing)
         
-        return s.fit(df)
+        return s.fit(df)       
+        
