@@ -145,6 +145,27 @@
         "a_model_name": 0,
 		"n_features": 0
       }
+    },
+	{
+      "Id": 13,
+      "Name": "sklearn_Predict",
+      "Type": 0,
+      "ReturnType": 0,
+      "Params": {
+        "a_model_name": 0,
+		"n_features": 0
+      }
+    },
+	{
+      "Id": 14,
+      "Name": "sklearn_Bulk_Predict",
+      "Type": 0,
+      "ReturnType": 0,
+      "Params": {
+        "a_model_name": 0,
+		"b_key": 0,
+		"n_features": 0
+      }
     }
   ]
 }

@@ -199,6 +199,9 @@ class SKLearnForQlik:
         
         # Prepare the output
         self.response = self.model.features_df
+        self.response["sort_order"] = pd.Series([i+1 for i in range(len(self.response.index))], index=self.response.index)
+        self.response = self.response[["model_name", "sort_order", "name", "variable_type", "data_type",\
+                                       "feature_strategy", "hash_features"]]
         
         # Send the reponse table description to Qlik
         self._send_table_description("features")
@@ -290,8 +293,69 @@ class SKLearnForQlik:
     
     #def score(self):
     
-    #def predict(self):
+    def predict(self, load_script=False):
+        """
+        Return a prediction by applying an existing model to the supplied data.
+        This method can be called from a chart expression or the load script in Qlik.
+        The load_script flag needs to be set accordingly for the correct response.
+        """
         
+        # Interpret the request data based on the expected row and column structure
+        row_template = ['strData', 'strData']
+        col_headers = ['model_name', 'n_features']
+        feature_col_num = 1
+        
+        # An additional key field column is expected if the call is made through the load script
+        if load_script:
+            row_template = ['strData', 'strData', 'strData']
+            col_headers = ['model_name', 'key', 'n_features']
+            feature_col_num = 2
+        
+        # Create a Pandas Data Frame for the request data
+        self.request_df = utils.request_df(self.request, row_template, col_headers)
+        
+        # Initialize the persistent model
+        self.model = PersistentModel()
+        
+        # Get the model name from the request dataframe
+        self.model.name = self.request_df.loc[0, 'model_name']
+        
+        # Load the model from disk
+        self.model = self.model.load(self.model.name, self.path)
+        
+        if load_script:
+            # Set the key column as the index
+            self.request_df.set_index("key", drop=False, inplace=True)
+        
+        # Split the features provided as a string into individual columns
+        self.X = pd.DataFrame([x[feature_col_num].split("|") for x in self.request_df.values.tolist()],\
+                                     columns=self.model.features_df.loc[:,"name"].tolist(),\
+                                     index=self.request_df.index)
+        
+        # Convert the data types based on feature definitions 
+        self.X = utils.convert_types(self.X, self.model.features_df)
+        
+        # Predict y for X using the previously fit pipeline
+        self.y = self.model.pipe.predict(self.X)
+        
+        # Prepare the response
+        self.response = pd.DataFrame(self.y, columns=["result"], index=self.X.index)
+        
+        if load_script:
+            # Add the key field column to the response
+            self.response = self.request_df.join(self.response).drop(['n_features'], axis=1)
+        
+            # If the function was called through the load script we return a Data Frame
+            self._send_table_description("predict")
+            
+            return self.response
+            
+        # If the function was called through a chart expression we return a Series
+        else:
+            return self.response.loc[:,'result']
+        
+    #def predict_proba(self, load_script=False)
+    
     # STAGE 3 : If feasible, allow transient models that can be setup and used from chart expressions
     # def fit_predict(self):
     
@@ -413,6 +477,7 @@ class SKLearnForQlik:
             self.table.fields.add(name="timestamp")
         elif variant == "features":
             self.table.fields.add(name="model_name")
+            self.table.fields.add(name="sort_order")
             self.table.fields.add(name="feature")
             self.table.fields.add(name="var_type")
             self.table.fields.add(name="data_type")
@@ -424,6 +489,10 @@ class SKLearnForQlik:
             self.table.fields.add(name="time_stamp")
             self.table.fields.add(name="score_result")
             self.table.fields.add(name="score", dataType=1)
+        elif variant == "predict":
+            self.table.fields.add(name="model_name")
+            self.table.fields.add(name="key")
+            self.table.fields.add(name="prediction")
             
         # Send table description
         table_header = (('qlik-tabledescription-bin', self.table.SerializeToString()),)

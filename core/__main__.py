@@ -78,7 +78,9 @@ class ExtensionService(SSE.ConnectorServicer):
             9: '_sklearn',
             10: '_sklearn',
             11: '_sklearn',
-            12: '_sklearn'
+            12: '_sklearn',
+            13: '_sklearn',
+            14: '_sklearn'
         }
 
     """
@@ -406,11 +408,12 @@ class ExtensionService(SSE.ConnectorServicer):
             
             # We convert values to type SSE.Dual, and group columns into a iterable
             response_rows = [iter([SSE.Dual(strData=row[0]),\
-                                   SSE.Dual(strData=row[1]),\
+                                   SSE.Dual(numData=row[1]),\
                                    SSE.Dual(strData=row[2]),\
                                    SSE.Dual(strData=row[3]),\
                                    SSE.Dual(strData=row[4]),\
-                                   SSE.Dual(numData=row[5])]) for row in response]
+                                   SSE.Dual(strData=row[5]),\
+                                   SSE.Dual(numData=row[6])]) for row in response]
         
         elif function == 12:
             # Train and Test an existing model, saving the sklearn pipeline for further predictions
@@ -425,6 +428,28 @@ class ExtensionService(SSE.ConnectorServicer):
                                    SSE.Dual(strData=row[2]),\
                                    SSE.Dual(strData=row[3]),\
                                    SSE.Dual(numData=row[4])]) for row in response]
+        
+        elif function == 13:
+            # Provide predictions in a chart expression based on an existing model
+            response = model.predict(load_script=False)
+            
+            # Convert the response to a list of rows
+            response = response.values.tolist()
+            
+            # We convert values to type SSE.Dual, and group columns into a iterable
+            response_rows = [iter([SSE.Dual(strData=row)]) for row in response]
+            
+        elif function == 14:
+            # Provide predictions in the load script based on an existing model
+            response = model.predict(load_script=True)    
+            
+            # Convert the response to a list of rows
+            response = response.values.tolist()
+            
+            # We convert values to type SSE.Dual, and group columns into a iterable
+            response_rows = [iter([SSE.Dual(strData=row[0]),\
+                                   SSE.Dual(strData=row[1]),\
+                                   SSE.Dual(strData=row[2])]) for row in response]        
         
         # Values are then structured as SSE.Rows
         response_rows = [SSE.Row(duals=duals) for duals in response_rows] 
