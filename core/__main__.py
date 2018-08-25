@@ -77,7 +77,8 @@ class ExtensionService(SSE.ConnectorServicer):
             8: '_prophet_seasonality',
             9: '_sklearn',
             10: '_sklearn',
-            11: '_sklearn'
+            11: '_sklearn',
+            12: '_sklearn'
         }
 
     """
@@ -410,6 +411,20 @@ class ExtensionService(SSE.ConnectorServicer):
                                    SSE.Dual(strData=row[3]),\
                                    SSE.Dual(strData=row[4]),\
                                    SSE.Dual(numData=row[5])]) for row in response]
+        
+        elif function == 12:
+            # Train and Test an existing model, saving the sklearn pipeline for further predictions
+            response = model.fit()
+            
+            # Convert the response to a list of rows
+            response = response.values.tolist()
+            
+            # We convert values to type SSE.Dual, and group columns into a iterable
+            response_rows = [iter([SSE.Dual(strData=row[0]),\
+                                   SSE.Dual(strData=row[1]),\
+                                   SSE.Dual(strData=row[2]),\
+                                   SSE.Dual(strData=row[3]),\
+                                   SSE.Dual(numData=row[4])]) for row in response]
         
         # Values are then structured as SSE.Rows
         response_rows = [SSE.Row(duals=duals) for duals in response_rows] 

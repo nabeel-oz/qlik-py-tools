@@ -1,5 +1,6 @@
 import os
 import sys
+import ast
 import string
 import numpy as np
 import pandas as pd
@@ -110,3 +111,53 @@ def get_kwargs(str_kwargs):
     kwargs = {k.lower(): v for k, v in kwargs.items()}
     
     return kwargs
+
+def get_kwargs_by_type(dict_kwargs):
+    """
+    Take in a dictionary of keyword arguments where values are converted to the specified data type.
+    The values in the dictionary should be a string of the form: "value|type" 
+    e.g. {"arg1": "2|int", "arg2": "2.0|float", "arg3": "True|bool", "arg4": "string|str"}
+    """
+    
+    # Dictionary used to convert argument values to the correct type
+    types = {"boolean":ast.literal_eval, "bool":ast.literal_eval, "integer":int, "int":int,\
+             "float":float, "float":float, "string":str, "str":str}
+    
+    result_dict = {}
+    
+    # Fill up the dictionary with the keyword arguments
+    for k, v in dict_kwargs.items():
+        # Split the value and type
+        v, t = v.split("|")
+        # Convert the value based on the correct type
+        result_dict[k] = types[t](v)
+    
+    return result_dict
+
+def convert_types(n_samples, features_df):
+    """
+    Convert data in n_samples to the correct data type based on the feature definitions.
+    Both parameters must be supplied as dataframes. The columns in n_samples must be equal to rows in features_df.
+    The features_df dataframe must have a "name" and a "data_type" column.
+    Accepted data_types are int, float, str, bool.
+    """
+    
+    # Transpose the features dataframe and keep the data_types for each feature
+    features_df_t = features_df.T
+    features_df_t.columns = features_df_t.loc["name",:].tolist()
+    dtypes = features_df_t.loc["data_type",:]
+    
+    # Dictionary used to convert argument values to the correct type
+    types = {"boolean":ast.literal_eval, "bool":ast.literal_eval, "integer":int, "int":int,\
+             "float":float, "float":float, "string":str, "str":str}
+    
+    # Convert columns by the corresponding data type
+    for col in n_samples.columns:
+        # Handle conversion from string to boolean
+        if dtypes[col] == "boolean" or dtypes[col] == "bool":
+            n_samples.loc[:, col] = n_samples.loc[:, col].astype("str").apply(str.capitalize)
+        
+        # Convert this column to the correct type
+        n_samples.loc[:, col] = n_samples.loc[:, col].apply(types[dtypes[col]])     
+        
+    return n_samples

@@ -1,4 +1,6 @@
 import time
+import numpy as np
+import pandas as pd
 from pathlib import Path
 from sklearn import preprocessing
 from sklearn.base import TransformerMixin
@@ -19,12 +21,13 @@ class PersistentModel:
         self.name = None
         self.state = None
         self.state_timestamp = None
+        self.overwrite = False
         
-    def save(self, name, path, overwrite=False):
+    def save(self, name, path):
         """
         Save the model to disk at the specified path.
-        If the model already exists and exist_ok=False, throw an exception.
-        If exist_ok=True, replace any existing file.
+        If the model already exists and self.overwrite=False, throw an exception.
+        If self.overwrite=True, replace any existing file.
         """
         
         # Create string for path and file name
@@ -37,7 +40,7 @@ class PersistentModel:
             pass
         
         # If the file exists and overwriting is not allowed, raise an exception
-        if Path(f).exists() and not overwrite:
+        if Path(f).exists() and not self.overwrite:
             raise FileExistsError("The specified model name already exists: {0}.".format(name + '.joblib')\
                                   +"\nPass overwrite=True if it is ok to overwrite.")
         else:
@@ -105,7 +108,7 @@ class Preprocessor(TransformerMixin):
             self.hash = True
             
             # Convert Hash_Features column to integers
-            self.hash_meta.loc[:,"hash_features"] = self.hash_meta.loc[:,"hash_features"].astype(np.int64)
+            self.hash_meta.loc[:,"hash_features"] = self.hash_meta.loc[:,"hash_features"].astype(np.int64, errors="ignore")
         
         # Collect features for scaling
         self.scale_meta = features.loc[features["feature_strategy"] == "scaling"].copy()
