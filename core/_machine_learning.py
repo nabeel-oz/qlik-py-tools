@@ -23,7 +23,7 @@ class PersistentModel:
         self.state_timestamp = None
         self.overwrite = False
         
-    def save(self, name, path):
+    def save(self, name, path, compress=3):
         """
         Save the model to disk at the specified path.
         If the model already exists and self.overwrite=False, throw an exception.
@@ -45,7 +45,7 @@ class PersistentModel:
                                   +"\nPass overwrite=True if it is ok to overwrite.")
         else:
             # Store this instance to file
-            joblib.dump(self, filename=Path(f), compress=3)
+            joblib.dump(self, filename=Path(f), compress=compress)
         
         self.name = name
         self.state = 'saved'

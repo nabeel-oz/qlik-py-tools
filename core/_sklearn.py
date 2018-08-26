@@ -124,7 +124,7 @@ class SKLearnForQlik:
         self._set_params(estimator_args, scaler_args, execution_args)
         
         # Persist the model to disk
-        self.model = self.model.save(self.model.name, self.path)
+        self.model = self.model.save(self.model.name, self.path, self.model.compress)
               
         # Prepare the output
         message = [[self.model.name, 'Model successfully saved to disk',\
@@ -163,7 +163,7 @@ class SKLearnForQlik:
         self.model.features_df.set_index("name", drop=False, inplace=True)
                
         # Persist the model to disk
-        self.model = self.model.save(self.model.name, self.path)
+        self.model = self.model.save(self.model.name, self.path, self.model.compress)
         
         # Prepare the output
         message = [[self.model.name, 'Feature definitions successfully saved to model',\
@@ -257,8 +257,15 @@ class SKLearnForQlik:
         train_test_df = train_test_df[self.model.features_df.index.tolist()]
         
         # Split the data into training and testing subsets
-        self.model.X_train, self.model.X_test, self.model.y_train, self.model.y_test = \
+        self.X_train, self.X_test, self.y_train, self.y_test = \
         train_test_split(train_test_df, target_df, test_size=self.model.test_size, random_state=self.model.random_state)
+        
+        # Add the training and test data to the model if required
+        if self.model.retain_data:
+            self.model.X_train = self.X_train
+            self.model.X_test = self.X_test
+            self.model.y_train = self.y_train
+            self.model.y_test = self.y_test
         
         # Construct a sklearn pipeline
         prep = Preprocessor(self.model.features_df, scale_hashed=self.model.scale_hashed, missing=self.model.missing,\
@@ -267,13 +274,13 @@ class SKLearnForQlik:
         self.model.pipe = Pipeline([('preprocessor', prep), ('estimator', estimator)])
         
         # Fit the training data to the pipeline
-        self.model.pipe.fit(self.model.X_train, self.model.y_train.values.ravel())
+        self.model.pipe.fit(self.X_train, self.y_train.values.ravel())
         
         # Test the accuracy of the model using the test data
-        self.model.score = self.model.pipe.score(self.model.X_test, self.model.y_test)
+        self.model.score = self.model.pipe.score(self.X_test, self.y_test)
         
         # Persist the model to disk
-        self.model = self.model.save(self.model.name, self.path)
+        self.model = self.model.save(self.model.name, self.path, self.model.compress)
         
         # Prepare the output
         message = [[self.model.name, 'Model successfully trained, tested and saved to disk.',\
@@ -379,6 +386,8 @@ class SKLearnForQlik:
         self.model.debug = False
         self.model.test_size = 0.33
         self.model.random_state = 42
+        self.model.compress = 3
+        self.model.retain_data = False
         
         # Set execution parameters
                 
@@ -400,6 +409,14 @@ class SKLearnForQlik:
             # Seed used by the random number generator when generating the training testing split
             if 'random_state' in execution_args:
                 self.model.random_state = int(execution_args['random_state'])
+            
+            # Compression level between 1-9 used by joblib when saving the model
+            if 'compress' in execution_args:
+                self.model.compress = int(execution_args['compress'])
+                
+            # Flag to determine if the training and test data should be saved in the model
+            if 'retain_data' in execution_args:
+                self.model.retain_data = 'true' == execution_args['retain_data'].lower()
                        
             # Set the debug option for generating execution logs
             # Valid values are: true, false
