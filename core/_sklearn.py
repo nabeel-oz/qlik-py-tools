@@ -7,6 +7,7 @@ import locale
 import warnings
 import numpy as np
 import pandas as pd
+from collections import OrderedDict
 
 # Turn off warnings by default
 if not sys.warnoptions:
@@ -51,8 +52,11 @@ class SKLearnForQlik:
     # Counter used to name log files for instances of the class
     log_no = 0
     
-    # List to cache recently used models at the class level
-    model_cache = []
+    # Ordered Dictionary to cache recently used models at the class level
+    model_cache = OrderedDict()
+    
+    # Limit on the number of models to be cached
+    cache_limit = 3
     
     def __init__(self, request, context, path="../models/"):
         """
@@ -67,6 +71,7 @@ class SKLearnForQlik:
         self.request = request
         self.context = context
         self.path = path
+        self.logfile = None
         
         # Set up a dictionary of valid algorithmns
         self.algorithms = {"DummyClassifier":DummyClassifier, "DummyRegressor":DummyRegressor,\
@@ -108,7 +113,7 @@ class SKLearnForQlik:
         
         # Create a Pandas Data Frame for the request data
         self.request_df = utils.request_df(self.request, row_template, col_headers)
-        
+               
         # Create a model that can be persisted to disk
         self.model = PersistentModel()
         
@@ -125,6 +130,9 @@ class SKLearnForQlik:
         
         # Persist the model to disk
         self.model = self.model.save(self.model.name, self.path, self.model.compress)
+        
+        # Update the cache to keep this model in memory
+        self._update_cache()
               
         # Prepare the output
         message = [[self.model.name, 'Model successfully saved to disk',\
@@ -133,6 +141,10 @@ class SKLearnForQlik:
         
         # Send the reponse table description to Qlik
         self._send_table_description("setup")
+        
+        # Debug information is printed to the terminal and logs if the paramater debug = true
+        if self.model.debug:
+            self._print_log(4)
         
         # Finally send the response
         return self.response
@@ -148,15 +160,19 @@ class SKLearnForQlik:
         
         # Create a Pandas Data Frame for the request data
         self.request_df = utils.request_df(self.request, row_template, col_headers)
-        
+       
         # Initialize the persistent model
         self.model = PersistentModel()
         
         # Get the model name from the request dataframe
         self.model.name = self.request_df.loc[0, 'model_name']
         
-        # Load the model from disk
-        self.model = self.model.load(self.model.name, self.path)
+        # Get the model from cache or disk
+        self._get_model()
+        
+        # Debug information is printed to the terminal and logs if the paramater debug = true
+        if self.model.debug:
+            self._print_log(3)
         
         # Add the feature definitions to the model
         self.model.features_df = self.request_df
@@ -165,6 +181,9 @@ class SKLearnForQlik:
         # Persist the model to disk
         self.model = self.model.save(self.model.name, self.path, self.model.compress)
         
+        # Update the cache to keep this model in memory
+        self._update_cache()
+        
         # Prepare the output
         message = [[self.model.name, 'Feature definitions successfully saved to model',\
                     time.strftime('%X %x %Z', time.localtime(self.model.state_timestamp))]]
@@ -172,6 +191,10 @@ class SKLearnForQlik:
         
         # Send the reponse table description to Qlik
         self._send_table_description("setup")
+        
+        # Debug information is printed to the terminal and logs if the paramater debug = true
+        if self.model.debug:
+            self._print_log(4)
         
         # Finally send the response
         return self.response
@@ -194,8 +217,12 @@ class SKLearnForQlik:
         # Get the model name from the request dataframe
         self.model.name = self.request_df.loc[0, 'model_name']
         
-        # Load the model from disk
-        self.model = self.model.load(self.model.name, self.path)
+        # Get the model from cache or disk
+        self._get_model()
+        
+        # Debug information is printed to the terminal and logs if the paramater debug = true
+        if self.model.debug:
+            self._print_log(3)
         
         # Prepare the output
         self.response = self.model.features_df
@@ -205,6 +232,10 @@ class SKLearnForQlik:
         
         # Send the reponse table description to Qlik
         self._send_table_description("features")
+        
+        # Debug information is printed to the terminal and logs if the paramater debug = true
+        if self.model.debug:
+            self._print_log(4)
         
         # Finally send the response
         return self.response
@@ -227,8 +258,12 @@ class SKLearnForQlik:
         # Get the model name from the request dataframe
         self.model.name = self.request_df.loc[0, 'model_name']
         
-        # Load the model from disk
-        self.model = self.model.load(self.model.name, self.path)
+        # Get the model from cache or disk
+        self._get_model()
+        
+        # Debug information is printed to the terminal and logs if the paramater debug = true
+        if self.model.debug:
+            self._print_log(3)
         
         # Split the features provided as a string into individual columns
         train_test_df = pd.DataFrame([x[1].split("|") for x in self.request_df.values.tolist()],\
@@ -282,6 +317,9 @@ class SKLearnForQlik:
         # Persist the model to disk
         self.model = self.model.save(self.model.name, self.path, self.model.compress)
         
+        # Update the cache to keep this model in memory
+        self._update_cache()
+        
         # Prepare the output
         message = [[self.model.name, 'Model successfully trained, tested and saved to disk.',\
                     time.strftime('%X %x %Z', time.localtime(self.model.state_timestamp)),\
@@ -292,14 +330,16 @@ class SKLearnForQlik:
         # Send the reponse table description to Qlik
         self._send_table_description("fit")
         
+        # Debug information is printed to the terminal and logs if the paramater debug = true
+        if self.model.debug:
+            self._print_log(4)
+        
         # Finally send the response
         return self.response
     
     # STAGE 2 : Allow for larger datasets by using partial fitting methods avaialble with some sklearn algorithmns
     # def partial_fit(self):
-    
-    #def score(self):
-    
+        
     def predict(self, load_script=False):
         """
         Return a prediction by applying an existing model to the supplied data.
@@ -320,15 +360,19 @@ class SKLearnForQlik:
         
         # Create a Pandas Data Frame for the request data
         self.request_df = utils.request_df(self.request, row_template, col_headers)
-        
+               
         # Initialize the persistent model
         self.model = PersistentModel()
         
         # Get the model name from the request dataframe
         self.model.name = self.request_df.loc[0, 'model_name']
         
-        # Load the model from disk
-        self.model = self.model.load(self.model.name, self.path)
+        # Get the model from cache or disk
+        self._get_model()
+        
+        # Debug information is printed to the terminal and logs if the paramater debug = true
+        if self.model.debug:
+            self._print_log(3)
         
         if load_script:
             # Set the key column as the index
@@ -355,10 +399,18 @@ class SKLearnForQlik:
             # If the function was called through the load script we return a Data Frame
             self._send_table_description("predict")
             
+            # Debug information is printed to the terminal and logs if the paramater debug = true
+            if self.model.debug:
+                self._print_log(4)
+            
             return self.response
             
         # If the function was called through a chart expression we return a Series
         else:
+            # Debug information is printed to the terminal and logs if the paramater debug = true
+            if self.model.debug:
+                self._print_log(4)
+            
             return self.response.loc[:,'result']
         
     #def predict_proba(self, load_script=False)
@@ -431,6 +483,11 @@ class SKLearnForQlik:
                     # Create a log file for the instance
                     # Logs will be stored in ..\logs\SKLearn Log <n>.txt
                     self.logfile = os.path.join(os.getcwd(), 'logs', 'SKLearn Log {}.txt'.format(self.log_no))
+                    
+                    # Create dictionary of parameters to display for debug
+                    self.exec_params = {"overwrite":self.model.overwrite, "test_size":self.model.test_size,\
+                                        "random_state":self.model.random_state, "compress":self.model.compress,\
+                                        "retain_data":self.model.retain_data, "debug":self.model.debug}
 
                     self._print_log(1)
         
@@ -474,7 +531,11 @@ class SKLearnForQlik:
                 self.model.estimator_kwargs = utils.get_kwargs_by_type(estimator_args)  
             else:
                 err = "Arguments for scaling did not include the estimator class e.g. RandomForestClassifier"
-                self._print_exception(err, Exception(err))    
+                self._print_exception(err, Exception(err))  
+        
+        # Debug information is printed to the terminal and logs if the paramater debug = true
+        if self.model.debug:
+            self._print_log(2)
               
     def _send_table_description(self, variant):
         """
@@ -494,7 +555,7 @@ class SKLearnForQlik:
             self.table.fields.add(name="timestamp")
         elif variant == "features":
             self.table.fields.add(name="model_name")
-            self.table.fields.add(name="sort_order")
+            self.table.fields.add(name="sort_order", dataType=1)
             self.table.fields.add(name="feature")
             self.table.fields.add(name="var_type")
             self.table.fields.add(name="data_type")
@@ -510,10 +571,60 @@ class SKLearnForQlik:
             self.table.fields.add(name="model_name")
             self.table.fields.add(name="key")
             self.table.fields.add(name="prediction")
+        
+        # Debug information is printed to the terminal and logs if the paramater debug = true
+        if self.model.debug:
+            self._print_log(5)
             
         # Send table description
         table_header = (('qlik-tabledescription-bin', self.table.SerializeToString()),)
         self.context.send_initial_metadata(table_header)
+    
+    def _get_model(self):
+        """
+        Get the model from the class model cache or disk.
+        Update the cache if loading from disk.
+        Return the model.
+        """
+        
+        if self.model.name in self.__class__.model_cache:
+            # Load the model from cache
+            self.model = self.__class__.model_cache[self.model.name]
+            
+            # Debug information is printed to the terminal and logs if the paramater debug = true
+            if self.model.debug:
+                self._print_log(6)
+        else:
+            # Load the model from disk
+            self.model = self.model.load(self.model.name, self.path)
+            
+            # Debug information is printed to the terminal and logs if the paramater debug = true
+            if self.model.debug:
+                self._print_log(7)
+            
+            # Update the cache to keep this model in memory
+            self._update_cache()
+    
+    def _update_cache(self):
+        """
+        Maintain a cache of recently used models at the class level
+        """
+        
+        # Check if the model cache is full
+        if self.__class__.cache_limit == len(self.__class__.model_cache):
+            # Remove the oldest item from the cache if exceeding cache limit
+            self.__class__.model_cache.popitem(last=False)
+        
+        # Remove the obsolete version of the model from the cache
+        if self.model.name in self.__class__.model_cache:
+            del self.__class__.model_cache[self.model.name]
+        
+        # Add the current model to the cache
+        self.__class__.model_cache[self.model.name] = self.model
+        
+        # Debug information is printed to the terminal and logs if the paramater debug = true
+        if self.model.debug:
+            self._print_log(8)
     
     def _print_log(self, step):
         """
@@ -521,11 +632,87 @@ class SKLearnForQlik:
         :step: Print the corresponding step in the log
         """
         
+        if self.logfile is None:
+            # Increment log counter for the class. Each instance of the class generates a new log.
+            self.__class__.log_no += 1
+
+            # Create a log file for the instance
+            # Logs will be stored in ..\logs\SKLearn Log <n>.txt
+            self.logfile = os.path.join(os.getcwd(), 'logs', 'SKLearn Log {}.txt'.format(self.log_no))
+        
         if step == 1:
             # Output log header
             sys.stdout.write("\nSKLearnForQlik Log: {0} \n\n".format(time.ctime(time.time())))
+            
             with open(self.logfile,'w') as f:
                 f.write("SKLearnForQlik Log: {0} \n\n".format(time.ctime(time.time())))
+                
+        elif step == 2:
+            # Output the parameters
+            sys.stdout.write("Model Name: {0}\n\n".format(self.model.name))
+            sys.stdout.write("Execution arguments: {0}\n\n".format(self.exec_params))
+            sys.stdout.write("Scaler: {0}, missing: {1}, scale_hashed: {2}\n".format(\
+                                                                                     self.model.scaler, self.model.missing,\
+                                                                                     self.model.scale_hashed))
+            sys.stdout.write("Scaler kwargs: {0}\n\n".format(self.model.scaler_kwargs))
+            sys.stdout.write("Estimator: {0}\nEstimator kwargs: {1}\n\n".format(self.model.estimator,\
+                                                                                self.model.estimator_kwargs))
+            
+            with open(self.logfile,'a') as f:
+                f.write("Model Name: {0}\n\n".format(self.model.name))
+                f.write("Execution arguments: {0}\n\n".format(self.exec_params))
+                f.write("Scaler: {0}, missing: {1}, scale_hashed: {2}\n".format(self.model.scaler, self.model.missing,\
+                                                                                self.model.scale_hashed))
+                f.write("Scaler kwargs: {0}\n\n".format(self.model.scaler_kwargs))
+                f.write("Estimator: {0}\nEstimator kwargs: {1}\n\n".format(self.model.estimator,self.model.estimator_kwargs))
+                
+        elif step == 3:                    
+            # Output the request dataframe
+            sys.stdout.write("REQUEST: {0} rows x cols\n\n".format(self.request_df.shape))
+            sys.stdout.write("{0} \n\n".format(self.request_df.to_string()))
+            
+            with open(self.logfile,'a') as f:
+                f.write("REQUEST: {0} rows x cols\n\n".format(self.request_df.shape))
+                f.write("{0} \n\n".format(self.request_df.to_string()))
+        
+        elif step == 4:
+            # Output the response dataframe/series
+            sys.stdout.write("RESPONSE: {0} rows x cols\n\n".format(self.response.shape))
+            sys.stdout.write("{0} \n\n".format(self.response.to_string()))
+            
+            with open(self.logfile,'a') as f:
+                f.write("RESPONSE: {0} rows x cols\n\n".format(self.response.shape))
+                f.write("{0} \n\n".format(self.response.to_string()))
+                 
+        elif step == 5:
+            # Print the table description if the call was made from the load script
+            sys.stdout.write("\nTABLE DESCRIPTION SENT TO QLIK:\n\n{0} \n\n".format(self.table))
+            
+            # Write the table description to the log file
+            with open(self.logfile,'a') as f:
+                f.write("\nTABLE DESCRIPTION SENT TO QLIK:\n\n{0} \n\n".format(self.table))
+        
+        elif step == 6:
+            # Message when model is loaded from cache
+            sys.stdout.write("\nModel {0} loaded from cache.\n\n".format(self.model.name))
+            
+            with open(self.logfile,'a') as f:
+                f.write("\nModel {0} loaded from cache.\n\n".format(self.model.name))
+            
+        elif step == 7:
+            # Message when model is loaded from disk
+            sys.stdout.write("\nModel {0} loaded from disk.\n\n".format(self.model.name))
+            
+            with open(self.logfile,'a') as f:
+                f.write("\nModel {0} loaded from disk.\n\n".format(self.model.name))
+            
+        elif step == 8:
+            # Message when cache is updated
+            sys.stdout.write("\nCache updated. Models in cache:\n{0}\n\n".format\
+                             ([k for k,v in self.__class__.model_cache.items()]))
+            
+            with open(self.logfile,'a') as f:
+                f.write("\nCache updated. Models in cache:\n{0}\n\n".format([k for k,v in self.__class__.model_cache.items()]))
     
     def _print_exception(self, s, e):
         """
