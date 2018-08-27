@@ -456,15 +456,15 @@ class SKLearnForQlik:
             # Set the test_size parameter that will be used to split the samples into training and testing data sets
             # Default value is 0.33, i.e. we use 66% of the samples for training and 33% for testing
             if 'test_size' in execution_args:
-                self.model.test_size = float(execution_args['test_size'])
+                self.model.test_size = locale.atof(execution_args['test_size'])
             
             # Seed used by the random number generator when generating the training testing split
             if 'random_state' in execution_args:
-                self.model.random_state = int(execution_args['random_state'])
+                self.model.random_state = locale.atoi(execution_args['random_state'])
             
             # Compression level between 1-9 used by joblib when saving the model
             if 'compress' in execution_args:
-                self.model.compress = int(execution_args['compress'])
+                self.model.compress = locale.atoi(execution_args['compress'])
                 
             # Flag to determine if the training and test data should be saved in the model
             if 'retain_data' in execution_args:

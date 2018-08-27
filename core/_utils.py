@@ -2,6 +2,7 @@ import os
 import sys
 import ast
 import string
+import locale
 import numpy as np
 import pandas as pd
 from sklearn import preprocessing
@@ -115,13 +116,14 @@ def get_kwargs(str_kwargs):
 def get_kwargs_by_type(dict_kwargs):
     """
     Take in a dictionary of keyword arguments where values are converted to the specified data type.
-    The values in the dictionary should be a string of the form: "value|type" 
+    The values in the dictionary should be a string of the form: "value|type" .
     e.g. {"arg1": "2|int", "arg2": "2.0|float", "arg3": "True|bool", "arg4": "string|str"}
+    String to numeric conversions are done using locale settings.
     """
     
     # Dictionary used to convert argument values to the correct type
-    types = {"boolean":ast.literal_eval, "bool":ast.literal_eval, "integer":int, "int":int,\
-             "float":float, "float":float, "string":str, "str":str}
+    types = {"boolean":ast.literal_eval, "bool":ast.literal_eval, "integer":locale.atoi, "int":locale.atoi,\
+             "float":locale.atof, "string":str, "str":str}
     
     result_dict = {}
     
@@ -140,6 +142,7 @@ def convert_types(n_samples, features_df):
     Both parameters must be supplied as dataframes. The columns in n_samples must be equal to rows in features_df.
     The features_df dataframe must have a "name" and a "data_type" column.
     Accepted data_types are int, float, str, bool.
+    String to numeric conversions are done using locale settings.
     """
     
     # Transpose the features dataframe and keep the data_types for each feature
@@ -148,8 +151,8 @@ def convert_types(n_samples, features_df):
     dtypes = features_df_t.loc["data_type",:]
     
     # Dictionary used to convert argument values to the correct type
-    types = {"boolean":ast.literal_eval, "bool":ast.literal_eval, "integer":int, "int":int,\
-             "float":float, "float":float, "string":str, "str":str}
+    types = {"boolean":ast.literal_eval, "bool":ast.literal_eval, "integer":locale.atoi, "int":locale.atoi,\
+             "float":locale.atof, "string":str, "str":str}
     
     # Convert columns by the corresponding data type
     for col in n_samples.columns:
