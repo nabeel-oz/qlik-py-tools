@@ -148,7 +148,7 @@
     },
 	{
       "Id": 13,
-      "Name": "sklearn_Predict",
+      "Name": "sklearn_Partial_Fit",
       "Type": 0,
       "ReturnType": 0,
       "Params": {
@@ -158,6 +158,16 @@
     },
 	{
       "Id": 14,
+      "Name": "sklearn_Predict",
+      "Type": 0,
+      "ReturnType": 0,
+      "Params": {
+        "a_model_name": 0,
+		"n_features": 0
+      }
+    },
+	{
+      "Id": 15,
       "Name": "sklearn_Bulk_Predict",
       "Type": 0,
       "ReturnType": 0,
@@ -165,6 +175,67 @@
         "a_model_name": 0,
 		"b_key": 0,
 		"n_features": 0
+      }
+    },
+	{
+      "Id": 16,
+      "Name": "sklearn_Predict_Proba",
+      "Type": 0,
+      "ReturnType": 0,
+      "Params": {
+        "a_model_name": 0,
+		"n_features": 0
+      }
+    },
+	{
+      "Id": 17,
+      "Name": "sklearn_Bulk_Predict_Proba",
+      "Type": 0,
+      "ReturnType": 0,
+      "Params": {
+        "a_model_name": 0,
+		"n_features": 0
+      }
+    },
+	{
+      "Id": 18,
+      "Name": "sklearn_Get_Metrics",
+      "Type": 0,
+      "ReturnType": 0,
+      "Params": {
+        "a_model_name": 0,
+		"n_features": 0
+      }
+    },
+	{
+      "Id": 19,
+      "Name": "sklearn_List_Models",
+      "Type": 0,
+      "ReturnType": 0,
+      "Params": {
+        "a_search_pattern": 0
+      }
+    },
+	{
+      "Id": 20,
+      "Name": "sklearn_Get_Features_Expression",
+      "Type": 0,
+      "ReturnType": 0,
+      "Params": {
+        "a_model_name": 0
+      }
+    },
+	{
+      "Id": 21,
+      "Name": "sklearn_Setup_With_Reduction",
+      "Type": 0,
+      "ReturnType": 0,
+      "Params": {
+        "a_model_name": 0,
+        "b_estimator_args": 0,
+        "c_scaler_args": 0,
+		"d_dim_reduction_args": 0,
+        "e_execution_args": 0
       }
     }
   ]

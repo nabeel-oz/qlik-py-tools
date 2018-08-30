@@ -4,6 +4,7 @@ import ast
 import time
 import string
 import locale
+import pathlib
 import warnings
 import numpy as np
 import pandas as pd
@@ -16,6 +17,7 @@ if not sys.warnoptions:
 from sklearn import preprocessing
 from sklearn.model_selection import train_test_split
 from sklearn.pipeline import Pipeline
+from sklearn.decomposition import PCA, KernelPCA, IncrementalPCA, TruncatedSVD
 
 from sklearn.dummy import DummyClassifier, DummyRegressor
 from sklearn.ensemble import AdaBoostClassifier, AdaBoostRegressor, BaggingClassifier,\
@@ -96,20 +98,56 @@ class SKLearnForQlik:
                            "MLPClassifier":MLPClassifier, "MLPRegressor":MLPRegressor, "LinearSVC":LinearSVC,\
                            "LinearSVR":LinearSVR, "NuSVC":NuSVC, "NuSVR":NuSVR, "SVC":SVC, "SVR":SVR,\
                            "DecisionTreeClassifier":DecisionTreeClassifier, "DecisionTreeRegressor":DecisionTreeRegressor,\
-                           "ExtraTreeClassifier":ExtraTreeClassifier, "ExtraTreeRegressor":ExtraTreeRegressor}       
+                           "ExtraTreeClassifier":ExtraTreeClassifier, "ExtraTreeRegressor":ExtraTreeRegressor}
         
-    def setup(self):
+        self.decomposers = {"PCA":PCA, "KernelPCA":KernelPCA, "IncrementalPCA":IncrementalPCA, "TruncatedSVD":TruncatedSVD}
+        
+    def list_models(self):
+        """
+        List available models.
+        This function is only meant to be used as a chart expression in Qlik.
+        """
+        
+        # Interpret the request data based on the expected row and column structure
+        row_template = ['strData']
+        col_headers = ['search_pattern']
+        
+        # Create a Pandas Data Frame for the request data
+        self.request_df = utils.request_df(self.request, row_template, col_headers)
+        
+        # Get the list of models based on the search pattern
+        search_pattern = self.request_df.loc[0, 'search_pattern']
+        
+        # If the search pattern is empty default to all models
+        if not search_pattern.strip():
+            search_pattern = '*'
+        
+        # Get the list of models as a string
+        models = ", ".join([str(p).split("\\")[-1] for p in list(pathlib.Path(self.path).glob(search_pattern))])
+        
+        # Prepare the output
+        self.response = pd.Series(models)
+        
+        # Finally send the response
+        return self.response
+    
+    def setup(self, dim_reduction=False):
         """
         Initialize the model with given parameters
         Arguments are retreived from the keyword argument columns in the request data
         Arguments should take the form of a comma separated string: 'arg1=value1, arg2=value2'
-        For estimater and scaler hyperparameters the type should also be specified
+        For estimater, scaler and dimensionality reduction hyperparameters the type should also be specified
         Use the pipe | character to specify type: 'arg1=value1|str, arg2=value2|int, arg3=value3|bool' 
         """
         
         # Interpret the request data based on the expected row and column structure
         row_template = ['strData', 'strData', 'strData', 'strData']
         col_headers = ['model_name', 'estimator_args', 'scaler_args', 'execution_args']
+        
+        if dim_reduction:
+            # If specified, get dimensionality reduction arguments
+            row_template = ['strData', 'strData', 'strData', 'strData', 'strData']
+            col_headers = ['model_name', 'estimator_args', 'scaler_args', 'dim_reduction_args', 'execution_args']
         
         # Create a Pandas Data Frame for the request data
         self.request_df = utils.request_df(self.request, row_template, col_headers)
@@ -124,9 +162,16 @@ class SKLearnForQlik:
         estimator_args = self.request_df.loc[0, 'estimator_args']
         scaler_args = self.request_df.loc[0, 'scaler_args']
         execution_args = self.request_df.loc[0, 'execution_args']
+        if dim_reduction:
+            dim_reduction_args = self.request_df.loc[0, 'dim_reduction_args']
         
         # Set the relevant parameters using the argument strings
-        self._set_params(estimator_args, scaler_args, execution_args)
+        if dim_reduction:
+            self._set_params(estimator_args, scaler_args, execution_args, dim_reduction_args=dim_reduction_args)
+            self.model.dim_reduction = True
+        else:
+            self._set_params(estimator_args, scaler_args, execution_args)
+            self.model.dim_reduction = False
         
         # Persist the model to disk
         self.model = self.model.save(self.model.name, self.path, self.model.compress)
@@ -302,11 +347,24 @@ class SKLearnForQlik:
             self.model.y_train = self.y_train
             self.model.y_test = self.y_test
         
-        # Construct a sklearn pipeline
+        # Construct the preprocessor
         prep = Preprocessor(self.model.features_df, scale_hashed=self.model.scale_hashed, missing=self.model.missing,\
                             scaler=self.model.scaler, **self.model.scaler_kwargs)
+        
+        # Construct an estimator
         estimator = self.algorithms[self.model.estimator](**self.model.estimator_kwargs)
+        
+        # Construct a sklearn pipeline
         self.model.pipe = Pipeline([('preprocessor', prep), ('estimator', estimator)])
+        self.model.estimation_step = 1
+        
+        if self.model.dim_reduction:
+            # Construct the dimensionality reduction object
+            reduction = self.decomposers[self.model.reduction](**self.model.dim_reduction_kwargs)
+            
+            # Include dimensionality reduction in the sklearn pipeline
+            self.model.pipe = self.model.pipe.insert(1, ('reduction', reduction))
+            self.model.estimation_step = 2
         
         # Fit the training data to the pipeline
         self.model.pipe.fit(self.X_train, self.y_train.values.ravel())
@@ -340,9 +398,11 @@ class SKLearnForQlik:
     # STAGE 2 : Allow for larger datasets by using partial fitting methods avaialble with some sklearn algorithmns
     # def partial_fit(self):
         
-    def predict(self, load_script=False):
+    def predict(self, load_script=False, variant="predict"):
         """
         Return a prediction by applying an existing model to the supplied data.
+        If variant='predict_proba', return the predicted probabilties for each sample. Only applicable for certain classes.
+        If variant='predict_log_proba', return the log probabilities for each sample. Only applicable for certain classes.
         This method can be called from a chart expression or the load script in Qlik.
         The load_script flag needs to be set accordingly for the correct response.
         """
@@ -386,9 +446,32 @@ class SKLearnForQlik:
         # Convert the data types based on feature definitions 
         self.X = utils.convert_types(self.X, self.model.features_df)
         
-        # Predict y for X using the previously fit pipeline
-        self.y = self.model.pipe.predict(self.X)
-        
+        if variant == 'predict_proba' or variant == 'predict_log_proba':
+            # If probabilities need to be returned
+            if variant == 'predict_proba':
+                # Get the predicted probability for each sample 
+                self.y = self.model.pipe.predict_proba(self.X)
+            elif variant == 'predict_log_proba':
+                # Get the log probability for each sample
+                self.y = self.model.pipe.predict_log_proba(self.X)
+                
+            # Prepare a list of probability by class for each sample
+            probabilities = []
+
+            for a in self.y:
+                s = ""
+                i = 0
+                for b in a:
+                    s = s + ", {0}: {1:.3f}".format(self.model.pipe.steps[self.model.estimation_step][1].classes_[i], b)
+                    i = i + 1
+                probabilities.append(s[2:])
+            
+            self.y = probabilities
+                
+        else:
+            # Predict y for X using the previously fit pipeline
+            self.y = self.model.pipe.predict(self.X)
+            
         # Prepare the response
         self.response = pd.DataFrame(self.y, columns=["result"], index=self.X.index)
         
@@ -412,8 +495,7 @@ class SKLearnForQlik:
                 self._print_log(4)
             
             return self.response.loc[:,'result']
-        
-    #def predict_proba(self, load_script=False)
+    
     
     # STAGE 3 : If feasible, allow transient models that can be setup and used from chart expressions
     # def fit_predict(self):
@@ -421,14 +503,60 @@ class SKLearnForQlik:
     # STAGE 2 : Provide metrics to assess prediction error beyond the score() method
     # def get_metrics():
     
-    def _set_params(self, estimator_args, scaler_args, execution_args):
+    # STAGE 2: Implement feature_importances_ for applicable algorithms
+    
+    # STAGE 2: Allow adding dimensionality reduction to the pipeline
+    
+    def get_features_expression(self):
+        """
+        Get a string that can be evaluated in Qlik to get the features portion of the predict function
+        """
+        
+        # Interpret the request data based on the expected row and column structure
+        row_template = ['strData']
+        col_headers = ['model_name']
+        
+        # Create a Pandas Data Frame for the request data
+        self.request_df = utils.request_df(self.request, row_template, col_headers)
+        
+        # Initialize the persistent model
+        self.model = PersistentModel()
+        
+        # Get the model name from the request dataframe
+        self.model.name = self.request_df.loc[0, 'model_name']
+        
+        # Get the model from cache or disk
+        self._get_model()
+        
+        # Debug information is printed to the terminal and logs if the paramater debug = true
+        if self.model.debug:
+            self._print_log(3)
+        
+        # Prepare the expression as a string
+        delimiter = " &'|'& "
+        features = self.model.features_df["name"].tolist()
+        self.response = pd.Series(delimiter.join(["[" + f + "]" for f in features]))
+        
+        # Send the reponse table description to Qlik
+        self._send_table_description("expression")
+        
+        # Debug information is printed to the terminal and logs if the paramater debug = true
+        if self.model.debug:
+            self._print_log(4)
+        
+        # Finally send the response
+        return self.response
+    
+    def _set_params(self, estimator_args, scaler_args, execution_args, dim_reduction_args=None):
         """
         Set input parameters based on the request.
         :
         :Refer to the sklearn API Reference for parameters avaialble for specific algorithms and scalers
         :http://scikit-learn.org/stable/modules/classes.html#api-reference
         :
-        :Additional parameters used by this SSE are: overwrite, test_size, randon_state, debug
+        :Additional parameters used by this SSE are: 
+        :overwrite, test_size, randon_state, compress, retain_data, debug
+        :For details refer to the GitHub project: https://github.com/nabeel-qlik/qlik-py-tools
         """
         
         # Set default values which will be used if execution arguments are not passed
@@ -530,8 +658,26 @@ class SKLearnForQlik:
                 # Get the rest of the estimator parameters, converting values to the correct data type
                 self.model.estimator_kwargs = utils.get_kwargs_by_type(estimator_args)  
             else:
-                err = "Arguments for scaling did not include the estimator class e.g. RandomForestClassifier"
+                err = "Arguments for estimator did not include the estimator class e.g. RandomForestClassifier"
                 self._print_exception(err, Exception(err))  
+        
+        # If dimensionality reduction key word arguments were included in the request, get the parameters and values
+        if dim_reduction_args is not None:
+            # Transform the string of arguments into a dictionary
+            dim_reduction_args = utils.get_kwargs(dim_reduction_args)
+                   
+            # Set dim_reduction arguments that will be used after preprocessing the data
+            # The parameters available will depend on the selected dimensionality reduction method
+            # Acceptable classes are PCA, KernelPCA, IncrementalPCA, TruncatedSVD
+            # More information here: http://scikit-learn.org/stable/modules/classes.html#api-reference
+            if 'reduction' in dim_reduction_args:
+                self.model.reduction = dim_reduction_args.pop('reduction')
+                
+                # Get the rest of the dim_reduction parameters, converting values to the correct data type
+                self.model.dim_reduction_args = utils.get_kwargs_by_type(dim_reduction_args)  
+            else:
+                err = "Arguments for dimensionality reduction did not include the class e.g. PCA"
+                self._print_exception(err, Exception(err))
         
         # Debug information is printed to the terminal and logs if the paramater debug = true
         if self.model.debug:
@@ -571,6 +717,8 @@ class SKLearnForQlik:
             self.table.fields.add(name="model_name")
             self.table.fields.add(name="key")
             self.table.fields.add(name="prediction")
+        elif variant == "expression":
+            self.table.fields.add(name="result")
         
         # Debug information is printed to the terminal and logs if the paramater debug = true
         if self.model.debug:
@@ -655,6 +803,9 @@ class SKLearnForQlik:
                                                                                      self.model.scaler, self.model.missing,\
                                                                                      self.model.scale_hashed))
             sys.stdout.write("Scaler kwargs: {0}\n\n".format(self.model.scaler_kwargs))
+            if self.model.dim_reduction:
+                sys.stdout.write("Reduction: {0}\nReduction kwargs: {1}\n\n".format(self.model.reduction,\
+                                                                                    self.model.dim_reduction_kwargs))
             sys.stdout.write("Estimator: {0}\nEstimator kwargs: {1}\n\n".format(self.model.estimator,\
                                                                                 self.model.estimator_kwargs))
             
@@ -664,6 +815,9 @@ class SKLearnForQlik:
                 f.write("Scaler: {0}, missing: {1}, scale_hashed: {2}\n".format(self.model.scaler, self.model.missing,\
                                                                                 self.model.scale_hashed))
                 f.write("Scaler kwargs: {0}\n\n".format(self.model.scaler_kwargs))
+                if self.model.dim_reduction:
+                    f.write("Reduction: {0}\nReduction kwargs: {1}\n\n".format(self.model.reduction,\
+                                                                               self.model.dim_reduction_kwargs))
                 f.write("Estimator: {0}\nEstimator kwargs: {1}\n\n".format(self.model.estimator,self.model.estimator_kwargs))
                 
         elif step == 3:                    

@@ -80,7 +80,14 @@ class ExtensionService(SSE.ConnectorServicer):
             11: '_sklearn',
             12: '_sklearn',
             13: '_sklearn',
-            14: '_sklearn'
+            14: '_sklearn',
+            15: '_sklearn',
+            16: '_sklearn',
+            17: '_sklearn',
+            18: '_sklearn',
+            19: '_sklearn',
+            20: '_sklearn',
+            21: '_sklearn'
         }
 
     """
@@ -383,10 +390,15 @@ class ExtensionService(SSE.ConnectorServicer):
         # Create an instance of the SKLearnForQlik class
         model = SKLearnForQlik(request_list, context)
         
-        if function >= 9 and function <= 10:    
+        # Call the function based on the mapping in functions.json
+        # The IF conditions are grouped based on similar output structure
+        if function in (9, 10, 21):    
             if function == 9:
-                # Set up the model and save to disk.
+                # Set up the model and save to disk
                 response = model.setup()
+            elif function == 21:
+                # Set up a model include dimensionality reduction in the pipeline and save to disk
+                response = model.setup(dim_reduction=True)
             elif function == 10:
                 # Set feature definitions for an existing model
                 response = model.set_features()
@@ -429,9 +441,19 @@ class ExtensionService(SSE.ConnectorServicer):
                                    SSE.Dual(strData=row[3]),\
                                    SSE.Dual(numData=row[4])]) for row in response]
         
-        elif function == 13:
-            # Provide predictions in a chart expression based on an existing model
-            response = model.predict(load_script=False)
+        elif function in (14, 16, 19, 20):
+            if function == 14:
+                # Provide predictions in a chart expression based on an existing model
+                response = model.predict(load_script=False)
+            elif function == 16:
+                # Provide predictions probabilities in a chart expression based on an existing model
+                response = model.predict(load_script=False, variant="predict_proba")
+            elif function == 19:
+                # Get a list of models based on a search string
+                response = model.list_models()
+            elif function == 20:
+                # Get a string that can be evaluated to get the features expression for the predict function
+                response = model.get_features_expression()
             
             # Convert the response to a list of rows
             response = response.values.tolist()
@@ -439,9 +461,13 @@ class ExtensionService(SSE.ConnectorServicer):
             # We convert values to type SSE.Dual, and group columns into a iterable
             response_rows = [iter([SSE.Dual(strData=row)]) for row in response]
             
-        elif function == 14:
-            # Provide predictions in the load script based on an existing model
-            response = model.predict(load_script=True)    
+        elif function in (15, 17):
+            if function == 15:
+                # Provide predictions in the load script based on an existing model
+                response = model.predict(load_script=True)    
+            if function == 17:
+                # Provide prediction probabilities in the load script based on an existing model
+                response = model.predict(load_script=True, variant="predict_proba")
             
             # Convert the response to a list of rows
             response = response.values.tolist()
@@ -449,7 +475,7 @@ class ExtensionService(SSE.ConnectorServicer):
             # We convert values to type SSE.Dual, and group columns into a iterable
             response_rows = [iter([SSE.Dual(strData=row[0]),\
                                    SSE.Dual(strData=row[1]),\
-                                   SSE.Dual(strData=row[2])]) for row in response]        
+                                   SSE.Dual(strData=row[2])]) for row in response]            
         
         # Values are then structured as SSE.Rows
         response_rows = [SSE.Row(duals=duals) for duals in response_rows] 
