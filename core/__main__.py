@@ -34,7 +34,7 @@ _DEFAULT_PORT = '50055'
 _ONE_DAY_IN_SECONDS = 60 * 60 * 24
 _MINFLOAT = float('-inf')
 
-# Set the locale for number formatting based on user settings
+# Set the locale for number formats based on user settings
 locale.setlocale(locale.LC_NUMERIC, '')
 
 class ExtensionService(SSE.ConnectorServicer):
@@ -87,7 +87,9 @@ class ExtensionService(SSE.ConnectorServicer):
             18: '_sklearn',
             19: '_sklearn',
             20: '_sklearn',
-            21: '_sklearn'
+            21: '_sklearn',
+            22: '_sklearn',
+            23: '_sklearn'
         }
 
     """
@@ -213,8 +215,8 @@ class ExtensionService(SSE.ConnectorServicer):
                 # Check that the lists are of equal length
                 if len(x) == len(y) and len(x) > 0:
                     # Create a Pandas data frame using the lists
-                    df = pd.DataFrame({'x': [utils._string_to_float(d) for d in x], \
-                                       'y': [utils._string_to_float(d) for d in y]})
+                    df = pd.DataFrame({'x': [utils.atof(d) for d in x], \
+                                       'y': [utils.atof(d) for d in y]})
                 
                     # Calculate the correlation matrix for the two series in the data frame
                     corr_matrix = df.corr(method=corr_type)
@@ -397,49 +399,29 @@ class ExtensionService(SSE.ConnectorServicer):
                 # Set up the model and save to disk
                 response = model.setup()
             elif function == 21:
-                # Set up a model include dimensionality reduction in the pipeline and save to disk
-                response = model.setup(dim_reduction=True)
+                # Set up a model with specific metric and dimensionality reduction arguments and save to disk
+                response = model.setup(advanced=True)
             elif function == 10:
                 # Set feature definitions for an existing model
                 response = model.set_features()
             
-            # Convert the response to a list of rows
-            response = response.values.tolist()
-
-            # We convert values to type SSE.Dual, and group columns into a iterable
-            response_rows = [iter([SSE.Dual(strData=row[0]),\
-                                  SSE.Dual(strData=row[1]),\
-                                  SSE.Dual(strData=row[2])]) for row in response]
+            # Get the response as SSE.Rows
+            response_rows = utils.get_response_rows(response.values.tolist(), ["str", "str", "str"])
         
         elif function == 11:
             # Return the feature definitions for an existing model
             response = model.get_features()
             
-            # Convert the response to a list of rows
-            response = response.values.tolist()
-            
-            # We convert values to type SSE.Dual, and group columns into a iterable
-            response_rows = [iter([SSE.Dual(strData=row[0]),\
-                                   SSE.Dual(numData=row[1]),\
-                                   SSE.Dual(strData=row[2]),\
-                                   SSE.Dual(strData=row[3]),\
-                                   SSE.Dual(strData=row[4]),\
-                                   SSE.Dual(strData=row[5]),\
-                                   SSE.Dual(numData=row[6])]) for row in response]
+            # Get the response as SSE.Rows
+            response_rows = utils.get_response_rows(response.values.tolist(), ["str", "num", "str", "str", "str",\
+                                                                               "str", "num"])
         
         elif function == 12:
             # Train and Test an existing model, saving the sklearn pipeline for further predictions
             response = model.fit()
             
-            # Convert the response to a list of rows
-            response = response.values.tolist()
-            
-            # We convert values to type SSE.Dual, and group columns into a iterable
-            response_rows = [iter([SSE.Dual(strData=row[0]),\
-                                   SSE.Dual(strData=row[1]),\
-                                   SSE.Dual(strData=row[2]),\
-                                   SSE.Dual(strData=row[3]),\
-                                   SSE.Dual(numData=row[4])]) for row in response]
+            # Get the response as SSE.Rows
+            response_rows = utils.get_response_rows(response.values.tolist(), ["str", "str", "str", "str", "num"])
         
         elif function in (14, 16, 19, 20):
             if function == 14:
@@ -455,11 +437,8 @@ class ExtensionService(SSE.ConnectorServicer):
                 # Get a string that can be evaluated to get the features expression for the predict function
                 response = model.get_features_expression()
             
-            # Convert the response to a list of rows
-            response = response.values.tolist()
-            
-            # We convert values to type SSE.Dual, and group columns into a iterable
-            response_rows = [iter([SSE.Dual(strData=row)]) for row in response]
+            # Get the response as SSE.Rows
+            response_rows = utils.get_response_rows(response.values.tolist(), ["str"])
             
         elif function in (15, 17):
             if function == 15:
@@ -469,20 +448,38 @@ class ExtensionService(SSE.ConnectorServicer):
                 # Provide prediction probabilities in the load script based on an existing model
                 response = model.predict(load_script=True, variant="predict_proba")
             
-            # Convert the response to a list of rows
-            response = response.values.tolist()
+            # Get the response as SSE.Rows
+            response_rows = utils.get_response_rows(response.values.tolist(), ["str", "str", "str"])
+        
+        elif function in (18, 22):
+            if function == 18:
+                response = model.get_metrics()
+            elif function == 22:
+                response = model.calculate_metrics()
+            
+            # Check whether the metrics are for a classifier
+            if "accuracy" in response.columns:
+                estimator_type = "classifier"
+            # Check whether the metrics are for a regressor
+            elif "r2_score" in response.columns:
+                estimator_type = "regressor"
             
             # We convert values to type SSE.Dual, and group columns into a iterable
-            response_rows = [iter([SSE.Dual(strData=row[0]),\
-                                   SSE.Dual(strData=row[1]),\
-                                   SSE.Dual(strData=row[2])]) for row in response]            
+            if estimator_type == "classifier":
+                # Get the response as SSE.Rows
+                response_rows = utils.get_response_rows(response.values.tolist(), ["str", "str", "num", "num", "num",\
+                                                                                   "num", "num"])
+            elif estimator_type == "regressor":
+                # Get the response as SSE.Rows
+                response_rows = utils.get_response_rows(response.values.tolist(), ["str", "num", "num", "num", "num", "num"])
         
-        # Values are then structured as SSE.Rows
-        response_rows = [SSE.Row(duals=duals) for duals in response_rows] 
-        
+        elif function == 23:
+            response = model.get_confusion_matrix()
+            response_rows = utils.get_response_rows(response.values.tolist(), ["str", "str", "str", "num"])
+            
         # Yield Row data as Bundled rows
         yield SSE.BundledRows(rows=response_rows)
-        
+    
     @staticmethod
     def _get_function_id(context):
         """

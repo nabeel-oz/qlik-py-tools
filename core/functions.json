@@ -203,8 +203,7 @@
       "Type": 0,
       "ReturnType": 0,
       "Params": {
-        "a_model_name": 0,
-		"n_features": 0
+        "a_model_name": 0
       }
     },
 	{
@@ -227,15 +226,35 @@
     },
 	{
       "Id": 21,
-      "Name": "sklearn_Setup_With_Reduction",
+      "Name": "sklearn_Setup_Adv",
       "Type": 0,
       "ReturnType": 0,
       "Params": {
         "a_model_name": 0,
         "b_estimator_args": 0,
         "c_scaler_args": 0,
-		"d_dim_reduction_args": 0,
-        "e_execution_args": 0
+		"d_metric_args": 0,
+		"e_dim_reduction_args": 0,
+        "f_execution_args": 0
+      }
+    },
+	{
+      "Id": 22,
+      "Name": "sklearn_Calculate_Metrics",
+      "Type": 0,
+      "ReturnType": 0,
+      "Params": {
+        "a_model_name": 0,
+		"n_features": 0
+      }
+    },
+	{
+      "Id": 23,
+      "Name": "sklearn_Get_Confusion_Matrix",
+      "Type": 0,
+      "ReturnType": 0,
+      "Params": {
+        "a_model_name": 0
       }
     }
   ]

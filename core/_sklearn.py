@@ -14,6 +14,7 @@ from collections import OrderedDict
 if not sys.warnoptions:
     warnings.simplefilter("ignore")
 
+from sklearn import metrics
 from sklearn import preprocessing
 from sklearn.model_selection import train_test_split
 from sklearn.pipeline import Pipeline
@@ -94,13 +95,28 @@ class SKLearnForQlik:
                            "GaussianNB":GaussianNB, "MultinomialNB":MultinomialNB,\
                            "KNeighborsClassifier":KNeighborsClassifier, "KNeighborsRegressor":KNeighborsRegressor,\
                            "RadiusNeighborsClassifier":RadiusNeighborsClassifier,\
-                           "RadiusNeighborsRegressor":RadiusNeighborsRegressor, "BernoulliRBM":BernoulliRBM,\
-                           "MLPClassifier":MLPClassifier, "MLPRegressor":MLPRegressor, "LinearSVC":LinearSVC,\
-                           "LinearSVR":LinearSVR, "NuSVC":NuSVC, "NuSVR":NuSVR, "SVC":SVC, "SVR":SVR,\
-                           "DecisionTreeClassifier":DecisionTreeClassifier, "DecisionTreeRegressor":DecisionTreeRegressor,\
-                           "ExtraTreeClassifier":ExtraTreeClassifier, "ExtraTreeRegressor":ExtraTreeRegressor}
+                           "RadiusNeighborsRegressor":RadiusNeighborsRegressor, "MLPClassifier":MLPClassifier,\
+                           "MLPRegressor":MLPRegressor, "LinearSVC":LinearSVC, "LinearSVR":LinearSVR, "NuSVC":NuSVC,\
+                           "NuSVR":NuSVR, "SVC":SVC, "SVR":SVR, "DecisionTreeClassifier":DecisionTreeClassifier,\
+                           "DecisionTreeRegressor":DecisionTreeRegressor, "ExtraTreeClassifier":ExtraTreeClassifier,\
+                           "ExtraTreeRegressor":ExtraTreeRegressor}
         
         self.decomposers = {"PCA":PCA, "KernelPCA":KernelPCA, "IncrementalPCA":IncrementalPCA, "TruncatedSVD":TruncatedSVD}
+        
+        self.classifiers = ["DummyClassifier", "AdaBoostClassifier", "BaggingClassifier", "ExtraTreesClassifier",\
+                            "GradientBoostingClassifier", "RandomForestClassifier", "VotingClassifier",\
+                            "GaussianProcessClassifier", "LogisticRegression", "LogisticRegressionCV",\
+                            "PassiveAggressiveClassifier", "Perceptron", "RidgeClassifier", "RidgeClassifierCV",\
+                            "SGDClassifier", "BernoulliNB", "GaussianNB", "MultinomialNB", "KNeighborsClassifier",\
+                            "RadiusNeighborsClassifier", "MLPClassifier", "LinearSVC", "NuSVC", "SVC",\
+                            "DecisionTreeClassifier", "ExtraTreeClassifier"] 
+        
+        self.regressors = ["DummyRegressor", "AdaBoostRegressor", "BaggingRegressor", "ExtraTreesRegressor",\
+                           "GradientBoostingRegressor", "RandomForestRegressor", "GaussianProcessRegressor",\
+                           "LinearRegression", "PassiveAggressiveRegressor", "RANSACRegressor", "Ridge", "RidgeCV"\
+                           "SGDRegressor", "TheilSenRegressor", "KNeighborsRegressor", "RadiusNeighborsRegressor",\
+                           "MLPRegressor", "LinearSVR", "NuSVR", "SVR", "DecisionTreeRegressor",\
+                           "ExtraTreeRegressor"]
         
     def list_models(self):
         """
@@ -131,7 +147,7 @@ class SKLearnForQlik:
         # Finally send the response
         return self.response
     
-    def setup(self, dim_reduction=False):
+    def setup(self, advanced=False):
         """
         Initialize the model with given parameters
         Arguments are retreived from the keyword argument columns in the request data
@@ -144,10 +160,11 @@ class SKLearnForQlik:
         row_template = ['strData', 'strData', 'strData', 'strData']
         col_headers = ['model_name', 'estimator_args', 'scaler_args', 'execution_args']
         
-        if dim_reduction:
+        if advanced:
             # If specified, get dimensionality reduction arguments
-            row_template = ['strData', 'strData', 'strData', 'strData', 'strData']
-            col_headers = ['model_name', 'estimator_args', 'scaler_args', 'dim_reduction_args', 'execution_args']
+            row_template = ['strData', 'strData', 'strData', 'strData', 'strData', 'strData']
+            col_headers = ['model_name', 'estimator_args', 'scaler_args', 'metric_args', 'dim_reduction_args',\
+                           'execution_args']
         
         # Create a Pandas Data Frame for the request data
         self.request_df = utils.request_df(self.request, row_template, col_headers)
@@ -162,16 +179,22 @@ class SKLearnForQlik:
         estimator_args = self.request_df.loc[0, 'estimator_args']
         scaler_args = self.request_df.loc[0, 'scaler_args']
         execution_args = self.request_df.loc[0, 'execution_args']
-        if dim_reduction:
+        if advanced:
+            metric_args = self.request_df.loc[0, 'metric_args']
             dim_reduction_args = self.request_df.loc[0, 'dim_reduction_args']
+            
+            if len(dim_reduction_args) > 0:
+                self.model.dim_reduction = True
+            else:
+                self.model.dim_reduction = False 
         
-        # Set the relevant parameters using the argument strings
-        if dim_reduction:
-            self._set_params(estimator_args, scaler_args, execution_args, dim_reduction_args=dim_reduction_args)
-            self.model.dim_reduction = True
+            # Set the relevant parameters using the argument strings
+            self._set_params(estimator_args, scaler_args, execution_args, metric_args=metric_args,\
+                             dim_reduction_args=dim_reduction_args)
         else:
+            # Set the relevant parameters using the argument strings
             self._set_params(estimator_args, scaler_args, execution_args)
-            self.model.dim_reduction = False
+            self.model.dim_reduction = False 
         
         # Persist the model to disk
         self.model = self.model.save(self.model.name, self.path, self.model.compress)
@@ -249,25 +272,8 @@ class SKLearnForQlik:
         Get feature definitions for an existing model
         """
         
-        # Interpret the request data based on the expected row and column structure
-        row_template = ['strData']
-        col_headers = ['model_name']
-        
-        # Create a Pandas Data Frame for the request data
-        self.request_df = utils.request_df(self.request, row_template, col_headers)
-        
-        # Initialize the persistent model
-        self.model = PersistentModel()
-        
-        # Get the model name from the request dataframe
-        self.model.name = self.request_df.loc[0, 'model_name']
-        
-        # Get the model from cache or disk
-        self._get_model()
-        
-        # Debug information is printed to the terminal and logs if the paramater debug = true
-        if self.model.debug:
-            self._print_log(3)
+        # Get the model from cache or disk based on the model_name in request
+        self._get_model_by_name()
         
         # Prepare the output
         self.response = self.model.features_df
@@ -290,62 +296,25 @@ class SKLearnForQlik:
         Train and test the model based on the provided dataset
         """
         
-        # Interpret the request data based on the expected row and column structure
-        row_template = ['strData', 'strData']
-        col_headers = ['model_name', 'n_features']
+        # Open an existing model and get the training & test dataset and targets
+        train_test_df, target_df = self._get_model_and_data()
         
-        # Create a Pandas Data Frame for the request data
-        self.request_df = utils.request_df(self.request, row_template, col_headers)
-        
-        # Initialize the persistent model
-        self.model = PersistentModel()
-        
-        # Get the model name from the request dataframe
-        self.model.name = self.request_df.loc[0, 'model_name']
-        
-        # Get the model from cache or disk
-        self._get_model()
-        
-        # Debug information is printed to the terminal and logs if the paramater debug = true
-        if self.model.debug:
-            self._print_log(3)
-        
-        # Split the features provided as a string into individual columns
-        train_test_df = pd.DataFrame([x[1].split("|") for x in self.request_df.values.tolist()],\
-                                     columns=self.model.features_df.loc[:,"name"].tolist(),\
-                                     index=self.request_df.index)
-        
-        # Convert the data types based on feature definitions 
-        train_test_df = utils.convert_types(train_test_df, self.model.features_df)
-        
-        # Get the target feature
-        # NOTE: This code block will need to be reviewed for multi-label classification
-        target = self.model.features_df.loc[self.model.features_df["variable_type"] == "target"]
-        target_name = target.index[0]
-
-        # Get the target data
-        target_df = train_test_df.loc[:,[target_name]]
-
-        # Get the features to be excluded from the model
-        exclusions = self.model.features_df['variable_type'].isin(["excluded", "target", "identifier"])
-        
-        # Update the feature definitions dataframe
-        excluded = self.model.features_df.loc[exclusions]
-        self.model.features_df = self.model.features_df.loc[~exclusions]
-        
-        # Remove excluded features from the data
-        train_test_df = train_test_df[self.model.features_df.index.tolist()]
-        
-        # Split the data into training and testing subsets
-        self.X_train, self.X_test, self.y_train, self.y_test = \
-        train_test_split(train_test_df, target_df, test_size=self.model.test_size, random_state=self.model.random_state)
+        if self.model.test_size > 0:        
+            # Split the data into training and testing subsets
+            self.X_train, self.X_test, self.y_train, self.y_test = \
+            train_test_split(train_test_df, target_df, test_size=self.model.test_size, random_state=self.model.random_state)
+        else:
+            self.X_train = train_test_df
+            self.y_train = target_df
         
         # Add the training and test data to the model if required
         if self.model.retain_data:
             self.model.X_train = self.X_train
             self.model.X_test = self.X_test
-            self.model.y_train = self.y_train
-            self.model.y_test = self.y_test
+            
+            if self.model.test_size > 0: 
+                self.model.y_train = self.y_train
+                self.model.y_test = self.y_test
         
         # Construct the preprocessor
         prep = Preprocessor(self.model.features_df, scale_hashed=self.model.scale_hashed, missing=self.model.missing,\
@@ -360,17 +329,18 @@ class SKLearnForQlik:
         
         if self.model.dim_reduction:
             # Construct the dimensionality reduction object
-            reduction = self.decomposers[self.model.reduction](**self.model.dim_reduction_kwargs)
+            reduction = self.decomposers[self.model.reduction](**self.model.dim_reduction_args)
             
             # Include dimensionality reduction in the sklearn pipeline
-            self.model.pipe = self.model.pipe.insert(1, ('reduction', reduction))
+            self.model.pipe.steps.insert(1, ('reduction', reduction))
             self.model.estimation_step = 2
         
         # Fit the training data to the pipeline
         self.model.pipe.fit(self.X_train, self.y_train.values.ravel())
         
-        # Test the accuracy of the model using the test data
-        self.model.score = self.model.pipe.score(self.X_test, self.y_test)
+        if self.model.test_size > 0:       
+            # Evaluate the model using the test data            
+            self.calculate_metrics(caller="internal")
         
         # Persist the model to disk
         self.model = self.model.save(self.model.name, self.path, self.model.compress)
@@ -379,10 +349,17 @@ class SKLearnForQlik:
         self._update_cache()
         
         # Prepare the output
-        message = [[self.model.name, 'Model successfully trained, tested and saved to disk.',\
-                    time.strftime('%X %x %Z', time.localtime(self.model.state_timestamp)),\
-                    "{0} model has a {1:.3f} accuracy against the test data."\
-                    .format(self.model.estimator, self.model.score), self.model.score]]
+        if self.model.test_size > 0: 
+            message = [[self.model.name, 'Model successfully trained, tested and saved to disk.',\
+                        time.strftime('%X %x %Z', time.localtime(self.model.state_timestamp)),\
+                        "{0} model has a score of {1:.3f} against the test data."\
+                        .format(self.model.estimator, self.model.score), self.model.score]]
+        else:
+            message = [[self.model.name, 'Model successfully trained and saved to disk.',\
+                        time.strftime('%X %x %Z', time.localtime(self.model.state_timestamp)),\
+                        "{0} model score unknown as test_size was <= 0."\
+                        .format(self.model.estimator), np.NaN]]
+            
         self.response = pd.DataFrame(message, columns=['model_name', 'result', 'time_stamp', 'score_result', 'score'])
         
         # Send the reponse table description to Qlik
@@ -394,10 +371,136 @@ class SKLearnForQlik:
         
         # Finally send the response
         return self.response
-    
+        
     # STAGE 2 : Allow for larger datasets by using partial fitting methods avaialble with some sklearn algorithmns
     # def partial_fit(self):
         
+    def calculate_metrics(self, caller="external"):
+        """
+        Return key metrics based on a test dataset.
+        Metrics returned for a classifier are: accuracy, precision, recall, fscore, support
+        Metrics returned for a regressor are: accuracy, 
+        """
+        
+        # If the function call was made externally, process the request
+        if caller == "external":
+            # Open an existing model and get the training & test dataset and targets based on the request
+            self.X_test, self.y_test = self._get_model_and_data()            
+
+        # Get predictions based on the samples
+        self.y_pred = self.model.pipe.predict(self.X_test)
+        
+        # Flatten the y_test DataFrame
+        self.y_test = self.y_test.values.ravel()
+                    
+        # Test the accuracy of the model using the test data
+        self.model.score = self.model.pipe.score(self.X_test, self.y_test)
+        
+        # Try getting the metric_args from the model
+        try:
+            metric_args = self.model.metric_args
+        except AttributeError: 
+            metric_args = {}
+               
+        if self.model.estimator_type == "classifier":
+            labels = self.model.pipe.steps[self.model.estimation_step][1].classes_
+            
+            # Check if the average parameter is specified
+            if len(metric_args) > 0  and "average" in metric_args:
+                # Metrics are returned as an overall average
+                metric_rows = ["overall"]
+            else:
+                # Get the class labels to be used as rows for the result DataFrame
+                metric_rows = labels
+            
+            # Get key classifier metrics
+            metrics_df = pd.DataFrame([x for x in metrics.precision_recall_fscore_support\
+                                       (self.y_test, self.y_pred, **metric_args)],\
+                                      index=["precision", "recall", "fscore", "support"], columns=metric_rows).transpose()
+            # Add accuracy
+            metrics_df.loc["overall", "accuracy"] = self.model.score
+            # Finalize the structure of the result DataFrame
+            metrics_df.loc[:,"model_name"] = self.model.name
+            metrics_df.loc[:,"class"] = metrics_df.index
+            metrics_df = metrics_df.loc[:,["model_name", "class", "accuracy", "precision", "recall", "fscore", "support"]]
+            
+            # Calculate confusion matrix and flatten it to a simple array
+            confusion_array = metrics.confusion_matrix(self.y_test, self.y_pred).ravel()
+            
+            # Structure into a DataFrame suitable for Qlik
+            result = []
+            i = 0
+            for t in labels:
+                for p in labels:
+                    result.append([str(t), str(p), confusion_array[i]])
+                    i = i + 1
+            self.model.confusion_matrix = pd.DataFrame(result, columns=["true_label", "pred_label", "count"])
+            self.model.confusion_matrix.loc[:,"model_name"] = self.model.name
+            self.model.confusion_matrix = self.model.confusion_matrix.loc[:,\
+                                                                          ["model_name", "true_label", "pred_label", "count"]]
+            
+        elif self.model.estimator_type == "regressor":
+            # Get the r2 score
+            metrics_df = pd.DataFrame([[self.model.score]], columns=["r2_score"])
+                        
+            # Get the mean squared error
+            metrics_df.loc[:,"mean_squared_error"] = metrics.mean_squared_error(self.y_test, self.y_pred, **metric_args)
+            
+            # Get the mean absolute error
+            metrics_df.loc[:,"mean_absolute_error"] = metrics.mean_absolute_error(self.y_test, self.y_pred, **metric_args)
+            
+            # Get the median absolute error
+            metrics_df.loc[:,"median_absolute_error"] = metrics.median_absolute_error(self.y_test, self.y_pred)
+            
+            # Get the explained variance score
+            metrics_df.loc[:,"explained_variance_score"] = metrics.explained_variance_score(self.y_test, self.y_pred,\
+                                                                                            metric_args)
+            
+            # Finalize the structure of the result DataFrame
+            metrics_df.loc[:,"model_name"] = self.model.name
+            metrics_df = metrics_df.loc[:,["model_name", "r2_score", "mean_squared_error", "mean_absolute_error",\
+                                           "median_absolute_error", "explained_variance_score"]]
+            
+        if caller == "external":
+            self.response = metrics_df
+
+            # Send the reponse table description to Qlik
+            if self.model.estimator_type == "classifier":
+                self._send_table_description("metrics_clf")
+            elif self.model.estimator_type == "regressor":
+                self._send_table_description("metrics_reg")
+
+            # Debug information is printed to the terminal and logs if the paramater debug = true
+            if self.model.debug:
+                self._print_log(4)
+
+            # Finally send the response
+            return self.response
+        else:
+            # Save the metrics_df to the model
+            self.model.metrics_df = metrics_df
+    
+    def get_confusion_matrix(self):
+        """
+        Returns a confusion matrix calculated previously using testing data with fit or calculate_metrics
+        """
+        
+        # Get the model from cache or disk based on the model_name in request
+        self._get_model_by_name()
+        
+        # Prepare the output
+        self.response = self.model.confusion_matrix
+        
+        # Send the reponse table description to Qlik
+        self._send_table_description("confusion_matrix")
+        
+        # Debug information is printed to the terminal and logs if the paramater debug = true
+        if self.model.debug:
+            self._print_log(4)
+        
+        # Finally send the response
+        return self.response
+    
     def predict(self, load_script=False, variant="predict"):
         """
         Return a prediction by applying an existing model to the supplied data.
@@ -446,7 +549,7 @@ class SKLearnForQlik:
         # Convert the data types based on feature definitions 
         self.X = utils.convert_types(self.X, self.model.features_df)
         
-        if variant == 'predict_proba' or variant == 'predict_log_proba':
+        if variant in ('predict_proba', 'predict_log_proba'):
             # If probabilities need to be returned
             if variant == 'predict_proba':
                 # Get the predicted probability for each sample 
@@ -547,7 +650,48 @@ class SKLearnForQlik:
         # Finally send the response
         return self.response
     
-    def _set_params(self, estimator_args, scaler_args, execution_args, dim_reduction_args=None):
+    def get_metrics(self):
+        """
+        Return metrics previously calculated during fit
+        """
+        
+        # Interpret the request data based on the expected row and column structure
+        row_template = ['strData']
+        col_headers = ['model_name']
+        
+        # Create a Pandas Data Frame for the request data
+        self.request_df = utils.request_df(self.request, row_template, col_headers)
+        
+        # Initialize the persistent model
+        self.model = PersistentModel()
+        
+        # Get the model name from the request dataframe
+        self.model.name = self.request_df.loc[0, 'model_name']
+        
+        # Get the model from cache or disk
+        self._get_model()
+        
+        # Debug information is printed to the terminal and logs if the paramater debug = true
+        if self.model.debug:
+            self._print_log(3)
+        
+        # Prepare the expression as a string
+        self.response = self.model.metrics_df
+        
+        # Send the reponse table description to Qlik
+        if self.model.estimator_type == "classifier":
+            self._send_table_description("metrics_clf")
+        elif self.model.estimator_type == "regressor":
+            self._send_table_description("metrics_reg")
+        
+        # Debug information is printed to the terminal and logs if the paramater debug = true
+        if self.model.debug:
+            self._print_log(4)
+        
+        # Finally send the response
+        return self.response
+    
+    def _set_params(self, estimator_args, scaler_args, execution_args, metric_args=None, dim_reduction_args=None):
         """
         Set input parameters based on the request.
         :
@@ -561,13 +705,17 @@ class SKLearnForQlik:
         
         # Set default values which will be used if execution arguments are not passed
         
-        # Execution parameters:
+        # Default execution parameters:
         self.model.overwrite = False
         self.model.debug = False
         self.model.test_size = 0.33
         self.model.random_state = 42
         self.model.compress = 3
         self.model.retain_data = False
+        
+        # Default metric parameters:
+        if metric_args is None:
+            self.model.metric_args = {}
         
         # Set execution parameters
                 
@@ -584,15 +732,15 @@ class SKLearnForQlik:
             # Set the test_size parameter that will be used to split the samples into training and testing data sets
             # Default value is 0.33, i.e. we use 66% of the samples for training and 33% for testing
             if 'test_size' in execution_args:
-                self.model.test_size = locale.atof(execution_args['test_size'])
+                self.model.test_size = utils.atof(execution_args['test_size'])
             
             # Seed used by the random number generator when generating the training testing split
             if 'random_state' in execution_args:
-                self.model.random_state = locale.atoi(execution_args['random_state'])
+                self.model.random_state = utils.atoi(execution_args['random_state'])
             
             # Compression level between 1-9 used by joblib when saving the model
             if 'compress' in execution_args:
-                self.model.compress = locale.atoi(execution_args['compress'])
+                self.model.compress = utils.atoi(execution_args['compress'])
                 
             # Flag to determine if the training and test data should be saved in the model
             if 'retain_data' in execution_args:
@@ -655,14 +803,28 @@ class SKLearnForQlik:
             if 'estimator' in estimator_args:
                 self.model.estimator = estimator_args.pop('estimator')
                 
+                # Set the estimator type for the model
+                if self.model.estimator in self.classifiers:
+                    self.model.estimator_type = "classifier"
+                elif self.model.estimator in self.regressors:
+                    self.model.estimator_type = "regressor"
+                
                 # Get the rest of the estimator parameters, converting values to the correct data type
                 self.model.estimator_kwargs = utils.get_kwargs_by_type(estimator_args)  
             else:
                 err = "Arguments for estimator did not include the estimator class e.g. RandomForestClassifier"
                 self._print_exception(err, Exception(err))  
         
-        # If dimensionality reduction key word arguments were included in the request, get the parameters and values
-        if dim_reduction_args is not None:
+        # If key word arguments for model evaluation metrics are included in the request, get the parameters and values
+        if metric_args is not None and len(metric_args) > 0:
+            # Transform the string of arguments into a dictionary
+            metric_args = utils.get_kwargs(metric_args)
+            
+            # Get the metric parameters, converting values to the correct data type
+            self.model.metric_args = utils.get_kwargs_by_type(metric_args)  
+        
+        # If key word arguments for dimensionality reduction are included in the request, get the parameters and values
+        if dim_reduction_args is not None and len(dim_reduction_args) > 0:
             # Transform the string of arguments into a dictionary
             dim_reduction_args = utils.get_kwargs(dim_reduction_args)
                    
@@ -682,7 +844,85 @@ class SKLearnForQlik:
         # Debug information is printed to the terminal and logs if the paramater debug = true
         if self.model.debug:
             self._print_log(2)
-              
+    
+    def _get_model_by_name(self):
+        """
+        Get a previously saved model using the model_name
+        """
+        
+        # Interpret the request data based on the expected row and column structure
+        row_template = ['strData']
+        col_headers = ['model_name']
+        
+        # Create a Pandas Data Frame for the request data
+        self.request_df = utils.request_df(self.request, row_template, col_headers)
+        
+        # Initialize the persistent model
+        self.model = PersistentModel()
+        
+        # Get the model name from the request dataframe
+        self.model.name = self.request_df.loc[0, 'model_name']
+        
+        # Get the model from cache or disk
+        self._get_model()
+        
+        # Debug information is printed to the terminal and logs if the paramater debug = true
+        if self.model.debug:
+            self._print_log(3)
+    
+    def _get_model_and_data(self):
+        """
+        Get samples and targets based on the request and an existing model's feature definitions
+        """
+    
+        # Interpret the request data based on the expected row and column structure
+        row_template = ['strData', 'strData']
+        col_headers = ['model_name', 'n_features']
+        
+        # Create a Pandas Data Frame for the request data
+        self.request_df = utils.request_df(self.request, row_template, col_headers)
+        
+        # Initialize the persistent model
+        self.model = PersistentModel()
+        
+        # Get the model name from the request dataframe
+        self.model.name = self.request_df.loc[0, 'model_name']
+        
+        # Get the model from cache or disk
+        self._get_model()
+        
+        # Debug information is printed to the terminal and logs if the paramater debug = true
+        if self.model.debug:
+            self._print_log(3)
+        
+        # Split the features provided as a string into individual columns
+        samples_df = pd.DataFrame([x[1].split("|") for x in self.request_df.values.tolist()],\
+                                     columns=self.model.features_df.loc[:,"name"].tolist(),\
+                                     index=self.request_df.index)
+        
+        # Convert the data types based on feature definitions 
+        samples_df = utils.convert_types(samples_df, self.model.features_df)
+        
+        # Get the target feature
+        # NOTE: This code block will need to be reviewed for multi-label classification
+        target = self.model.features_df.loc[self.model.features_df["variable_type"] == "target"]
+        target_name = target.index[0]
+
+        # Get the target data
+        target_df = samples_df.loc[:,[target_name]]
+
+        # Get the features to be excluded from the model
+        exclusions = self.model.features_df['variable_type'].isin(["excluded", "target", "identifier"])
+        
+        # Update the feature definitions dataframe
+        excluded = self.model.features_df.loc[exclusions]
+        self.model.features_df = self.model.features_df.loc[~exclusions]
+        
+        # Remove excluded features from the data
+        samples_df = samples_df[self.model.features_df.index.tolist()]
+        
+        return [samples_df, target_df]
+        
     def _send_table_description(self, variant):
         """
         Send the table description to Qlik as meta data.
@@ -713,6 +953,26 @@ class SKLearnForQlik:
             self.table.fields.add(name="time_stamp")
             self.table.fields.add(name="score_result")
             self.table.fields.add(name="score", dataType=1)
+        elif variant == "metrics_clf":
+            self.table.fields.add(name="model_name")
+            self.table.fields.add(name="class")
+            self.table.fields.add(name="accuracy", dataType=1)
+            self.table.fields.add(name="precision", dataType=1)
+            self.table.fields.add(name="recall", dataType=1)
+            self.table.fields.add(name="fscore", dataType=1)
+            self.table.fields.add(name="support", dataType=1)
+        elif variant == "metrics_reg":
+            self.table.fields.add(name="model_name")
+            self.table.fields.add(name="r2_score", dataType=1)
+            self.table.fields.add(name="mean_squared_error", dataType=1)
+            self.table.fields.add(name="mean_absolute_error", dataType=1)
+            self.table.fields.add(name="median_absolute_error", dataType=1)
+            self.table.fields.add(name="explained_variance_score", dataType=1)
+        elif variant == "confusion_matrix":
+            self.table.fields.add(name="model_name")
+            self.table.fields.add(name="true_label")
+            self.table.fields.add(name="pred_label")
+            self.table.fields.add(name="count", dataType=1)
         elif variant == "predict":
             self.table.fields.add(name="model_name")
             self.table.fields.add(name="key")
@@ -805,7 +1065,7 @@ class SKLearnForQlik:
             sys.stdout.write("Scaler kwargs: {0}\n\n".format(self.model.scaler_kwargs))
             if self.model.dim_reduction:
                 sys.stdout.write("Reduction: {0}\nReduction kwargs: {1}\n\n".format(self.model.reduction,\
-                                                                                    self.model.dim_reduction_kwargs))
+                                                                                    self.model.dim_reduction_args))
             sys.stdout.write("Estimator: {0}\nEstimator kwargs: {1}\n\n".format(self.model.estimator,\
                                                                                 self.model.estimator_kwargs))
             
@@ -817,7 +1077,7 @@ class SKLearnForQlik:
                 f.write("Scaler kwargs: {0}\n\n".format(self.model.scaler_kwargs))
                 if self.model.dim_reduction:
                     f.write("Reduction: {0}\nReduction kwargs: {1}\n\n".format(self.model.reduction,\
-                                                                               self.model.dim_reduction_kwargs))
+                                                                               self.model.dim_reduction_args))
                 f.write("Estimator: {0}\nEstimator kwargs: {1}\n\n".format(self.model.estimator,self.model.estimator_kwargs))
                 
         elif step == 3:                    

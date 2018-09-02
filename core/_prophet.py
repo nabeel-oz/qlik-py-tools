@@ -166,7 +166,7 @@ class ProphetForQlik:
         request_df = pd.DataFrame([p.split(":") for p in pairs], columns=['ds', 'y'])
         
         # Convert strings to numeric values, replace conversion errors with Null values
-        request_df = request_df.applymap(lambda s: locale.atof(s) if s else np.NaN)      
+        request_df = request_df.applymap(lambda s: utils.atof(s) if s else np.NaN)      
         
         # Check if the holidays column is populated
         if len(holidays) > 0:
@@ -372,25 +372,25 @@ class ProphetForQlik:
             # Set the cap which adds an upper limit at which the forecast will saturate
             # This changes the default linear growth model to a logistic growth model
             if 'cap' in self.kwargs:
-                self.cap = locale.atof(self.kwargs['cap'])
+                self.cap = utils.atof(self.kwargs['cap'])
                 self.growth = 'logistic'
             
                 # Set the floor which adds a lower limit at which the forecast will saturate
                 # To use a logistic growth trend with a floor, a cap must also be specified
                 if 'floor' in self.kwargs:
-                    self.floor = locale.atof(self.kwargs['floor'])
+                    self.floor = utils.atof(self.kwargs['floor'])
             
             # Set the changepoint_prior_scale to adjust the trend flexibility
             # If the trend changes are being overfit (too much flexibility) or underfit (not enough flexibility), 
             # you can adjust the strength of the sparse prior. 
             # Default value is 0.05. Increasing it will make the trend more flexible.
             if 'changepoint_prior_scale' in self.kwargs:
-                self.changepoint_prior_scale = locale.atof(self.kwargs['changepoint_prior_scale'])
+                self.changepoint_prior_scale = utils.atof(self.kwargs['changepoint_prior_scale'])
             
             # Set the width for the uncertainty intervals
             # Default value is 0.8 (i.e. 80%)
             if 'interval_width' in self.kwargs:
-                self.interval_width = locale.atof(self.kwargs['interval_width'])
+                self.interval_width = utils.atof(self.kwargs['interval_width'])
             
             # Set additional seasonality to be added to the model
             # Default seasonalities are yearly and weekly, as well as daily for sub daily data
@@ -405,7 +405,7 @@ class ProphetForQlik:
             # Set the seasonality period 
             # e.g. 30.5 for 'monthly' seasonality
             if 'seasonality_period' in self.kwargs:
-                self.period = locale.atof(self.kwargs['seasonality_period'])
+                self.period = utils.atof(self.kwargs['seasonality_period'])
             
             # Set the seasonality fourier terms 
             # Increasing the number of Fourier terms allows the seasonality to fit faster changing cycles, 
@@ -416,32 +416,32 @@ class ProphetForQlik:
             # Set the seasonality prior scale to smooth seasonality effects. 
             # Reducing this parameter dampens seasonal effects
             if 'seasonality_prior_scale' in self.kwargs:
-                self.seasonality_prior_scale = locale.atof(self.kwargs['seasonality_prior_scale'])
+                self.seasonality_prior_scale = utils.atof(self.kwargs['seasonality_prior_scale'])
             
             # Set the holiday prior scale to smooth holiday effects. 
             # Reducing this parameter dampens holiday effects. Default is 10, which provides very little regularization.
             if 'holidays_prior_scale' in self.kwargs:
-                self.holidays_prior_scale = locale.atof(self.kwargs['holidays_prior_scale'])
+                self.holidays_prior_scale = utils.atof(self.kwargs['holidays_prior_scale'])
             
             # Set the weekly start for 'weekly' seasonality requests 
             # Default week start is 0 which represents Sunday. Add offset as required.
             if 'weekly_start' in self.kwargs:
-                self.weekly_start = locale.atoi(self.kwargs['weekly_start'])
+                self.weekly_start = utils.atoi(self.kwargs['weekly_start'])
             
             # Set the weekly start for 'yearly' seasonality requests 
             # Default week start is 0 which represents 1st of Jan. Add offset as required.
             if 'yearly_start' in self.kwargs:
-                self.yearly_start = locale.atoi(self.kwargs['yearly_start'])
+                self.yearly_start = utils.atoi(self.kwargs['yearly_start'])
             
             # Set a period to extend the holidays by lower_window number of days before the date. 
             # This can be used to extend the holiday effect
             if 'lower_window' in self.kwargs:
-                self.lower_window = locale.atoi(self.kwargs['lower_window'])
+                self.lower_window = utils.atoi(self.kwargs['lower_window'])
             
             # Set a period to extend the holidays by upper_window number of days after the date. 
             # This can be used to extend the holiday effect
             if 'upper_window' in self.kwargs:
-                self.upper_window = locale.atoi(self.kwargs['upper_window'])
+                self.upper_window = utils.atoi(self.kwargs['upper_window'])
         
         # Create dictionary of arguments for the Prophet(), make_future_dataframe() and add_seasonality() functions
         self.prophet_kwargs = {}

@@ -86,7 +86,7 @@ class HDBSCANForQlik:
                 self.input_df = pd.DataFrame([s.split(';') for r in self.input_df.values for s in r], index=self.input_df.index)
         
                 # Convert strings to numbers using locale settings
-                self.input_df = self.input_df.applymap(lambda s: locale.atof(s) if s else np.NaN)
+                self.input_df = self.input_df.applymap(lambda s: utils.atof(s) if s else np.NaN)
         
         # Finally we prepare the data for the clustering algorithm:
         
@@ -264,19 +264,19 @@ class HDBSCANForQlik:
             # The minimum size of clusters. 
             # The default value is 5.
             if 'min_cluster_size' in self.kwargs:
-                self.min_cluster_size = locale.atoi(self.kwargs['min_cluster_size'])
+                self.min_cluster_size = utils.atoi(self.kwargs['min_cluster_size'])
                 
             # The number of samples in a neighbourhood for a point to be considered a core point.
             if 'min_samples' in self.kwargs:
-                self.min_samples = locale.atoi(self.kwargs['min_samples'])
+                self.min_samples = utils.atoi(self.kwargs['min_samples'])
             
             # p value to use if using the minkowski metric.
             if 'p' in self.kwargs:
-                self.p = locale.atoi(self.kwargs['p'])
+                self.p = utils.atoi(self.kwargs['p'])
             
             # A distance scaling parameter as used in robust single linkage.
             if 'alpha' in self.kwargs:
-                self.alpha = locale.atof(self.kwargs['alpha'])
+                self.alpha = utils.atof(self.kwargs['alpha'])
             
             # The method used to select clusters from the condensed tree.
             # Options are: eom, leaf.
@@ -309,7 +309,7 @@ class HDBSCANForQlik:
             if self.scaler == 'minmax':
                 if 'feature_range' in self.kwargs:
                     self.feature_range = ''.join(c for c in self.kwargs['feature_range'] if c not in '()').split(';')
-                    self.feature_range = (locale.atoi(self.feature_range[0]),locale.atoi(self.feature_range[1]))
+                    self.feature_range = (utils.atoi(self.feature_range[0]),utils.atoi(self.feature_range[1]))
             
             # Parameters for the Robust scaler
             # http://scikit-learn.org/stable/modules/generated/sklearn.preprocessing.RobustScaler.html
@@ -320,21 +320,21 @@ class HDBSCANForQlik:
                     self.with_scaling = 'true' == self.kwargs['with_scaling'].lower()
                 if 'quantile_range' in self.kwargs:
                     self.quantile_range = ''.join(c for c in self.kwargs['quantile_range'] if c not in '()').split(';')
-                    self.quantile_range = (locale.atof(self.quantile_range[0]),locale.atof(self.quantile_range[1]))
+                    self.quantile_range = (utils.atof(self.quantile_range[0]),utils.atof(self.quantile_range[1]))
             
             # Parameters for the Quantile Transformer
             # http://scikit-learn.org/stable/modules/generated/sklearn.preprocessing.QuantileTransformer.html
             if self.scaler == 'quantile':
                 if 'n_quantiles' in self.kwargs:
-                    self.n_quantiles = locale.atoi(self.kwargs['n_quantiles'])
+                    self.n_quantiles = utils.atoi(self.kwargs['n_quantiles'])
                 if 'output_distribution' in self.kwargs:
                     self.output_distribution = self.kwargs['output_distribution'].lower()
                 if 'ignore_implicit_zeros' in self.kwargs:
                     self.ignore_implicit_zeros = 'true' == self.kwargs['ignore_implicit_zeros'].lower()
                 if 'subsample' in self.kwargs:
-                    self.subsample = locale.atoi(self.kwargs['subsample'])
+                    self.subsample = utils.atoi(self.kwargs['subsample'])
                 if 'random_state' in self.kwargs:
-                    self.random_state = locale.atoi(self.kwargs['random_state'])
+                    self.random_state = utils.atoi(self.kwargs['random_state'])
         
         # Set up a list of possible key word arguments for the HDBSCAN() function
         hdbscan_params = ['algorithm', 'metric', 'min_cluster_size', 'min_samples', 'p', 'alpha',\

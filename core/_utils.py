@@ -12,16 +12,6 @@ import ServerSideExtension_pb2 as SSE
 PARENT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.append(os.path.join(PARENT_DIR, 'generated'))
 
-def _string_to_float(s):
-    """
-    This function returns a float for the string parameter s, or None in the case of a ValueError exception
-    """
-    try:
-        f = float(s)
-        return f
-    except ValueError:
-        return None
-
 def request_df(request_list, row_template, col_headers):
     """
     This function takes in a SSE request as a list together with a row template and column headers as lists of strings.
@@ -42,6 +32,50 @@ def request_df(request_list, row_template, col_headers):
         outer.append(inner)
     
     return pd.DataFrame(outer, columns=col_headers)
+
+def get_response_rows(response, template):
+    """
+    Take in a list of responses and covert them to SSE.Rows based on the column type specified in template
+    The template should be a list of the form: ["str", "num", "dual", ...]
+    For string values use: "str"
+    For numeric values use: "num"
+    For dual values: "dual"
+    """
+
+    response_rows = []
+    
+    # For each row in the response list
+    for row in response:
+        i = 0
+        this_row = []
+        
+        if len(template) > 1:        
+            # For each column in the row
+            for col in row:
+                # Convert values to type SSE.Dual according to the template list
+                if template[i] == "str":
+                    this_row.append(SSE.Dual(strData=col))
+                elif template[i] == "num":
+                    this_row.append(SSE.Dual(numData=col))
+                elif template[i] == "dual":
+                    this_row.append(SSE.Dual(strData=col, numData=col))
+                i = i + 1
+        else:
+            # Convert values to type SSE.Dual according to the template list
+            if template[0] == "str":
+                this_row.append(SSE.Dual(strData=row))
+            elif template[0] == "num":
+                this_row.append(SSE.Dual(numData=row))
+            elif template[0] == "dual":
+                this_row.append(SSE.Dual(strData=row, numData=row))
+        
+        # Group columns into a iterable and add to the the response_rows
+        response_rows.append(iter(this_row))
+
+    # Values are then structured as SSE.Rows
+    response_rows = [SSE.Row(duals=duals) for duals in response_rows]
+
+    return response_rows
 
 def fillna(df, method="zeros"):
     """
@@ -116,23 +150,67 @@ def get_kwargs(str_kwargs):
 def get_kwargs_by_type(dict_kwargs):
     """
     Take in a dictionary of keyword arguments where values are converted to the specified data type.
-    The values in the dictionary should be a string of the form: "value|type" .
+    The values in the dictionary should be a string of the form: "value|type"
     e.g. {"arg1": "2|int", "arg2": "2.0|float", "arg3": "True|bool", "arg4": "string|str"}
-    String to numeric conversions are done using locale settings.
+    Dictionaries, lists and arrays are allowed with the following format:
+    "arg1":"x:1;y:2|dict|str|int" where str is the type for keys and int is the type for values
+    "x;y;z|array|str" where str is the type of values in the array
+    "1;2;3|list|int" where int is the type of the values in the list
     """
     
     # Dictionary used to convert argument values to the correct type
-    types = {"boolean":ast.literal_eval, "bool":ast.literal_eval, "integer":locale.atoi, "int":locale.atoi,\
-             "float":locale.atof, "string":str, "str":str}
+    types = {"boolean":ast.literal_eval, "bool":ast.literal_eval, "integer":atoi, "int":atoi,\
+             "float":atof, "string":str, "str":str}
     
     result_dict = {}
     
     # Fill up the dictionary with the keyword arguments
     for k, v in dict_kwargs.items():
         # Split the value and type
-        v, t = v.split("|")
-        # Convert the value based on the correct type
-        result_dict[k] = types[t](v)
+        split = v.split("|")
+        
+        if len(split) == 2:      
+            # Handle conversion from string to boolean
+            if split[1] in ("boolean", "bool"):
+                split[0] = split[0].capitalize()
+            
+            # Convert the value based on the correct type
+            result_dict[k] = types[split[1]](split[0])
+        
+        elif split[1] == "dict":
+            # If the argument is a dictionary convert keys and values according to the correct types
+            items = split[0].split(";")
+            d = {}
+            
+            for i in items:
+                a,b = i.split(":")
+                
+                # Handle conversion from string to boolean
+                if split[2] in ("boolean", "bool"):
+                    a = a.capitalize()
+                if split[3] in ("boolean", "bool"):
+                    b = b.capitalize()
+                
+                d[types[split[2]](a)] = types[split[3]](b)
+            
+            result_dict[k] = d
+        
+        elif split[1] in ("list", "array"):
+            # If the argument is a list or array convert keys and values according to the correct types
+            items = split[0].split(";")
+            l = []
+            
+            for i in items:
+                # Handle conversion from string to boolean
+                if split[2] in ("boolean", "bool"):
+                    i = i.capitalize()
+                    
+                l.append(types[split[2]](i))
+            
+            if split[1] == "array":
+                l = np.array(l)
+                
+            result_dict[k] = l
     
     return result_dict
 
@@ -142,7 +220,6 @@ def convert_types(n_samples, features_df):
     Both parameters must be supplied as dataframes. The columns in n_samples must be equal to rows in features_df.
     The features_df dataframe must have a "name" and a "data_type" column.
     Accepted data_types are int, float, str, bool.
-    String to numeric conversions are done using locale settings.
     """
     
     # Transpose the features dataframe and keep the data_types for each feature
@@ -151,16 +228,50 @@ def convert_types(n_samples, features_df):
     dtypes = features_df_t.loc["data_type",:]
     
     # Dictionary used to convert argument values to the correct type
-    types = {"boolean":ast.literal_eval, "bool":ast.literal_eval, "integer":locale.atoi, "int":locale.atoi,\
-             "float":locale.atof, "string":str, "str":str}
+    types = {"boolean":ast.literal_eval, "bool":ast.literal_eval, "integer":atoi, "int":atoi,\
+             "float":atof, "string":str, "str":str}
     
     # Convert columns by the corresponding data type
     for col in n_samples.columns:
         # Handle conversion from string to boolean
-        if dtypes[col] == "boolean" or dtypes[col] == "bool":
+        if dtypes[col] in ("boolean", "bool"):
             n_samples.loc[:, col] = n_samples.loc[:, col].astype("str").apply(str.capitalize)
         
         # Convert this column to the correct type
         n_samples.loc[:, col] = n_samples.loc[:, col].apply(types[dtypes[col]])     
         
     return n_samples
+
+def atoi(a):
+    """
+    Convert a string to float.
+    The string can be in the following valid regional number formats:
+    4,294,967,295   4 294 967 295   4.294.967.295   4 294 967.295  
+    """
+    if len(a) == 0:
+        return np.NaN
+    
+    translator = str.maketrans("", "", ",. ")
+    
+    return (int(a.translate(translator)))
+
+def atof(a):
+    """
+    Convert a string to float.
+    The string can be in the following valid regional number formats:
+    4,294,967,295.00   4 294 967 295,000   4.294.967.295,000  
+    """
+    if len(a) == 0:
+        return np.NaN
+    
+    del_chars = " "
+    
+    if a.count(",") > 1 or a.rfind(",") < a.rfind("."):
+        del_chars = del_chars + ","
+    
+    if a.count(".") > 1 or a.rfind(",") > a.rfind("."):
+        del_chars = del_chars + "."
+    
+    s = a.translate(str.maketrans("", "", del_chars))
+
+    return float(s.replace(",", "."))
