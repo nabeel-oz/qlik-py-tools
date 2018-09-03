@@ -326,13 +326,33 @@ This sections provides any specific syntax required for inputs to the `PyTools.s
 | missing | Strategy to use for missing/null values | `mean`, `median`, `mode`, `zeros`, `none` | Defaults to `zeros`. |
 | scale_hashed | Whether to scale hashed features | `true`, `false` | At times machine learning requires trial and error. You may want to control this setting and see the impact on the results. |
 
-In addition to the standard parameters above, you can provide any valid key word arguments accepted by the scikit-learn preprocesing class specified under the `scaler` argument above. The format for these additional arguments must take the form `arg=value|type` for example:
+In addition to the standard parameters above, you can provide any valid key word arguments accepted by the scikit-learn preprocesing class specified under the `scaler` argument above. Refer to the specifictions under [Specifying additional key word arguments](#specifying-additional-key-word-arguments)
+
+For more information on available parameters refer to the [scikit-learn API](http://scikit-learn.org/stable/modules/classes.html#module-sklearn.preprocessing).
+
+#### Specifying additional key word arguments
+
+Many of the functions defined in this SSE accept additional key word arguments for the relevant class. You should refer to the [scikit-learn API](http://scikit-learn.org/stable/modules/classes.html#api-reference) for documentation on the available parameters.
+
+For the simple data types `bool`, `int`, `float`, and `str`, the format for such key word arguments must take the form `arg=value|type` for example:
 
 ```
 'scaler=StandardScaler, with_mean=true|bool, with_std=true|bool' 
 ```
 
-For more information refer to the [scikit-learn API](http://scikit-learn.org/stable/modules/classes.html#module-sklearn.preprocessing).
+In addition this SSE accepts lists, arrays, tuples with the syntax `arg=item1;item2;item3|object_type|value_type`. For example:
+
+```
+'arg=1;2;3|list|int'
+'arg=x;y;z|array|str'
+'arg=0;1|tuple|int'
+```
+
+Finally dictionaries are accepted with the syntax `arg=x:1;y:2|dict|key_type|value_type`. For example:
+
+```
+'arg=x:1;y:2|dict|str|int'
+```
 
 ## Attribution
 The data used in the sample apps was obtained from https://www.kaggle.com:
