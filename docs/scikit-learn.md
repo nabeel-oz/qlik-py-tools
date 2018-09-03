@@ -10,8 +10,8 @@
      - [Training and testing the model](#training-and-testing-the-model)
      - [Making predictions using the model](#making-predictions-using-the-model)
 - [Additional Functionality](#additional-functionality)
-     - [Optimizing hyperparameters for a model](#optimizing-hyperparameters-for-a-model)
-     - [Training multiple models](#training-multiple-models)
+     - [Optimizing hyperparameters for an estimator](#optimizing-hyperparameters-for-an-estimator)
+     - [Training multiple estimators](#training-multiple-estimators)
      - [Out-of-core learning](#out-of-core-learning)
      - [Dimensionality reduction](#dimensionality-reduction)
 - [Input Specifications](#input-specifications)
@@ -106,7 +106,7 @@ LOAD
 EXTENSION PyTools.sklearn_Set_Features(FEATURES{Model_Name, Name, Variable_Type, Data_Type, Feature_Strategy, Hash_Features});
 ```
 
-For details on the format of the inputs refer to the section on [Input Specifications](#input-specifications).
+For details on the format of inputs refer to the [Input Specifications](#input-specifications).
 
 ### Training and testing the model
 
@@ -267,16 +267,41 @@ EXTENSION PyTools.sklearn_Bulk_Predict(TEMP_SAMPLES_WITH_KEYS{Model_Name, Key, N
 ## Additional Functionality
 The basic flow described above needs to be extended in most real world cases. 
 
-### Optimizing hyperparameters for a model
+### Optimizing hyperparameters for an estimator
 One key step is determining the best hyperparameters for an estimator. This process can be automated given a parameter grid and performing a search across combinations of the specified parameter values for the estimator.
 
 This capability is currently a work in progress.
 
-### Training multiple models 
+### Training multiple estimators
+Multiple estimators can be trained with the same dataset by using Qlik's [FOR EACH...NEXT](https://help.qlik.com/en-US/sense/June2018/Subsystems/Hub/Content/Scripting/ScriptControlStatements/For%20Each.htm) load script syntax.
+
+This is demonstrated in the `HR Attrition Model` sample app.
 
 ### Out-of-core learning
+Some of the scikit-learn algorithms allow for out-of-core learning, i.e. training a model in batches where the dataset is too large to fit into memory. For more information refer to the [scikit-learn documentation](http://scikit-learn.org/stable/modules/scaling_strategies.html).
+
+This capability is currently a work in progress.
 
 ### Dimensionality reduction
+A very large number of features can have a negative impact on the model. This is called the [curse of dimensionality](https://en.wikipedia.org/wiki/Curse_of_dimensionality). 
+
+This problem can be addressed by using dimensionality reduction before the estimator is fit to the data. You can add dimensionality reduction to the model by specifying it during the setup using the `sklearn_Setup_Adv` function.
+
+```
+[Result-Setup]:
+LOAD
+   model_name,
+   result,
+   timestamp
+EXTENSION PyTools.sklearn_Setup_Adv(MODEL_INIT{Model_Name, EstimatorArgs, ScalerArgs, MetricArgs, DimReductionArgs, ExecutionArgs}); 
+```
+
+For details on the format of inputs refer to the [Input Specifications](#input-specifications).
+
+### What-if analysis
+When making predictions, you can use Qlik expressions for input features. This gives you the flexibility to control certain features using variables in Qlik and assess the change to the predictions. This is demonstrated in the `What-if Analysis` sheet in the `HR Attrition Predictions` sample app. 
+
+_Note that the expression must retain the data type defined in the model's feature definitions,_
 
 ## Input Specifications
 
