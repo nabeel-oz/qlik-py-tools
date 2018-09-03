@@ -43,18 +43,18 @@ At a high-level the steps are:
    - `PyTools.sklearn_Param_Grid(model_name, estimator_args, grid_search_args)` _(Work in progress)_
 5. Set feature definitions for the model
    - `PyTools.sklearn_Set_Features(model_name, feature_name, variable_type, data_type, feature_strategy, hash_length)`
-6. Fit the model using the training data, and optionally evalute it using test data
+6. Fit the model using the training data, and optionally evaluate it using test data
    - `PyTools.sklearn_Fit(model_name, n_features)`
    - `PyTools.sklearn_Partial_Fit(model_name, n_features)` _(Work in progress)_
-7. Optionally, get metrics on test data if this was not done together with training
+7. Optionally, calculate metrics on test data if this was not done together with training
    - `PyTools.sklearn_Calculate_Metrics(model_name, n_features)`
    - `PyTools.sklearn_Get_Metrics(model_name)`
    - `PyTools.sklearn_Get_Confusion_Matrix(model_name, n_features)` _(Only applicable to classifiers)_
 8. Get predictions from an existing model
    - `PyTools.sklearn_Predict(model_name, n_features)` _(For use in chart expressions)_
-   - `PyTools.sklearn_Bulk_Predict(model_name, n_features)` _(For use in the load script)_
+   - `PyTools.sklearn_Bulk_Predict(model_name, key, n_features)` _(For use in the load script)_
    - `PyTools.sklearn_Predict_Proba(model_name, n_features)` _(For use in chart expressions. Only applicable to classifiers)_
-   - `PyTools.sklearn_Bulk_Predict_Proba(model_name, n_features)` _(For use in the load script. Only applicable to classifiers)_
+   - `PyTools.sklearn_Bulk_Predict_Proba(model_name, key, n_features)` _(For use in the load script. Only applicable to classifiers)_
 
 Steps 1-7 are done through Qlik's data load processes, while the predictions can be made through either the load script or in real-time using chart expressions.
 
