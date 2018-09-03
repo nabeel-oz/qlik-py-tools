@@ -209,6 +209,61 @@ EXTENSION PyTools.sklearn_Get_Confusion_Matrix(TEMP_SAMPLES{Model_Name});
 
 ### Making predictions using the model
 
+To make predictions you need to use an existing model. A list of models can be obtained using the `sklearn_List_Models` function. This function is meant to be used in chart expressions, for example as a dimension in a table object.
+
+The input to this function is a string to search for within the directory. You can also provide an empty string to get a list of all the models.
+
+```
+PyTools.sklearn_List_Models('')
+```
+
+To make predictions you must provide exactly the same features in exactly the same order as the training data. And as explained in the section above, all features need to be concatenated into a single string. To help with this the function `sklearn_Get_Features_Expression` provides the expression that can be added to a variable in the load script.
+
+```
+TEMP_MODEL:
+LOAD * INLINE [
+	'Model_Name'
+    'HR-Attrition-LR'
+];
+
+[FEATURES_EXPRESSION]:
+LOAD
+	result as features_expression
+EXTENSION PyTools.sklearn_Get_Features_Expression(TEMP_MODEL{Model_Name});
+
+vFeaturesExpression = peek('features_expression', 0, 'TEMP_EXPRESSION');
+
+Drop tables TEMP_MODEL;
+```
+
+Predictions can be made in a chart expression using the `sklearn_Predict` function. For classifiers you can use the `sklearn_Predict_Proba` function to get the predicted class probabilities.
+
+```
+PyTools.sklearn_Predict('HR-Attrition-LR', $(vFeaturesExpression))
+```
+
+_Note: As of the June 2018 release, the expression above can be used as a dimension in the table object, allowing you to make selections on the prediction results. Note that the prediction expression should *not* be stored as a master item as this can lead to unstable behavior._
+
+Predictions can also be made in the load script using the `sklearn_Bulk_Predict` method. For classifiers you can also use the `sklearn_Bulk_Predict_Proba` function to get the predicted class probabilities.
+
+The input to the bulk prediction functions must include a key, which is simply returned back and can be used to link the predictions in the Qlik data model.
+
+```
+[TEMP_SAMPLES_WITH_KEYS]:
+LOAD
+   Model_Name,
+   EmployeeNumber as Key,
+   N_Features
+RESIDENT [TEMP_SAMPLES];
+
+[Predictions]:
+LOAD
+   model_name,
+   key,
+   prediction
+EXTENSION PyTools.sklearn_Bulk_Predict(TEMP_SAMPLES_WITH_KEYS{Model_Name, Key, N_Features});
+```
+
 ## Additional Functionality
 The basic flow described above needs to be extended in most real world cases. 
 
