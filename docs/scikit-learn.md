@@ -75,6 +75,7 @@ For each feature, i.e. each column in the dataset, we need to define the followi
 | Hash Features | The number of features where the feature strategy is hashing | An integer e.g. `4` | The integer should be a power of 2 for the hashing to work correctly. |
    
 The table should look like this:
+
 ![feature definitions](images/sklearn-pre-02.png)
 
 ### Setting up the model
