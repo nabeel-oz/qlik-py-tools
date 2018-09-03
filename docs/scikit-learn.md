@@ -15,13 +15,13 @@
      - [Out-of-core learning](#out-of-core-learning)
      - [Dimensionality reduction](#dimensionality-reduction)
 - [Input Specifications](#input-specifications)
+     - [Specifying keyword arguments for scikit-learn classes](specifying-keyword-arguments-for-scikit-learn-classes)
      - [Execution Arguments](#execution-arguments)
      - [Scaler Arguments](#scaler-arguments)
      - [Estimator Arguments](#estimator-arguments)
      - [Grid Search Arguments](#grid-search-arguments)
      - [Metrics Arguments](#metrics-arguments)
      - [Dimensionality Reduction Arguments](#dimensionality-reduction-arguments)
-     - [Specifying additional key word arguments](#specifying-additional-key-word-arguments)
 - [Attribution](#attribution)
 
 ## Introduction
@@ -194,7 +194,7 @@ LOAD
 EXTENSION PyTools.sklearn_Get_Metrics(TEMP_SAMPLES{Model_Name});
 ```
 
-The `sklearn_Calculate_Metrics` function takes in a new test dataset, albiet with exactly the same features as the training data, and calculates the metrics. The output fields are the same as the ones described above for `sklearn_Get_Metrics`.
+The `sklearn_Calculate_Metrics` function takes in a new test dataset, with exactly the same features as the training data, and calculates the metrics. The output fields are the same as the ones described above for `sklearn_Get_Metrics`.
 
 ```
 [Result-Metrics]:
@@ -229,7 +229,7 @@ To make predictions you must provide exactly the same features in exactly the sa
 ```
 TEMP_MODEL:
 LOAD * INLINE [
-	'Model_Name'
+    'Model_Name'
     'HR-Attrition-LR'
 ];
 
@@ -312,7 +312,38 @@ _Note that the expression must retain the data type defined in the model's featu
 
 ## Input Specifications
 
-This sections provides any specific syntax required for inputs to the `PyTools.sklearn` functions.
+This sections provides the specific syntax required for arguments to the `PyTools.sklearn` functions. 
+
+In general, arguments are passed as strings to this SSE using the syntax `argument=value`. Multiple arguments within a string have to be separated by a comma, with single quotes around the entire string. For example:
+
+```
+// Set up a variable for execution parameters
+LET vExecutionArgs = 'overwrite=true,test_size=0.3,debug=true';
+```
+
+### Specifying keyword arguments for scikit-learn classes
+
+Many of the functions defined in this SSE accept additional keyword arguments for the relevant scikit-learn class. You should refer to the [scikit-learn API](http://scikit-learn.org/stable/modules/classes.html#api-reference) for documentation on the parameters available for each class.
+
+For the simple data types `bool`, `int`, `float`, and `str`, the format for such keyword arguments must take the form `arg=value|type`. For example:
+
+```
+'scaler=StandardScaler, with_mean=true|bool, with_std=true|bool' 
+```
+
+In addition this SSE accepts lists, arrays, tuples with the syntax `arg=item1;item2;item3|object_type|value_type`. For example:
+
+```
+'arg=1;2;3|list|int'
+'arg=x;y;z|array|str'
+'arg=0;1|tuple|int'
+```
+
+Finally dictionaries are accepted with the syntax `arg=x:1;y:2|dict|key_type|value_type`. For example:
+
+```
+'arg=x:1;y:2|dict|str|int'
+```
 
 ### Execution Arguments
 
@@ -339,35 +370,15 @@ For more information on available parameters refer to the [scikit-learn API](htt
 
 ### Estimator Arguments
 
+| Keyword | Description | Sample Values | Remarks |
+| --- | --- | --- | --- |
+| estimator | The chosen estimator for the model | `AdaBoostClassifier`, `AdaBoostRegressor`, `BaggingClassifier`, `BaggingRegressor`, `ExtraTreesClassifier`, `ExtraTreesRegressor`, `GradientBoostingClassifier`, `GradientBoostingRegressor`, `RandomForestClassifier`, `RandomForestRegressor`, `VotingClassifier`, `GaussianProcessClassifier`, `GaussianProcessRegressor`, `LinearRegression`, `LogisticRegression`, `LogisticRegressionCV`, `PassiveAggressiveClassifier`, `PassiveAggressiveRegressor`, `Perceptron`, `RANSACRegressor`, `Ridge`, `RidgeClassifier`, `RidgeCV`, `RidgeClassifierCV`, `SGDClassifier`, `SGDRegressor`, `TheilSenRegressor`, `BernoulliNB`, `GaussianNB`, `MultinomialNB`, `KNeighborsClassifier`, `KNeighborsRegressor`, `RadiusNeighborsClassifier`, `RadiusNeighborsRegressor`, `MLPClassifier`,  `MLPRegressor`, `LinearSVC`, `LinearSVR`, `NuSVC`, `NuSVR`, `SVC`, `SVR`, `DecisionTreeClassifier`, `DecisionTreeRegressor`, `ExtraTreeClassifier`, `ExtraTreeRegressor`, `DummyClassifier`, `DummyRegressor` | Any of the classification and regression algorithms in scikit-learn can be used with this SSE. For more  information refer to [scikit-learn.org](http://scikit-learn.org/). <br><br>The arguments for the estimator should be specified as a string using the syntax described under [Specifying keyword arguments for scikit-learn classes](specifying-keyword-arguments-for-scikit-learn-classes).  |
+
 ### Grid Search Arguments
 
 ### Metrics Arguments
 
 ### Dimensionality Reduction Arguments
-
-### Specifying additional key word arguments
-
-Many of the functions defined in this SSE accept additional key word arguments for the relevant class. You should refer to the [scikit-learn API](http://scikit-learn.org/stable/modules/classes.html#api-reference) for documentation on the available parameters.
-
-For the simple data types `bool`, `int`, `float`, and `str`, the format for such key word arguments must take the form `arg=value|type` for example:
-
-```
-'scaler=StandardScaler, with_mean=true|bool, with_std=true|bool' 
-```
-
-In addition this SSE accepts lists, arrays, tuples with the syntax `arg=item1;item2;item3|object_type|value_type`. For example:
-
-```
-'arg=1;2;3|list|int'
-'arg=x;y;z|array|str'
-'arg=0;1|tuple|int'
-```
-
-Finally dictionaries are accepted with the syntax `arg=x:1;y:2|dict|key_type|value_type`. For example:
-
-```
-'arg=x:1;y:2|dict|str|int'
-```
 
 ## Attribution
 The data used in the sample apps was obtained from https://www.kaggle.com:
