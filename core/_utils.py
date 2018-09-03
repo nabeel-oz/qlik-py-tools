@@ -153,7 +153,7 @@ def get_kwargs_by_type(dict_kwargs):
     The values in the dictionary should be a string of the form: "value|type"
     e.g. {"arg1": "2|int", "arg2": "2.0|float", "arg3": "True|bool", "arg4": "string|str"}
     Dictionaries, lists and arrays are allowed with the following format:
-    "arg1":"x:1;y:2|dict|str|int" where str is the type for keys and int is the type for values
+    "x:1;y:2|dict|str|int" where str is the type for keys and int is the type for values
     "x;y;z|array|str" where str is the type of values in the array
     "1;2;3|list|int" where int is the type of the values in the list
     "0;1|tuple|int" where int is the type of the values in the tuple
