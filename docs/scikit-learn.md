@@ -15,7 +15,7 @@
      - [Out-of-core learning](#out-of-core-learning)
      - [Dimensionality reduction](#dimensionality-reduction)
 - [Input Specifications](#input-specifications)
-     - [Specifying keyword arguments for scikit-learn classes](specifying-keyword-arguments-for-scikit-learn-classes)
+     - [Specifying keyword arguments for scikit-learn classes](#specifying-keyword-arguments-for-scikit-learn-classes)
      - [Execution Arguments](#execution-arguments)
      - [Scaler Arguments](#scaler-arguments)
      - [Estimator Arguments](#estimator-arguments)
@@ -325,7 +325,7 @@ LET vExecutionArgs = 'overwrite=true,test_size=0.3,debug=true';
 
 Many of the functions defined in this SSE accept additional keyword arguments for the relevant scikit-learn class. You should refer to the [scikit-learn API](http://scikit-learn.org/stable/modules/classes.html#api-reference) for documentation on the parameters available for each class.
 
-For the simple data types `bool`, `int`, `float`, and `str`, the format for such keyword arguments must take the form `arg=value|type`. For example:
+For the simple data types `bool`, `int`, `float`, and `str`, the format for such keyword arguments must take the form `arg=value|type`. Such arguments can be combined into a single string with the named parameters described in the sections below. For example:
 
 ```
 'scaler=StandardScaler, with_mean=true|bool, with_std=true|bool' 
@@ -354,7 +354,7 @@ Finally dictionaries are accepted with the syntax `arg=x:1;y:2|dict|key_type|val
 | random_state | Seed used by the random number generator when generating the training testing split | `42` | Must be an integer. |
 | compress | Compression level between 1-9 used by joblib when saving the model | `1` | Defaults to `3`. |
 | retain_data | Flag to determine if the training and test data should be saved in the model | `true`, `false` | Defaults to `false`. |
-| debug | Flag to output additional information to the terminal and logs | `true`, `false` | Defaults to `false`.<br><br>Information will be printed to the terminal as well to a log file: ..\qlik-py-env\core\logs\SKLearn Log <n>.txt. |
+| debug | Flag to output additional information to the terminal and logs | `true`, `false` | Defaults to `false`.<br><br>Information will be printed to the terminal as well to a log file: `qlik-py-tools\qlik-py-env\core\logs\SKLearn Log <n>.txt`. |
 
 ### Scaler Arguments
 
@@ -362,9 +362,9 @@ Finally dictionaries are accepted with the syntax `arg=x:1;y:2|dict|key_type|val
 | --- | --- | --- | --- |
 | scaler | scikit-learn class that will be used for scaling numeric data | `StandardScaler`, `MinMaxScaler`, `MaxAbsScaler`, `RobustScaler`, `QuantileTransformer` | Defaults to `StandardScaler`.<br><br>Standardizing the data is a common requirement for machine learning algorithmns. In this implementation we use the [sklearn.preprocessing](http://scikit-learn.org/stable/modules/preprocessing.html) package. |
 | missing | Strategy to use for missing/null values | `mean`, `median`, `mode`, `zeros`, `none` | Defaults to `zeros`. |
-| scale_hashed | Whether to scale hashed features | `true`, `false` | At times machine learning requires trial and error. You may want to control this setting and see the impact on the results. |
+| scale_hashed | Whether to scale hashed features | `true`, `false` | Defaults to `true`.<br><br>At times machine learning requires trial and error. You may want to control this setting and see the impact on the results. |
 
-In addition to the standard parameters above, you can provide any valid key word arguments accepted by the scikit-learn preprocesing class specified under the `scaler` argument above. Refer to the specifictions under [Specifying additional key word arguments](#specifying-additional-key-word-arguments)
+In addition to the standard parameters above, you can provide any valid key word arguments accepted by the scikit-learn preprocesing class specified under the `scaler` argument above. Refer to the specifictions under [Specifying keyword arguments for scikit-learn classes](#specifying-keyword-arguments-for-scikit-learn-classes)
 
 For more information on available parameters refer to the [scikit-learn API](http://scikit-learn.org/stable/modules/classes.html#module-sklearn.preprocessing).
 
@@ -372,13 +372,36 @@ For more information on available parameters refer to the [scikit-learn API](htt
 
 | Keyword | Description | Sample Values | Remarks |
 | --- | --- | --- | --- |
-| estimator | The chosen estimator for the model | `AdaBoostClassifier`, `AdaBoostRegressor`, `BaggingClassifier`, `BaggingRegressor`, `ExtraTreesClassifier`, `ExtraTreesRegressor`, `GradientBoostingClassifier`, `GradientBoostingRegressor`, `RandomForestClassifier`, `RandomForestRegressor`, `VotingClassifier`, `GaussianProcessClassifier`, `GaussianProcessRegressor`, `LinearRegression`, `LogisticRegression`, `LogisticRegressionCV`, `PassiveAggressiveClassifier`, `PassiveAggressiveRegressor`, `Perceptron`, `RANSACRegressor`, `Ridge`, `RidgeClassifier`, `RidgeCV`, `RidgeClassifierCV`, `SGDClassifier`, `SGDRegressor`, `TheilSenRegressor`, `BernoulliNB`, `GaussianNB`, `MultinomialNB`, `KNeighborsClassifier`, `KNeighborsRegressor`, `RadiusNeighborsClassifier`, `RadiusNeighborsRegressor`, `MLPClassifier`,  `MLPRegressor`, `LinearSVC`, `LinearSVR`, `NuSVC`, `NuSVR`, `SVC`, `SVR`, `DecisionTreeClassifier`, `DecisionTreeRegressor`, `ExtraTreeClassifier`, `ExtraTreeRegressor`, `DummyClassifier`, `DummyRegressor` | Any of the classification and regression algorithms in scikit-learn can be used with this SSE. For more  information refer to [scikit-learn.org](http://scikit-learn.org/). <br><br>The arguments for the estimator should be specified as a string using the syntax described under [Specifying keyword arguments for scikit-learn classes](specifying-keyword-arguments-for-scikit-learn-classes).  |
+| estimator | The chosen estimator for the model | `AdaBoostClassifier`, `AdaBoostRegressor`, `BaggingClassifier`, `BaggingRegressor`, `ExtraTreesClassifier`, `ExtraTreesRegressor`, `GradientBoostingClassifier`, `GradientBoostingRegressor`, `RandomForestClassifier`, `RandomForestRegressor`, `VotingClassifier`, `GaussianProcessClassifier`, `GaussianProcessRegressor`, `LinearRegression`, `LogisticRegression`, `LogisticRegressionCV`, `PassiveAggressiveClassifier`, `PassiveAggressiveRegressor`, `Perceptron`, `RANSACRegressor`, `Ridge`, `RidgeClassifier`, `RidgeCV`, `RidgeClassifierCV`, `SGDClassifier`, `SGDRegressor`, `TheilSenRegressor`, `BernoulliNB`, `GaussianNB`, `MultinomialNB`, `KNeighborsClassifier`, `KNeighborsRegressor`, `RadiusNeighborsClassifier`, `RadiusNeighborsRegressor`, `MLPClassifier`,  `MLPRegressor`, `LinearSVC`, `LinearSVR`, `NuSVC`, `NuSVR`, `SVC`, `SVR`, `DecisionTreeClassifier`, `DecisionTreeRegressor`, `ExtraTreeClassifier`, `ExtraTreeRegressor`, `DummyClassifier`, `DummyRegressor` | Any of the classification and regression algorithms in scikit-learn can be used with this SSE. For more  information refer to [scikit-learn.org](http://scikit-learn.org/). <br><br>The arguments for the estimator should be included in the `EstimatorArgs` string using the syntax described under [Specifying keyword arguments for scikit-learn classes](#specifying-keyword-arguments-for-scikit-learn-classes).  |
 
 ### Grid Search Arguments
 
 ### Metrics Arguments
 
+Model evaluation metrics are calculated by the `PyTools.sklearn_Fit` and `PyTools.sklearn_Calculate_Metrics` functions. 
+
+For classification, metrics are calculated using the scikit-learn class [metrics.precision_recall_fscore_support](http://scikit-learn.org/stable/modules/generated/sklearn.metrics.precision_recall_fscore_support.html). The accuracy is available from the estimator's `score` method and is not recalculated separately.
+
+For regression, metrics are calculated using [metrics.mean_squared_error](http://scikit-learn.org/stable/modules/generated/sklearn.metrics.mean_squared_error.html), [metrics.mean_absolute_error](http://scikit-learn.org/stable/modules/generated/sklearn.metrics.mean_absolute_error.html), [metrics.median_absolute_error](http://scikit-learn.org/stable/modules/generated/sklearn.metrics.median_absolute_error.html), [metrics.explained_variance_score](http://scikit-learn.org/stable/modules/generated/sklearn.metrics.explained_variance_score.html). The r2 score is available from the estimator's `score` method and is not recalculated separately.
+
+Arguments for the metrics other than those coming from the estimator's `score` method can be provided by using the `PyTools.sklearn_Setup_Adv` function instead of the standard `PyTools.sklearn_Setup` function.
+
+```
+[Result-Setup]:
+LOAD
+   model_name,
+   result,
+   timestamp
+EXTENSION PyTools.sklearn_Setup_Adv(MODEL_INIT{Model_Name, EstimatorArgs, ScalerArgs, MetricArgs, DimReductionArgs, ExecutionArgs}); 
+```
+
+Metric arguments should be specified as a string using the syntax described under [Specifying keyword arguments for scikit-learn classes](#specifying-keyword-arguments-for-scikit-learn-classes).
+
 ### Dimensionality Reduction Arguments
+
+| Keyword | Description | Sample Values | Remarks |
+| --- | --- | --- | --- |
+| reduction | The chosen matrix decomposition algorithm for the model | `PCA`, `KernelPCA`, `IncrementalPCA` | Any valid class from [sklearn-decomposition](http://scikit-learn.org/stable/modules/classes.html#module-sklearn.decomposition). <br><br>The arguments for the algorithm should be included in the argument string using the syntax described under [Specifying keyword arguments for scikit-learn classes](#specifying-keyword-arguments-for-scikit-learn-classes).  |
 
 ## Attribution
 The data used in the sample apps was obtained from https://www.kaggle.com:
