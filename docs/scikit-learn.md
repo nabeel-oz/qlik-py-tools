@@ -146,7 +146,7 @@ LOAD
 EXTENSION PyTools.sklearn_Fit(TEMP_SAMPLES{Model_Name, N_Features});
 ```
 
-By default the fit method uses `0.3` of the dataset to test the model and provide a score. This can be controlled through the `test_size` parameter passed through the `execution_args`. The SSE handles the shuffling and split of data using the scikit-learn library.
+By default the fit method uses `0.33` of the dataset to test the model and provide a score. This can be controlled through the `test_size` parameter passed through the `execution_args`. The SSE handles the shuffling and split of data using the scikit-learn library.
 
 For classification problems, the score represents accuracy. For regression problems, the score represents the r2 score.
 
@@ -304,6 +304,35 @@ When making predictions, you can use Qlik expressions for input features. This g
 _Note that the expression must retain the data type defined in the model's feature definitions,_
 
 ## Input Specifications
+
+This sections provides any specific syntax required for inputs to the `PyTools.sklearn` functions.
+
+#### Execution Arguments
+
+| Keyword | Description | Sample Values | Remarks |
+| --- | --- | --- | --- |
+| overwrite | Specify whether any existing model with the same name should be overwritten | `true`, `false` | Defaults to `false`. |
+| test_size | Set the ratio that will be used to split the samples into training and testing data sets | `0.3` | Defaults to `0.33`. |
+| random_state | Seed used by the random number generator when generating the training testing split | `42` | Must be an integer. |
+| compress | Compression level between 1-9 used by joblib when saving the model | `1` | Defaults to `3`. |
+| retain_data | Flag to determine if the training and test data should be saved in the model | `true`, `false` | Defaults to `false`. |
+| debug | Flag to output additional information to the terminal and logs | `true`, `false` | Defaults to `false`.<br><br>Information will be printed to the terminal as well to a log file: ..\qlik-py-env\core\logs\SKLearn Log <n>.txt. |
+
+#### Scaler Arguments
+
+| Keyword | Description | Sample Values | Remarks |
+| --- | --- | --- | --- |
+| scaler | scikit-learn class that will be used for scaling numeric data | `StandardScaler`, `MinMaxScaler`, `MaxAbsScaler`, `RobustScaler`, `QuantileTransformer` | Defaults to `StandardScaler`.<br><br>Standardizing the data is a common requirement for machine learning algorithmns. In this implementation we use the [sklearn.preprocessing](http://scikit-learn.org/stable/modules/preprocessing.html) package. |
+| missing | Strategy to use for missing/null values | `mean`, `median`, `mode`, `zeros`, `none` | Defaults to `zeros`. |
+| scale_hashed | Whether to scale hashed features | `true`, `false` | At times machine learning requires trial and error. You may want to control this setting and see the impact on the results. |
+
+In addition to the standard parameters above, you can provide any valid key word arguments accepted by the scikit-learn preprocesing class specified under the `scaler` argument above. The format for these additional arguments must take the form `arg=value|type` for example:
+
+```
+'scaler=StandardScaler, with_mean=true|bool, with_std=true|bool' 
+```
+
+For more information refer to the [scikit-learn API](http://scikit-learn.org/stable/modules/classes.html#module-sklearn.preprocessing).
 
 ## Attribution
 The data used in the sample apps was obtained from https://www.kaggle.com:
