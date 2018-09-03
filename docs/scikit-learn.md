@@ -9,11 +9,12 @@
      - [Setting up the model](#setting-up-the-model)
      - [Training and testing the model](#training-and-testing-the-model)
      - [Making predictions using the model](#making-predictions-using-the-model)
-- [Advanced topics](#advanced-topics)
+- [Additional Functionality](#additional-functionality)
      - [Optimizing hyperparameters for a model](#optimizing-hyperparameters-for-a-model)
      - [Training multiple models](#training-multiple-models)
      - [Out-of-core learning](#out-of-core-learning)
      - [Dimensionality reduction](#dimensionality-reduction)
+- [Input Specifications](#input-specifications)
 - [Attribution](#attribution)
 
 ## Introduction
@@ -32,7 +33,7 @@ At a high-level the steps are:
    - `PyTools.sklearn_Setup(model_name, estimator_args, scaler_args, execution_args)`
    - `PyTools.sklearn_Setup_Adv(model_name, estimator_args, scaler_args, metric_args, dim_reduction_args, execution_args)`
 4. Optionally, setup a parameter grid to automate optimization of hyperparameters
-   - `PyTools.sklearn_Param_Grid(model_name, estimator_args)` _(Work in progress)_
+   - `PyTools.sklearn_Param_Grid(model_name, estimator_args, grid_search_args)` _(Work in progress)_
 5. Set feature definitions for the model
    - `PyTools.sklearn_Set_Features(model_name, feature_name, variable_type, data_type, feature_strategy, hash_length)`
 6. Fit the model using the training data, and optionally evalute it using test data
@@ -78,12 +79,31 @@ The table should look like this:
 
 ### Setting up the model
 
+The model is set up through the Qlik load script. You should familiarize yourself with the [LOAD...EXTENSION](https://help.qlik.com/en-US/sense/June2018/Subsystems/Hub/Content/Scripting/ScriptRegularStatements/Load.htm) syntax.
+
+To set up the model we need to provide a model name and parameters for the estimator, scaler and the SSE itself. The input to the function `sklearn_Setup` is a table with one row and four columns: `Model_Name`, `EstimatorArgs`, `ScalerArgs`, `ExecutionArgs`. In the example below the table `MODEL_INIT` provides the input.
+
+The response is the model name, the result and a timestamp. If successful, this call will save the model to the path `qlik-py-tools\qlik-py-env\models`.
+
+```
+[Result-Setup]:
+LOAD
+   model_name,
+   result,
+   timestamp
+EXTENSION PyTools.sklearn_Setup(MODEL_INIT{Model_Name, EstimatorArgs, ScalerArgs, ExecutionArgs}); 
+```
+
+For details on the format of the inputs refer to the section on [Input Specifications](#input-specifications).
+
 ### Training and testing the model
+
+
 
 ### Making predictions using the model
 
-## Advanced topics
-The basic flow needs to be extended in real world cases. 
+## Additional Functionality
+The basic flow described above needs to be extended in most real world cases. 
 
 ### Optimizing hyperparameters for a model
 One key step is determining the best hyperparameters for an estimator. This process can be automated given a parameter grid and performing a search across combinations of the specified parameter values for the estimator.
@@ -95,6 +115,8 @@ This capability is currently a work in progress.
 ### Out-of-core learning
 
 ### Dimensionality reduction
+
+## Input Specifications
 
 ## Attribution
 The data used in the sample apps was obtained from https://www.kaggle.com:
