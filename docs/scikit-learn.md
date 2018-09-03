@@ -4,8 +4,8 @@
 
 - [Introduction](#introduction)
 - [Machine learning flow for Qlik](#machine-learning-flow-for-qlik)
-     - [Preparing Data](#preparing-data)
-     - [Preparing Feature Definitions](#preparing-feature-definitions)
+     - [Preparing data](#preparing-data)
+     - [Preparing feature definitions](#preparing-feature-definitions)
      - [Setting up the model](#setting-up-the-model)
      - [Training and testing the model](#training-and-testing-the-model)
      - [Making predictions using the model](#making-predictions-using-the-model)
@@ -58,16 +58,16 @@ At a high-level the steps are:
 
 Steps 1-7 are done through Qlik's data load processes, while the predictions can be made through either the load script or in real-time using chart expressions.
 
-### Preparing Data
-The first step is to gather the features (i.e. dimensions and measures in Qlik) that will help us predict the target. The target can be a discrete labels for a classification problem, or a continuous variable for a regression problem. 
+### Preparing data
+The first step is to gather the features (i.e. dimensions and measures in Qlik) that will help us predict the target. The target can be discrete labels for a classification problem, or a continuous variable for a regression problem. 
 
-This is something where Qlik natively works well; bringing together data from multiple sources, deriving new dimensions and measures and structuring the data into a single table. This table should provide us one row for each sample, including the target and all the features being provided to predict the target.
+This is something where Qlik natively works well; bringing together data from multiple sources, deriving new dimensions and measures and structuring the data into a single table. This table should provide us one row for each sample, with columns for the target and all the features being provided to predict the target.
 
 The first input to our model is the training dataset. If testing and evaluation needs to be done on the same dataset, we will split the data when setting up the model.
    
 ![training and testing data](images/sklearn-pre-01.png)
 
-### Preparing Feature Definitions
+### Preparing feature definitions
 
 Next, for this implementation, we need to provide feature definitions for our dataset. This metadata can be brought into Qlik from any source such as a file or an internal table.
 
