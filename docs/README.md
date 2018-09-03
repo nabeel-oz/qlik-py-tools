@@ -16,6 +16,7 @@ This repository provides a server side extension (SSE) for Qlik Sense built usin
 
 The current implementation includes:
 
+- Supervised Machine Learning: Implemented using [SciKit-Learn](http://scikit-learn.org/stable/index.html), the go-to machine learning library for Python. This SSE implements the full machine learning flow from data preparation, model training and evaluation, to making predictions in Qlik.
 - Clustering : Implemented using [HDBSCAN](https://hdbscan.readthedocs.io/en/latest/comparing_clustering_algorithms.html), a high performance algorithm that is great for exploratory data analysis.  
 - Time series forecasting : Implemented using [Facebook Prophet](https://research.fb.com/prophet-forecasting-at-scale/), a modern library for easily generating good quality forecasts.
 - Seasonality and holiday analysis: Also using Facebook Prophet.
@@ -80,6 +81,7 @@ Sample Qlik Sense apps are provided and each app includes a series of Bookmarks 
 
 | Documentation | Sample App | App Dependencies |
 | --- | --- | --- |
+| [Correlations](Correlation.md) | [Sample App - Correlations](Sample_App_Correlations.qvf) | None. |
 | [Clustering](Clustering.md) | [Sample App - Clustering with HDBSCAN](Sample_App_Clustering.qvf) | The [qsVariable](https://github.com/erikwett/qsVariable) extension. <br/><br/>Qlik Sense April 2018 or later to view the multi-layered maps. |
 | [Prophet](Prophet.md) | [Sample App - Facebook Prophet](Sample_App_Prophet.qvf) | The [qsVariable](https://github.com/erikwett/qsVariable) extension. <br/><br/>Use the bookmarks to step through the sheets with relevant selections. |
-| [Correlations](Correlation.md) | [Sample App - Correlations](Sample_App_Correlations.qvf) | None. |
+| [Supervised Machine Learning](Scikit-Learn.md) | Work in progress | The [qsVariable](https://github.com/erikwett/qsVariable) extension. |
