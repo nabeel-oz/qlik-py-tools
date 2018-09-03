@@ -27,12 +27,12 @@ This SSE provides functions to train, test and evaluate models and then use thes
 Machine learning problems can be broken down into general steps. In this SSE each step is carried out with the help of functions that provide a bridge between Qlik and the scikit-learn API. These functions are explained in the sections below.
 
 At a high-level the steps are:
-1. Prepare the training and testing dataset in Qlik
+1. Prepare the features in Qlik
 2. Prepare feature definitions in Qlik
 3. Setup the model with relevant parameters
    - `PyTools.sklearn_Setup(model_name, estimator_args, scaler_args, execution_args)`
    - `PyTools.sklearn_Setup_Adv(model_name, estimator_args, scaler_args, metric_args, dim_reduction_args, execution_args)`
-4. Optionally, setup a parameter grid to automate optimization of hyperparameters
+4. Optionally, setup a parameter grid to automate the optimization of hyperparameters
    - `PyTools.sklearn_Param_Grid(model_name, estimator_args, grid_search_args)` _(Work in progress)_
 5. Set feature definitions for the model
    - `PyTools.sklearn_Set_Features(model_name, feature_name, variable_type, data_type, feature_strategy, hash_length)`
@@ -94,11 +94,117 @@ LOAD
 EXTENSION PyTools.sklearn_Setup(MODEL_INIT{Model_Name, EstimatorArgs, ScalerArgs, ExecutionArgs}); 
 ```
 
+We then send the feature definitions, i.e. the metadata on our features, to the model. In the sample script below the existing table `FEATURES` provides us the inputs: `Model_Name`, `Name`, `Variable_Type`, `Data_Type`, `Feature_Strategy`, `Hash_Features`.
+
+```
+[Result-Setup]:
+LOAD
+   model_name,
+   result,
+   timestamp
+EXTENSION PyTools.sklearn_Set_Features(FEATURES{Model_Name, Name, Variable_Type, Data_Type, Feature_Strategy, Hash_Features});
+```
+
 For details on the format of the inputs refer to the section on [Input Specifications](#input-specifications).
 
 ### Training and testing the model
 
+To train the model we need to prepare a temporary table that concatenates all features into a single string. This is due to Qlik currently requiring a fixed number of parameters for SSE function calls.
 
+This table can be set up easily in the load script by concatenating fields using `&` and the delimiter `|`. Note that the delimiter *must be* `|`.
+
+```
+// Set up a temporary table for the training and test dataset
+[TEMP_TRAIN_TEST]:
+LOAD
+    "Age" & '|' & 
+    Attrition & '|' &
+    ...
+    YearsSinceLastPromotion & '|' &
+    YearsWithCurrManager AS N_Features
+RESIDENT [Train-Test];
+```
+
+Now we are ready to train the model. The inputs to `sklearn_Fit` is the table setup earlier with the addition of a field for the model name.
+
+```
+[TEMP_SAMPLES]:
+LOAD
+   '$(vModel)' as Model_Name,
+   N_Features
+RESIDENT [TEMP_TRAIN_TEST];
+
+// Use the LOAD...EXTENSION syntax to call the Fit function
+[Result-Fit]:
+LOAD
+   model_name,
+   result as fit_result, 
+   time_stamp as fit_timestamp, 
+   score_result, 
+   score
+EXTENSION PyTools.sklearn_Fit(TEMP_SAMPLES{Model_Name, N_Features});
+```
+
+By default the fit method uses `0.3` of the dataset to test the model and provide a score. This can be controlled through the `test_size` parameter passed through the `execution_args`. The SSE handles the shuffling and split of data using the scikit-learn library.
+
+For classification problems, the score represents accuracy. For regression problems, the score represents the r2 score.
+
+#### Evaluation Metrics
+
+Additional metrics can be obtained using the `sklearn_Get_Metrics` and `sklearn_Calculate_Metrics` functions.
+
+The `sklearn_Get_Metrics` can be used if the model was evaluated with a test dataset during the call to `sklearn_Fit`. This happens by default unless the `test_size` is set to zero in the execution arguments. 
+
+This function only requires the model name as the input. 
+
+The sample below shows the output fields for a classifier:
+
+```
+[Result-Metrics]:
+LOAD
+   model_name,
+   class,
+   accuracy,
+   precision,
+   recall,
+   fscore,
+   support
+EXTENSION PyTools.sklearn_Get_Metrics(TEMP_SAMPLES{Model_Name});
+```
+
+And this sample shows the output fields for a regressor:
+
+```
+[Result-Metrics]:
+LOAD
+   model_name,
+   r2_score,
+   mean_squared_error,
+   mean_absolute_error,
+   median_absolute_error,
+   explained_variance_score
+EXTENSION PyTools.sklearn_Get_Metrics(TEMP_SAMPLES{Model_Name});
+```
+
+The `sklearn_Calculate_Metrics` function takes in a new test dataset, albiet with exactly the same features as the training data, and calculates the metrics. The output fields are the same as the ones described above for `sklearn_Get_Metrics`.
+
+```
+[Result-Metrics]:
+LOAD *
+EXTENSION PyTools.sklearn_Calculate_Metrics(TEMP_SAMPLES{Model_Name, N_Features});
+```
+
+For classifiers you can also obtain a confusion matrix with the function `sklearn_Get_Confusion_Matrix`.
+
+```
+[Result-ConfusionMatrix]:
+LOAD
+   model_name,
+   true_label,
+   pred_label,
+   count
+EXTENSION PyTools.sklearn_Get_Confusion_Matrix(TEMP_SAMPLES{Model_Name});
+```
 
 ### Making predictions using the model
 
