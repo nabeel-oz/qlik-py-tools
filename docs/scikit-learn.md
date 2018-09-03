@@ -15,6 +15,13 @@
      - [Out-of-core learning](#out-of-core-learning)
      - [Dimensionality reduction](#dimensionality-reduction)
 - [Input Specifications](#input-specifications)
+     - [Execution Arguments](#execution-arguments)
+     - [Scaler Arguments](#scaler-arguments)
+     - [Estimator Arguments](#estimator-arguments)
+     - [Grid Search Arguments](#grid-search-arguments)
+     - [Metrics Arguments](#metrics-arguments)
+     - [Dimensionality Reduction Arguments](#dimensionality-reduction-arguments)
+     - [Specifying additional key word arguments](#specifying-additional-key-word-arguments)
 - [Attribution](#attribution)
 
 ## Introduction
@@ -307,7 +314,7 @@ _Note that the expression must retain the data type defined in the model's featu
 
 This sections provides any specific syntax required for inputs to the `PyTools.sklearn` functions.
 
-#### Execution Arguments
+### Execution Arguments
 
 | Keyword | Description | Sample Values | Remarks |
 | --- | --- | --- | --- |
@@ -318,7 +325,7 @@ This sections provides any specific syntax required for inputs to the `PyTools.s
 | retain_data | Flag to determine if the training and test data should be saved in the model | `true`, `false` | Defaults to `false`. |
 | debug | Flag to output additional information to the terminal and logs | `true`, `false` | Defaults to `false`.<br><br>Information will be printed to the terminal as well to a log file: ..\qlik-py-env\core\logs\SKLearn Log <n>.txt. |
 
-#### Scaler Arguments
+### Scaler Arguments
 
 | Keyword | Description | Sample Values | Remarks |
 | --- | --- | --- | --- |
@@ -330,7 +337,15 @@ In addition to the standard parameters above, you can provide any valid key word
 
 For more information on available parameters refer to the [scikit-learn API](http://scikit-learn.org/stable/modules/classes.html#module-sklearn.preprocessing).
 
-#### Specifying additional key word arguments
+### Estimator Arguments
+
+### Grid Search Arguments
+
+### Metrics Arguments
+
+### Dimensionality Reduction Arguments
+
+### Specifying additional key word arguments
 
 Many of the functions defined in this SSE accept additional key word arguments for the relevant class. You should refer to the [scikit-learn API](http://scikit-learn.org/stable/modules/classes.html#api-reference) for documentation on the available parameters.
 
