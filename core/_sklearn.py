@@ -18,7 +18,7 @@ from sklearn import metrics
 from sklearn import preprocessing
 from sklearn.model_selection import train_test_split
 from sklearn.pipeline import Pipeline
-from sklearn.decomposition import PCA, KernelPCA, IncrementalPCA, TruncatedSVD
+from sklearn.decomposition import PCA, KernelPCA, IncrementalPCA, TruncatedSVD, FactorAnalysis, FastICA, NMF, SparsePCA
 
 from sklearn.dummy import DummyClassifier, DummyRegressor
 from sklearn.ensemble import AdaBoostClassifier, AdaBoostRegressor, BaggingClassifier,\
@@ -101,7 +101,8 @@ class SKLearnForQlik:
                            "DecisionTreeRegressor":DecisionTreeRegressor, "ExtraTreeClassifier":ExtraTreeClassifier,\
                            "ExtraTreeRegressor":ExtraTreeRegressor}
         
-        self.decomposers = {"PCA":PCA, "KernelPCA":KernelPCA, "IncrementalPCA":IncrementalPCA, "TruncatedSVD":TruncatedSVD}
+        self.decomposers = {"PCA":PCA, "KernelPCA":KernelPCA, "IncrementalPCA":IncrementalPCA, "TruncatedSVD":TruncatedSVD,\
+                            "FactorAnalysis":FactorAnalysis, "FastICA":FastICA, "NMF":NMF, "SparsePCA":SparsePCA}
         
         self.classifiers = ["DummyClassifier", "AdaBoostClassifier", "BaggingClassifier", "ExtraTreesClassifier",\
                             "GradientBoostingClassifier", "RandomForestClassifier", "VotingClassifier",\
@@ -702,13 +703,14 @@ class SKLearnForQlik:
         
         # Set default values which will be used if execution arguments are not passed
         
-        # Default execution parameters:
+        # Default parameters:
         self.model.overwrite = False
         self.model.debug = False
         self.model.test_size = 0.33
         self.model.random_state = 42
         self.model.compress = 3
         self.model.retain_data = False
+        self.model.scale_hashed = True
         
         # Default metric parameters:
         if metric_args is None:
