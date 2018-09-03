@@ -372,7 +372,7 @@ class SKLearnForQlik:
         # Finally send the response
         return self.response
         
-    # STAGE 2 : Allow for larger datasets by using partial fitting methods avaialble with some sklearn algorithmns
+    # STAGE 3 : Allow for larger datasets by using partial fitting methods avaialble with some sklearn algorithmns
     # def partial_fit(self):
         
     def calculate_metrics(self, caller="external"):
@@ -501,6 +501,8 @@ class SKLearnForQlik:
         # Finally send the response
         return self.response
     
+    # STAGE 2: Grid Search CV: sklearn_Param_Grid(model_name, estimator_args, grid_search_args)
+    
     def predict(self, load_script=False, variant="predict"):
         """
         Return a prediction by applying an existing model to the supplied data.
@@ -600,15 +602,10 @@ class SKLearnForQlik:
             return self.response.loc[:,'result']
     
     
-    # STAGE 3 : If feasible, allow transient models that can be setup and used from chart expressions
+    # STAGE 4 : If feasible, allow transient models that can be setup and used from chart expressions
     # def fit_predict(self):
     
-    # STAGE 2 : Provide metrics to assess prediction error beyond the score() method
-    # def get_metrics():
-    
-    # STAGE 2: Implement feature_importances_ for applicable algorithms
-    
-    # STAGE 2: Allow adding dimensionality reduction to the pipeline
+    # STAGE 3: Implement feature_importances_ for applicable algorithms
     
     def get_features_expression(self):
         """
