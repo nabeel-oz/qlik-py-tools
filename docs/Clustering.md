@@ -169,7 +169,7 @@ In the example below we are clustering Local Government Areas by the number of i
 PyTools.Cluster([Local Government Area], sum([Incidents Recorded]) & ';' & avg(ERP), 'scaler=quantile, min_cluster_size=3, min_samples=2')
 ```
 
-The function will break down the string into individual features based on the locale settings of the machine where the SSE is running. To check that the inputs are being read correctly you can use the `debug=true` argument.
+The function will break down the string into individual features. To check that the inputs are being read correctly you can use the `debug=true` argument.
 
 The expression above is used to colour the scatter plot below:
 
