@@ -156,6 +156,7 @@ def get_kwargs_by_type(dict_kwargs):
     "arg1":"x:1;y:2|dict|str|int" where str is the type for keys and int is the type for values
     "x;y;z|array|str" where str is the type of values in the array
     "1;2;3|list|int" where int is the type of the values in the list
+    "0;1|tuple|int" where int is the type of the values in the tuple
     """
     
     # Dictionary used to convert argument values to the correct type
@@ -195,8 +196,8 @@ def get_kwargs_by_type(dict_kwargs):
             
             result_dict[k] = d
         
-        elif split[1] in ("list", "array"):
-            # If the argument is a list or array convert keys and values according to the correct types
+        elif split[1] in ("list", "array", "tuple"):
+            # If the argument is a list, array or tuple convert keys and values according to the correct types
             items = split[0].split(";")
             l = []
             
@@ -209,6 +210,8 @@ def get_kwargs_by_type(dict_kwargs):
             
             if split[1] == "array":
                 l = np.array(l)
+            elif split[1] == "tuple":
+                l = tuple(l)
                 
             result_dict[k] = l
     
