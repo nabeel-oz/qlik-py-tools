@@ -63,7 +63,7 @@ The first step is to gather the features (i.e. dimensions and measures in Qlik) 
 
 This is something where Qlik natively works well; bringing together data from multiple sources, deriving new dimensions and measures and structuring the data into a single table. This table should provide us one row for each sample, with columns for the target and all the features being provided to predict the target.
 
-The first input to our model is the training dataset. If testing and evaluation needs to be done on the same dataset, we will split the data when setting up the model.
+The first input to our model is this training dataset. If testing and evaluation needs to be done on the same dataset, this SSE can automate the process of splitting the data into training and testing subsets.
    
 ![training and testing data](images/sklearn-pre-01.png)
 
@@ -76,9 +76,9 @@ For each feature, i.e. each column in the dataset, we need to define the followi
 | Metadata field | Description | Valid values | Remarks |
 | --- | --- | --- | --- |
 | Name | A unique name for the feature | Any string | The feature name must be unique. |
-| Variable Type | Identify whether the variable is a feature or target | `feature`, `target`, `excluded`, `identifier` | |
-| Data Type | Used to covert the data to the correct type | `bool`, `int`, `float`, `str` | |
-| Feature Strategy | The feature preparation strategy | `one hot encoding`, `hashing`, `scaling`, `none` | Strings need to be converted to numerical values for machine learning. The strategies implemented in this SSE to do this are one hot encoding and hashing. Numerical values need to be scaled to avoid bias towards larger numbers. <br><br> In general, for discrete values use OHE where the unique values are small, otherwise use hashing. For continuous values, use scaling. |
+| Variable Type | Identify whether the variable is a feature or target | `feature`, `target`, `excluded`, `identifier` | Features marked as `excluded` or `identifier` will be ignored. |
+| Data Type | Used to covert the data to the correct type | `bool`, `int`, `float`, `str` | Specifying data types correctly is necessary due to how data will be exchanged between Qlik and this SSE. |
+| Feature Strategy | The feature preparation strategy | `one hot encoding`, `hashing`, `scaling`, `none` | Strings need to be converted to numerical values for machine learning. The strategies implemented in this SSE to do this are one hot encoding and hashing. Numerical values need to be scaled to avoid bias towards larger numbers. <br><br> In general, for discrete values use OHE where the number of unique values is small, otherwise use hashing. For continuous values, use scaling. |
 | Hash Features | The number of features where the feature strategy is hashing | An integer e.g. `4` | The integer should be a power of 2 for the hashing to work correctly. |
    
 The table should look like this:
@@ -238,7 +238,7 @@ LOAD
 	result as features_expression
 EXTENSION PyTools.sklearn_Get_Features_Expression(TEMP_MODEL{Model_Name});
 
-vFeaturesExpression = peek('features_expression', 0, 'TEMP_EXPRESSION');
+vFeaturesExpression = peek('features_expression', 0, 'FEATURES_EXPRESSION');
 
 Drop tables TEMP_MODEL;
 ```
@@ -249,7 +249,7 @@ Predictions can be made in a chart expression using the `sklearn_Predict` functi
 PyTools.sklearn_Predict('HR-Attrition-LR', $(vFeaturesExpression))
 ```
 
-_Note: As of the June 2018 release, the expression above can be used as a dimension in the table object, allowing you to make selections on the prediction results. Note that the prediction expression should *not* be stored as a master item as this can lead to unstable behavior._
+_Note: As of the June 2018 release, the expression above can be used as a dimension in the table object, allowing you to make selections on the prediction results. Note that the prediction expression should *not* be stored as a master item dimension as this can lead to unstable behavior._
 
 Predictions can also be made in the load script using the `sklearn_Bulk_Predict` method. For classifiers you can also use the `sklearn_Bulk_Predict_Proba` function to get the predicted class probabilities.
 
@@ -275,7 +275,7 @@ EXTENSION PyTools.sklearn_Bulk_Predict(TEMP_SAMPLES_WITH_KEYS{Model_Name, Key, N
 The basic flow described above needs to be extended in most real world cases. 
 
 ### Optimizing hyperparameters for an estimator
-One key step is determining the best hyperparameters for an estimator. This process can be automated given a parameter grid and performing a search across combinations of the specified parameter values for the estimator.
+A key step in building a good model is determining the best hyperparameters for the estimator. This process can be automated given a parameter grid and performing a search across combinations of the specified parameter values for the estimator.
 
 This capability is currently a work in progress.
 
@@ -308,7 +308,7 @@ For details on the format of inputs refer to the [Input Specifications](#input-s
 ### What-if analysis
 When making predictions, you can use Qlik expressions for input features. This gives you the flexibility to control certain features using variables in Qlik and assess the change to the predictions. This is demonstrated in the `What-if Analysis` sheet in the `HR Attrition Predictions` sample app. 
 
-_Note that the expression must retain the data type defined in the model's feature definitions,_
+_Note that the expression must retain the data type defined in the model's feature definitions._
 
 ## Input Specifications
 
@@ -331,7 +331,7 @@ For the simple data types `bool`, `int`, `float`, and `str`, the format for such
 'scaler=StandardScaler, with_mean=true|bool, with_std=true|bool' 
 ```
 
-In addition this SSE accepts lists, arrays, tuples with the syntax `arg=item1;item2;item3|object_type|value_type`. For example:
+In addition this SSE accepts lists, arrays and tuples with the syntax `arg=item1;item2;item3|object_type|value_type`. For example:
 
 ```
 'arg=1;2;3|list|int'
@@ -364,11 +364,11 @@ If you want to use default values you can simply pass an empty string for `Execu
 
 These arguments specify how numerical data will be standardized before being sent to the machine learning algorithm. Standardization of the data is a common requirement for machine learning algorithmns and helps avoid bias towards certain features. If you want to use default values you can simply pass an empty string for `ScalerArgs` when setting up the model.
 
-In this implementation we use the [sklearn.preprocessing](http://scikit-learn.org/stable/modules/preprocessing.html) package.
+In this implementation we use the [sklearn.preprocessing](http://scikit-learn.org/stable/modules/preprocessing.html) package for scaling data.
 
 | Keyword | Description | Sample Values | Remarks |
 | --- | --- | --- | --- |
-| scaler | scikit-learn class that will be used for scaling numeric data | `StandardScaler`, `MinMaxScaler`, `MaxAbsScaler`, `RobustScaler`, `QuantileTransformer` | Defaults to `StandardScaler`. |
+| scaler | scikit-learn class that will be used for scaling numeric data | `StandardScaler`, `MinMaxScaler`, `MaxAbsScaler`, `RobustScaler`, `QuantileTransformer` | Defaults to `StandardScaler`.<br><br>Mandatory argument if the scaler arguments are not an empty string. |
 | missing | Strategy to use for missing/null values | `mean`, `median`, `mode`, `zeros`, `none` | Defaults to `zeros`.<br><br>This setting only applies to numerical features. Null values in features marked for one hot encoding or hashing are simply ignored. If you want Null values to be taken into consideration for such features, replace them with an appropriate string in Qlik. |
 | scale_hashed | Whether to scale hashed features | `true`, `false` | Defaults to `true`.<br><br>At times machine learning requires trial and error. You may want to control this setting and see the impact on the results. |
 
@@ -378,9 +378,11 @@ For more information on available parameters refer to the [scikit-learn API](htt
 
 ### Estimator Arguments
 
+Any of the classification and regression algorithms in scikit-learn can be used with this SSE. For more  information refer to [scikit-learn.org](http://scikit-learn.org/).
+
 | Keyword | Description | Sample Values | Remarks |
 | --- | --- | --- | --- |
-| estimator | The chosen estimator for the model | `AdaBoostClassifier`, `AdaBoostRegressor`, `BaggingClassifier`, `BaggingRegressor`, `ExtraTreesClassifier`, `ExtraTreesRegressor`, `GradientBoostingClassifier`, `GradientBoostingRegressor`, `RandomForestClassifier`, `RandomForestRegressor`, `VotingClassifier`, `GaussianProcessClassifier`, `GaussianProcessRegressor`, `LinearRegression`, `LogisticRegression`, `LogisticRegressionCV`, `PassiveAggressiveClassifier`, `PassiveAggressiveRegressor`, `Perceptron`, `RANSACRegressor`, `Ridge`, `RidgeClassifier`, `RidgeCV`, `RidgeClassifierCV`, `SGDClassifier`, `SGDRegressor`, `TheilSenRegressor`, `BernoulliNB`, `GaussianNB`, `MultinomialNB`, `KNeighborsClassifier`, `KNeighborsRegressor`, `RadiusNeighborsClassifier`, `RadiusNeighborsRegressor`, `MLPClassifier`,  `MLPRegressor`, `LinearSVC`, `LinearSVR`, `NuSVC`, `NuSVR`, `SVC`, `SVR`, `DecisionTreeClassifier`, `DecisionTreeRegressor`, `ExtraTreeClassifier`, `ExtraTreeRegressor`, `DummyClassifier`, `DummyRegressor` | Any of the classification and regression algorithms in scikit-learn can be used with this SSE. For more  information refer to [scikit-learn.org](http://scikit-learn.org/). <br><br>Additional arguments for the estimator should be included in the `EstimatorArgs` string using the syntax described under [Specifying keyword arguments for scikit-learn classes](#specifying-keyword-arguments-for-scikit-learn-classes).  |
+| estimator | The chosen estimator for the model | `AdaBoostClassifier`, `AdaBoostRegressor`, `BaggingClassifier`, `BaggingRegressor`, `ExtraTreesClassifier`, `ExtraTreesRegressor`, `GradientBoostingClassifier`, `GradientBoostingRegressor`, `RandomForestClassifier`, `RandomForestRegressor`, `VotingClassifier`, `GaussianProcessClassifier`, `GaussianProcessRegressor`, `LinearRegression`, `LogisticRegression`, `LogisticRegressionCV`, `PassiveAggressiveClassifier`, `PassiveAggressiveRegressor`, `Perceptron`, `RANSACRegressor`, `Ridge`, `RidgeClassifier`, `RidgeCV`, `RidgeClassifierCV`, `SGDClassifier`, `SGDRegressor`, `TheilSenRegressor`, `BernoulliNB`, `GaussianNB`, `MultinomialNB`, `KNeighborsClassifier`, `KNeighborsRegressor`, `RadiusNeighborsClassifier`, `RadiusNeighborsRegressor`, `MLPClassifier`,  `MLPRegressor`, `LinearSVC`, `LinearSVR`, `NuSVC`, `NuSVR`, `SVC`, `SVR`, `DecisionTreeClassifier`, `DecisionTreeRegressor`, `ExtraTreeClassifier`, `ExtraTreeRegressor`, `DummyClassifier`, `DummyRegressor` | Mandatory when supplying estimator arguments.<br><br>Additional arguments for the estimator should be included in the `EstimatorArgs` string using the syntax described under [Specifying keyword arguments for scikit-learn classes](#specifying-keyword-arguments-for-scikit-learn-classes).  |
 
 ### Grid Search Arguments
 
@@ -407,9 +409,22 @@ Metric arguments should be specified as a string using the syntax described unde
 
 ### Dimensionality Reduction Arguments
 
+You can include dimensionality reduction in the machine learning flow by using any valid class from [sklearn-decomposition](http://scikit-learn.org/stable/modules/classes.html#module-sklearn.decomposition). 
+
+Add this step by using the `PyTools.sklearn_Setup_Adv` function instead of the standard `PyTools.sklearn_Setup` function.
+
+```
+[Result-Setup]:
+LOAD
+   model_name,
+   result,
+   timestamp
+EXTENSION PyTools.sklearn_Setup_Adv(MODEL_INIT{Model_Name, EstimatorArgs, ScalerArgs, MetricArgs, DimReductionArgs, ExecutionArgs}); 
+```
+
 | Keyword | Description | Sample Values | Remarks |
 | --- | --- | --- | --- |
-| reduction | The chosen matrix decomposition algorithm for the model | `PCA`, `KernelPCA`, `IncrementalPCA` | Any valid class from [sklearn-decomposition](http://scikit-learn.org/stable/modules/classes.html#module-sklearn.decomposition). <br><br>The arguments for the algorithm should be included in the argument string using the syntax described under [Specifying keyword arguments for scikit-learn classes](#specifying-keyword-arguments-for-scikit-learn-classes).  |
+| reduction | The chosen matrix decomposition algorithm for the model | `PCA`, `KernelPCA`, `IncrementalPCA` | Mandatory argument if using `PyTools.sklearn_Setup_Adv` and the dimensionality reduction arguments are not an empty string.<br><br>The arguments for the algorithm should be included in the argument string using the syntax described under [Specifying keyword arguments for scikit-learn classes](#specifying-keyword-arguments-for-scikit-learn-classes).  |
 
 ## Attribution
 The data used in the sample apps was obtained from https://www.kaggle.com:
