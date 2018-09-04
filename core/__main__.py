@@ -6,6 +6,7 @@ import os
 import sys
 import time
 import locale
+import warnings
 from concurrent import futures
 
 # Add Generated folder to module path.
@@ -15,12 +16,17 @@ sys.path.append(os.path.join(PARENT_DIR, 'generated'))
 import ServerSideExtension_pb2 as SSE
 import grpc
 
+# Turn off warnings by default
+if not sys.warnoptions:
+    warnings.simplefilter("ignore")
+
 # Import libraries for added functions
 import numpy as np
 import pandas as pd
 import _utils as utils
 from _prophet import ProphetForQlik
 from _clustering import HDBSCANForQlik
+from _sklearn import SKLearnForQlik
 
 # Set the default port for this SSE Extension
 _DEFAULT_PORT = '50055'
@@ -28,7 +34,7 @@ _DEFAULT_PORT = '50055'
 _ONE_DAY_IN_SECONDS = 60 * 60 * 24
 _MINFLOAT = float('-inf')
 
-# Set the locale for number formatting based on user settings
+# Set the locale for number formats based on user settings
 locale.setlocale(locale.LC_NUMERIC, '')
 
 class ExtensionService(SSE.ConnectorServicer):
@@ -68,7 +74,22 @@ class ExtensionService(SSE.ConnectorServicer):
             5: '_prophet',
             6: '_prophet',
             7: '_prophet',
-            8: '_prophet_seasonality'
+            8: '_prophet_seasonality',
+            9: '_sklearn',
+            10: '_sklearn',
+            11: '_sklearn',
+            12: '_sklearn',
+            13: '_sklearn',
+            14: '_sklearn',
+            15: '_sklearn',
+            16: '_sklearn',
+            17: '_sklearn',
+            18: '_sklearn',
+            19: '_sklearn',
+            20: '_sklearn',
+            21: '_sklearn',
+            22: '_sklearn',
+            23: '_sklearn'
         }
 
     """
@@ -194,8 +215,8 @@ class ExtensionService(SSE.ConnectorServicer):
                 # Check that the lists are of equal length
                 if len(x) == len(y) and len(x) > 0:
                     # Create a Pandas data frame using the lists
-                    df = pd.DataFrame({'x': [utils._string_to_float(d) for d in x], \
-                                       'y': [utils._string_to_float(d) for d in y]})
+                    df = pd.DataFrame({'x': [utils.atof(d) for d in x], \
+                                       'y': [utils.atof(d) for d in y]})
                 
                     # Calculate the correlation matrix for the two series in the data frame
                     corr_matrix = df.corr(method=corr_type)
@@ -351,6 +372,113 @@ class ExtensionService(SSE.ConnectorServicer):
         for request_rows in request_list:
             # Yield Row data as Bundled rows
             yield SSE.BundledRows(rows=response_rows)  
+    
+    @staticmethod
+    def _sklearn(request, context):
+        """
+        Setup the meta data for a sklearn machine learning model.
+        :param request: an iterable sequence of RowData
+        :param context:
+        :return: Refer to comments below as the response depends on the function called
+        :Qlik expression examples:
+        :<AAI Connection Name>.
+        """
+        # Get a list from the generator object so that it can be iterated over multiple times
+        request_list = [request_rows for request_rows in request]
+        
+        # Get the function id from the header to determine the variant being called
+        function = ExtensionService._get_function_id(context)
+        
+        # Create an instance of the SKLearnForQlik class
+        model = SKLearnForQlik(request_list, context)
+        
+        # Call the function based on the mapping in functions.json
+        # The IF conditions are grouped based on similar output structure
+        if function in (9, 10, 21):    
+            if function == 9:
+                # Set up the model and save to disk
+                response = model.setup()
+            elif function == 21:
+                # Set up a model with specific metric and dimensionality reduction arguments and save to disk
+                response = model.setup(advanced=True)
+            elif function == 10:
+                # Set feature definitions for an existing model
+                response = model.set_features()
+            
+            # Get the response as SSE.Rows
+            response_rows = utils.get_response_rows(response.values.tolist(), ["str", "str", "str"])
+        
+        elif function == 11:
+            # Return the feature definitions for an existing model
+            response = model.get_features()
+            
+            # Get the response as SSE.Rows
+            response_rows = utils.get_response_rows(response.values.tolist(), ["str", "num", "str", "str", "str",\
+                                                                               "str", "num"])
+        
+        elif function == 12:
+            # Train and Test an existing model, saving the sklearn pipeline for further predictions
+            response = model.fit()
+            
+            # Get the response as SSE.Rows
+            response_rows = utils.get_response_rows(response.values.tolist(), ["str", "str", "str", "str", "num"])
+        
+        elif function in (14, 16, 19, 20):
+            if function == 14:
+                # Provide predictions in a chart expression based on an existing model
+                response = model.predict(load_script=False)
+            elif function == 16:
+                # Provide predictions probabilities in a chart expression based on an existing model
+                response = model.predict(load_script=False, variant="predict_proba")
+            elif function == 19:
+                # Get a list of models based on a search string
+                response = model.list_models()
+            elif function == 20:
+                # Get a string that can be evaluated to get the features expression for the predict function
+                response = model.get_features_expression()
+            
+            # Get the response as SSE.Rows
+            response_rows = utils.get_response_rows(response.values.tolist(), ["str"])
+            
+        elif function in (15, 17):
+            if function == 15:
+                # Provide predictions in the load script based on an existing model
+                response = model.predict(load_script=True)    
+            if function == 17:
+                # Provide prediction probabilities in the load script based on an existing model
+                response = model.predict(load_script=True, variant="predict_proba")
+            
+            # Get the response as SSE.Rows
+            response_rows = utils.get_response_rows(response.values.tolist(), ["str", "str", "str"])
+        
+        elif function in (18, 22):
+            if function == 18:
+                response = model.get_metrics()
+            elif function == 22:
+                response = model.calculate_metrics()
+            
+            # Check whether the metrics are for a classifier
+            if "accuracy" in response.columns:
+                estimator_type = "classifier"
+            # Check whether the metrics are for a regressor
+            elif "r2_score" in response.columns:
+                estimator_type = "regressor"
+            
+            # We convert values to type SSE.Dual, and group columns into a iterable
+            if estimator_type == "classifier":
+                # Get the response as SSE.Rows
+                response_rows = utils.get_response_rows(response.values.tolist(), ["str", "str", "num", "num", "num",\
+                                                                                   "num", "num"])
+            elif estimator_type == "regressor":
+                # Get the response as SSE.Rows
+                response_rows = utils.get_response_rows(response.values.tolist(), ["str", "num", "num", "num", "num", "num"])
+        
+        elif function == 23:
+            response = model.get_confusion_matrix()
+            response_rows = utils.get_response_rows(response.values.tolist(), ["str", "str", "str", "num"])
+            
+        # Yield Row data as Bundled rows
+        yield SSE.BundledRows(rows=response_rows)
     
     @staticmethod
     def _get_function_id(context):
