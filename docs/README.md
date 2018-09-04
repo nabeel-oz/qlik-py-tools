@@ -84,4 +84,4 @@ Sample Qlik Sense apps are provided and each app includes a series of Bookmarks 
 | [Correlations](Correlation.md) | [Sample App - Correlations](Sample_App_Correlations.qvf) | None. |
 | [Clustering](Clustering.md) | [Sample App - Clustering with HDBSCAN](Sample_App_Clustering.qvf) | The [qsVariable](https://github.com/erikwett/qsVariable) extension. <br/><br/>Qlik Sense April 2018 or later to view the multi-layered maps. |
 | [Forecasting](Prophet.md) | [Sample App - Facebook Prophet](Sample_App_Prophet.qvf) | The [qsVariable](https://github.com/erikwett/qsVariable) extension. <br/><br/>Use the bookmarks to step through the sheets with relevant selections. |
-| [Supervised Machine Learning](scikit-learn.md) | Work in progress | The [qsVariable](https://github.com/erikwett/qsVariable) extension. |
+| [Supervised Machine Learning](scikit-learn.md) | [Sample App sklearn - Train_Test](Sample_App_sklearn_Train_Test.qvf)<br><br>[Sample App sklearn - Predict](Sample_App_sklearn_Predict.qvf) | Make sure you run the load for the Train_Test app before using the Predict app.<br><br>The [qsVariable](https://github.com/erikwett/qsVariable) extension. |
