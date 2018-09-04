@@ -16,13 +16,13 @@ This repository provides a server side extension (SSE) for Qlik Sense built usin
 
 The current implementation includes:
 
-- Supervised Machine Learning: Implemented using [scikit-learn](http://scikit-learn.org/stable/index.html), the go-to machine learning library for Python. This SSE implements the full machine learning flow from data preparation, model training and evaluation, to making predictions in Qlik.
-- Clustering : Implemented using [HDBSCAN](https://hdbscan.readthedocs.io/en/latest/comparing_clustering_algorithms.html), a high performance algorithm that is great for exploratory data analysis.  
-- Time series forecasting : Implemented using [Facebook Prophet](https://research.fb.com/prophet-forecasting-at-scale/), a modern library for easily generating good quality forecasts.
-- Seasonality and holiday analysis: Also using Facebook Prophet.
-- Linear correlations : Implemented using Pandas.
+- **Supervised Machine Learning** : Implemented using [scikit-learn](http://scikit-learn.org/stable/index.html), the go-to machine learning library for Python. This SSE implements the full machine learning flow from data preparation, model training and evaluation, to making predictions in Qlik.
+- **Clustering** : Implemented using [HDBSCAN](https://hdbscan.readthedocs.io/en/latest/comparing_clustering_algorithms.html), a high performance algorithm that is great for exploratory data analysis.  
+- **Time series forecasting** : Implemented using [Facebook Prophet](https://research.fb.com/prophet-forecasting-at-scale/), a modern library for easily generating good quality forecasts.
+- **Seasonality and holiday analysis** : Also using Facebook Prophet.
+- **Linear correlations** : Implemented using Pandas.
 
-Further information on these features is available through the Usage section below.
+Further information on these features is available through the [Usage](#usage) section below.
 
 For more information on Qlik Server Side Extensions see [qlik-oss](https://github.com/qlik-oss/server-side-extension).
 
