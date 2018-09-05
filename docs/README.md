@@ -42,13 +42,14 @@ I prefer this approach for two key reasons:
 ## Pre-requisites
 
 - Qlik Sense Enterprise or Qlik Sense Desktop
-- Python 3.4 or above
+- Python >= 3.4 < 3.7. The recommended version is 3.6.6.
+    - _Note: The latest stable version of python is 3.6. The `pystan` library, which is required for `fbprophet`, is known to have issues with Python 3.7 on Windows._
 - Microsoft Visual C++ Build Tools
 
 
 ## Installation
 
-1. Get Python from [here](https://www.python.org/downloads/). Remember to select the option to add Python to your PATH environment variable.
+1. Get Python from [here](https://www.python.org/downloads/release/python-366/). Remember to select the option to add Python to your PATH environment variable.
 
 2. You'll also need a recent C++ compiler as this is a requirement for the `pystan` library used by `fbprophet`. One option is to use [Microsoft Visual C++ Build Tools](https://visualstudio.microsoft.com/downloads/#build-tools-for-visual-studio-2017). If you are having trouble finding the correct installer try [this direct link](https://www.visualstudio.com/thank-you-downloading-visual-studio/?sku=BuildTools&rel=15). An alternative is to use the `mingw-w64` compiler as described in the [PyStan documentation](http://pystan.readthedocs.io/en/latest/windows.html). 
      - If you're using the Visual Studio installer, select the Visual C++ Build Tools workload in the installer and make sure you select the C++ compilers in the optional components:<br/><br/>![C++ Compiler Installation](images/Install-01.png)

@@ -13,11 +13,8 @@ cd ..
 echo.
 echo Installing required packages... & echo.
 python -m pip install --upgrade pip
-pip install grpcio
-pip install grpcio-tools
-pip install numpy
-pip install scipy
-pip install pandas
+pip install grpcio grpcio-tools numpy scipy pandas cython
+pip install pystan==2.17
 pip install fbprophet
 pip install -U scikit-learn
 pip install hdbscan
