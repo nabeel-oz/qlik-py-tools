@@ -40,7 +40,8 @@ At a high-level the steps are:
    - `PyTools.sklearn_Setup(model_name, estimator_args, scaler_args, execution_args)`
    - `PyTools.sklearn_Setup_Adv(model_name, estimator_args, scaler_args, metric_args, dim_reduction_args, execution_args)`
 4. Optionally, setup a parameter grid to automate the optimization of hyperparameters
-   - `PyTools.sklearn_Param_Grid(model_name, estimator_args, grid_search_args)` _(Work in progress)_
+   - `PyTools.sklearn_Set_Param_Grid(model_name, estimator_args, grid_search_args)`
+   - `PyTools.sklearn_Get_Best_Params(model_name)`
 5. Set feature definitions for the model
    - `PyTools.sklearn_Set_Features(model_name, feature_name, variable_type, data_type, feature_strategy, hash_length)`
 6. Fit the model using the training data, and optionally evaluate it using test data
@@ -275,14 +276,39 @@ EXTENSION PyTools.sklearn_Bulk_Predict(TEMP_SAMPLES_WITH_KEYS{Model_Name, Key, N
 The basic flow described above needs to be extended in most real world cases. 
 
 ### Optimizing hyperparameters for an estimator
-A key step in building a good model is determining the best hyperparameters for the estimator. This process can be automated given a parameter grid and performing a search across combinations of the specified parameter values for the estimator.
+A key step in building a good model is determining the best hyperparameters for the estimator. This process can be automated given a parameter grid and performing a search across combinations of the specified parameter values for the estimator. For more information see the scikit-learn documentation on [tuning the hyper-parameters of an estimator](http://scikit-learn.org/stable/modules/grid_search.html)
 
-This capability is currently a work in progress.
+To provide a parameter grid we use the `PyTools.sklearn_Set_Param_Grid` function. This will automatically result in hyperparameter optimization being performed using the sklearn [model_selection.GridSearchCV](http://scikit-learn.org/stable/modules/generated/sklearn.model_selection.GridSearchCV.html) class. If the parameter grid is set up, the optimization will be performed as part of the fit method.
+
+Generally, we would set up the grid after the initial call to `PyTools.sklearn_Setup`. We do this by calling the `PyTools.sklearn_Set_Param_Grid` function with the model name, the hyperparameter combinations to be evaluated as well as arguments for the grid search itself.
+
+```
+// Set up a variable for grid search parameters
+LET vGridSearch = 'scoring=f1_micro|str';
+
+[PARAM_GRID]:
+LOAD
+    [Model Name] as Model_Name,
+    [Hyperparameters],
+    '$(vGridSearch)' as GridSearchArgs  
+RESIDENT Optimization
+WHERE [Model Name] = '$(vModel)';
+
+// Use the LOAD...EXTENSION syntax to call the Setup function
+[Result-Setup]:
+LOAD
+    model_name,
+    result,
+    timestamp
+EXTENSION PyTools.sklearn_Set_Param_Grid(PARAM_GRID{Model_Name, Hyperparameters, GridSearchArgs});
+```
+
+For a working example refer to the [Parameter Tuning](Sample-App-scikit-learn-Parameter-Tuning.qvf) sample app. For details on the format of inputs refer to the [Input Specifications](#input-specifications).
 
 ### Training multiple estimators
 Multiple estimators can be trained with the same dataset by using Qlik's [FOR EACH...NEXT](https://help.qlik.com/en-US/sense/June2018/Subsystems/Hub/Content/Scripting/ScriptControlStatements/For%20Each.htm) load script syntax.
 
-This is demonstrated in the `HR Attrition Model` sample app.
+This is demonstrated in the [Train & Test](Sample-App-scikit-learn-Train-Test.qvf) sample app.
 
 ### Out-of-core learning
 Some of the scikit-learn algorithms allow for out-of-core learning, i.e. training a model in batches where the dataset is too large to fit into memory. For more information refer to the [scikit-learn documentation](http://scikit-learn.org/stable/modules/scaling_strategies.html).
@@ -306,7 +332,7 @@ EXTENSION PyTools.sklearn_Setup_Adv(MODEL_INIT{Model_Name, EstimatorArgs, Scaler
 For details on the format of inputs refer to the [Input Specifications](#input-specifications).
 
 ### What-if analysis
-When making predictions, you can use Qlik expressions for input features. This gives you the flexibility to control certain features using variables in Qlik and assess the change to the predictions. This is demonstrated in the `What-if Analysis` sheet in the `HR Attrition Predictions` sample app. 
+When making predictions, you can use Qlik expressions for input features. This gives you the flexibility to control certain features using variables in Qlik and assess the change to the predictions. This is demonstrated in the `What-if Analysis` sheet in the [Predict](Sample-App-scikit-learn-Predict.qvf) sample app. 
 
 _Note that the expression must retain the data type defined in the model's feature definitions._
 
@@ -385,6 +411,28 @@ Any of the classification and regression algorithms in scikit-learn can be used 
 | estimator | The chosen estimator for the model | `AdaBoostClassifier`, `AdaBoostRegressor`, `BaggingClassifier`, `BaggingRegressor`, `ExtraTreesClassifier`, `ExtraTreesRegressor`, `GradientBoostingClassifier`, `GradientBoostingRegressor`, `RandomForestClassifier`, `RandomForestRegressor`, `VotingClassifier`, `GaussianProcessClassifier`, `GaussianProcessRegressor`, `LinearRegression`, `LogisticRegression`, `LogisticRegressionCV`, `PassiveAggressiveClassifier`, `PassiveAggressiveRegressor`, `Perceptron`, `RANSACRegressor`, `Ridge`, `RidgeClassifier`, `RidgeCV`, `RidgeClassifierCV`, `SGDClassifier`, `SGDRegressor`, `TheilSenRegressor`, `BernoulliNB`, `GaussianNB`, `MultinomialNB`, `KNeighborsClassifier`, `KNeighborsRegressor`, `RadiusNeighborsClassifier`, `RadiusNeighborsRegressor`, `MLPClassifier`,  `MLPRegressor`, `LinearSVC`, `LinearSVR`, `NuSVC`, `NuSVR`, `SVC`, `SVR`, `DecisionTreeClassifier`, `DecisionTreeRegressor`, `ExtraTreeClassifier`, `ExtraTreeRegressor`, `DummyClassifier`, `DummyRegressor` | Mandatory when supplying estimator arguments.<br><br>Additional arguments for the estimator should be included in the `EstimatorArgs` string using the syntax described under [Specifying keyword arguments for scikit-learn classes](#specifying-keyword-arguments-for-scikit-learn-classes).  |
 
 ### Grid Search Arguments
+
+A grid search can be used to optimize hyperparameters for an estimator. This functionality makes use of the [model_selection.GridSearchCV](http://scikit-learn.org/stable/modules/generated/sklearn.model_selection.GridSearchCV.html) class. For details on the available parameters refer to the scikit-learn API.
+
+Note that the parameter `refit` is fixed to `True` for this implementation. 
+
+For setting up the parameter grid, we need to supply a string that contains a list for each hyperparameter to be optimized.  As an example refer to the sample data set below used in the [Parameter Tuning](Sample-App-scikit-learn-Parameter-Tuning.qvf) sample app. Note how the combinations to be tried for every parameter need to be specied as a list with the appropriate data type.
+
+The syntax for the hyperparameters is based on the specifictions under [Specifying keyword arguments for scikit-learn classes](#specifying-keyword-arguments-for-scikit-learn-classes).
+
+```
+[PARAMETER_GRID]:
+LOAD * INLINE [
+    'Model Name' 'Hyperparameters'
+    'HR-Attrition-RF' 'n_estimators=5;10;15|list|int, criterion=gini;entropy|list|str, max_depth=None;2;5|list|int'
+    'HR-Attrition-LR' 'penalty=l1|list|str, C=0.25;0.5;1;2;5;10|list|float, solver=liblinear;saga|list|str'
+    'HR-Attrition-LR' 'penalty=l2|list|str, C=0.25;0.5;1;2;5;10|list|float, solver=newton-cg;lbfgs;sag|list|str'
+    'HR-Attrition-SGD' 'loss=hinge;log;perceptron;modified_huber|list|str, penalty=l1;l2|list|str, alpha=0.0001;0.0002;0.0005;0.001|list|float'
+    'HR-Attrition-SVC'	'C=0.25;0.5;1;2;5|list|float, kernel=rbf;linear;poly;sigmoid|list|str'
+    'HR-Attrition-MLP'	'activation=relu;identity;logistic;tanh|list|str, solver=lbfgs;sgd;adam|list|str, learning_rate=constant;invscaling;adaptive|list|str'
+];
+
+```
 
 ### Metrics Arguments
 

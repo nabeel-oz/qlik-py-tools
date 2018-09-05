@@ -16,8 +16,9 @@ if not sys.warnoptions:
 
 from sklearn import metrics
 from sklearn import preprocessing
-from sklearn.model_selection import train_test_split
 from sklearn.pipeline import Pipeline
+from sklearn.model_selection import train_test_split
+from sklearn.model_selection import GridSearchCV
 from sklearn.decomposition import PCA, KernelPCA, IncrementalPCA, TruncatedSVD, FactorAnalysis, FastICA, NMF, SparsePCA
 
 from sklearn.dummy import DummyClassifier, DummyRegressor
@@ -292,6 +293,61 @@ class SKLearnForQlik:
         # Finally send the response
         return self.response
         
+    def set_param_grid(self):
+        """
+        Set a parameter grid that will be used to optimize hyperparameters for the estimator.
+        The parameters are used in the fit method to do a grid search.
+        """
+
+        # Interpret the request data based on the expected row and column structure
+        row_template = ['strData', 'strData', 'strData']
+        col_headers = ['model_name', 'estimator_args', 'grid_search_args']
+        
+        # Create a Pandas Data Frame for the request data
+        self.request_df = utils.request_df(self.request, row_template, col_headers)
+       
+        # Initialize the persistent model
+        self.model = PersistentModel()
+        
+        # Get the model name from the request dataframe
+        self.model.name = self.request_df.loc[0, 'model_name']
+        
+        # Get the estimator's hyperparameter grid from the request dataframe
+        param_grid = self.request_df.loc[:, 'estimator_args']
+
+        # Get the grid search arguments from the request dataframe
+        grid_search_args = self.request_df.loc[0, 'grid_search_args']
+
+        # Get the model from cache or disk
+        self._get_model()
+        
+        # Debug information is printed to the terminal and logs if the paramater debug = true
+        if self.model.debug:
+            self._print_log(3)
+
+        self._set_grid_params(param_grid, grid_search_args)
+        
+        # Persist the model to disk
+        self.model = self.model.save(self.model.name, self.path, self.model.compress)
+        
+        # Update the cache to keep this model in memory
+        self._update_cache()
+              
+        # Prepare the output
+        message = [[self.model.name, 'Hyperparameter grid successfully saved to disk',\
+                    time.strftime('%X %x %Z', time.localtime(self.model.state_timestamp))]]
+        self.response = pd.DataFrame(message, columns=['model_name', 'result', 'time_stamp'])
+        
+        # Send the reponse table description to Qlik
+        self._send_table_description("setup")
+        
+        # Debug information is printed to the terminal and logs if the paramater debug = true
+        if self.model.debug:
+            self._print_log(4)
+        
+        # Finally send the response
+        return self.response
+    
     def fit(self):
         """
         Train and test the model based on the provided dataset
@@ -321,13 +377,9 @@ class SKLearnForQlik:
         prep = Preprocessor(self.model.features_df, scale_hashed=self.model.scale_hashed, missing=self.model.missing,\
                             scaler=self.model.scaler, **self.model.scaler_kwargs)
         
-        # Construct an estimator
-        estimator = self.algorithms[self.model.estimator](**self.model.estimator_kwargs)
-        
         # Construct a sklearn pipeline
-        self.model.pipe = Pipeline([('preprocessor', prep), ('estimator', estimator)])
-        self.model.estimation_step = 1
-        
+        self.model.pipe = Pipeline([('preprocessor', prep)])
+
         if self.model.dim_reduction:
             # Construct the dimensionality reduction object
             reduction = self.decomposers[self.model.reduction](**self.model.dim_reduction_args)
@@ -335,9 +387,47 @@ class SKLearnForQlik:
             # Include dimensionality reduction in the sklearn pipeline
             self.model.pipe.steps.insert(1, ('reduction', reduction))
             self.model.estimation_step = 2
+        else:
+            self.model.estimation_step = 1      
         
-        # Fit the training data to the pipeline
-        self.model.pipe.fit(self.X_train, self.y_train.values.ravel())
+        # Check if the pipeline involves a grid search
+        try:
+            # Construct an estimator
+            estimator = self.algorithms[self.model.estimator]()
+
+            # Prepare the grid search using the previously set parameter grid
+            grid_search = GridSearchCV(estimator=estimator, param_grid=self.model.param_grid, **self.model.grid_search_args)
+            
+            if self.model.test_size <= 0:  
+                err = "A parameter grid was set up, but test_size <= 0 making cross validation impossible."
+                raise Exception(err)
+            
+            # Add grid search to the sklearn pipeline
+            self.model.pipe.steps.append(('grid_search', grid_search))
+
+            # Fit the training data to the pipeline
+            self.model.pipe.fit(self.X_train, self.y_train.values.ravel())
+
+            # Get the best parameters and the cross validation results
+            grid_search = self.model.pipe.steps[self.model.estimation_step][1]
+            self.model.best_params = grid_search.best_params_
+            self.model.cv_results = grid_search.cv_results_
+
+            # Get the best estimator to add to the final pipeline
+            estimator = grid_search.best_estimator_
+
+            # Update the pipeline with the best estimator
+            self.model.pipe.steps[self.model.estimation_step] = ('estimator', estimator)
+
+        except AttributeError:
+            # Construct an estimator
+            estimator = self.algorithms[self.model.estimator](**self.model.estimator_kwargs)
+
+            # Add the estimator to the sklearn pipeline
+            self.model.pipe.steps.append(('estimator', estimator))  
+
+            # Fit the training data to the pipeline
+            self.model.pipe.fit(self.X_train, self.y_train.values.ravel())
         
         if self.model.test_size > 0:       
             # Evaluate the model using the test data            
@@ -502,8 +592,6 @@ class SKLearnForQlik:
         # Finally send the response
         return self.response
     
-    # STAGE 2: Grid Search CV: sklearn_Param_Grid(model_name, estimator_args, grid_search_args)
-    
     def predict(self, load_script=False, variant="predict"):
         """
         Return a prediction by applying an existing model to the supplied data.
@@ -602,7 +690,6 @@ class SKLearnForQlik:
             
             return self.response.loc[:,'result']
     
-    
     # STAGE 4 : If feasible, allow transient models that can be setup and used from chart expressions
     # def fit_predict(self):
     
@@ -613,25 +700,8 @@ class SKLearnForQlik:
         Get a string that can be evaluated in Qlik to get the features portion of the predict function
         """
         
-        # Interpret the request data based on the expected row and column structure
-        row_template = ['strData']
-        col_headers = ['model_name']
-        
-        # Create a Pandas Data Frame for the request data
-        self.request_df = utils.request_df(self.request, row_template, col_headers)
-        
-        # Initialize the persistent model
-        self.model = PersistentModel()
-        
-        # Get the model name from the request dataframe
-        self.model.name = self.request_df.loc[0, 'model_name']
-        
-        # Get the model from cache or disk
-        self._get_model()
-        
-        # Debug information is printed to the terminal and logs if the paramater debug = true
-        if self.model.debug:
-            self._print_log(3)
+        # Get the model from cache or disk based on the model_name in request
+        self._get_model_by_name()
         
         # Prepare the expression as a string
         delimiter = " &'|'& "
@@ -647,31 +717,39 @@ class SKLearnForQlik:
         
         # Finally send the response
         return self.response
+
+    def get_best_params(self):
+        """
+        Get the best parameters for the model based on the grid search cross validation 
+        """
+        
+        # Get the model from cache or disk based on the model_name in request
+        self._get_model_by_name()
+        
+        try:
+            # Prepare the response
+            self.response = pd.DataFrame([[self.model.name, utils.dict_to_sse_arg(self.model.best_params)]])
+        except AttributeError:
+            err = "Best parameters are not available as a parameter grid was not provided for cross validation."
+            raise Exception(err)
+        
+        # Send the reponse table description to Qlik
+        self._send_table_description("best_params")
+        
+        # Debug information is printed to the terminal and logs if the paramater debug = true
+        if self.model.debug:
+            self._print_log(4)
+        
+        # Finally send the response
+        return self.response
     
     def get_metrics(self):
         """
         Return metrics previously calculated during fit
         """
         
-        # Interpret the request data based on the expected row and column structure
-        row_template = ['strData']
-        col_headers = ['model_name']
-        
-        # Create a Pandas Data Frame for the request data
-        self.request_df = utils.request_df(self.request, row_template, col_headers)
-        
-        # Initialize the persistent model
-        self.model = PersistentModel()
-        
-        # Get the model name from the request dataframe
-        self.model.name = self.request_df.loc[0, 'model_name']
-        
-        # Get the model from cache or disk
-        self._get_model()
-        
-        # Debug information is printed to the terminal and logs if the paramater debug = true
-        if self.model.debug:
-            self._print_log(3)
+        # Get the model from cache or disk based on the model_name in request
+        self._get_model_by_name()
         
         # Prepare the expression as a string
         self.response = self.model.metrics_df
@@ -788,7 +866,7 @@ class SKLearnForQlik:
                 self.model.scaler_kwargs = utils.get_kwargs_by_type(scaler_args) 
             else:
                 err = "Arguments for scaling did not include the scaler name e.g StandardScaler"
-                self._print_exception(err, Exception(err))
+                raise Exception(err)
             
         # If the estimator key word arguments were included in the request, get the parameters and values
         if len(estimator_args) > 0:
@@ -812,7 +890,7 @@ class SKLearnForQlik:
                 self.model.estimator_kwargs = utils.get_kwargs_by_type(estimator_args)  
             else:
                 err = "Arguments for estimator did not include the estimator class e.g. RandomForestClassifier"
-                self._print_exception(err, Exception(err))  
+                raise Exception(err)
         
         # If key word arguments for model evaluation metrics are included in the request, get the parameters and values
         if metric_args is not None and len(metric_args) > 0:
@@ -838,12 +916,44 @@ class SKLearnForQlik:
                 self.model.dim_reduction_args = utils.get_kwargs_by_type(dim_reduction_args)  
             else:
                 err = "Arguments for dimensionality reduction did not include the class e.g. PCA"
-                self._print_exception(err, Exception(err))
+                raise Exception(err)
         
         # Debug information is printed to the terminal and logs if the paramater debug = true
         if self.model.debug:
             self._print_log(2)
     
+    def _set_grid_params(self, param_grid, grid_search_args):
+        """
+        Set up the grid search parameters to be used later for sklearn.model_selection.GridSearchCV
+        param_grid is a series with the hyperparameters. The series can have multiple rows.
+        grid_search_args is a string with the arguments for the call to GridSearchCV.
+        """
+        
+        # If key word arguments for the grid search are included in the request, get the parameters and values
+        if len(grid_search_args) > 0:
+            # Transform the string of arguments into a dictionary
+            grid_search_args = utils.get_kwargs(grid_search_args)
+            
+            # Get the metric parameters, converting values to the correct data type
+            self.model.grid_search_args = utils.get_kwargs_by_type(grid_search_args)
+
+            # The refit parameter must be True, so this is ignored if passed in the arguments
+            self.model.grid_search_args["refit"] = True
+        else:
+            self.model.grid_search_args = {}
+        
+        # If key word arguments for the grid search are included in the request, get the parameters and values
+        if len(param_grid) > 0:
+            # Transform the parameter grid dataframe into a list of dictionaries
+            self.model.param_grid = list(param_grid.apply(utils.get_kwargs).apply(utils.get_kwargs_by_type))
+        else:
+            err = "An empty string is not a valid input for the param_grid argument"
+            raise Exception(err)
+        
+        # Debug information is printed to the terminal and logs if the paramater debug = true
+        if self.model.debug:
+            self._print_log(9)
+
     def _get_model_by_name(self):
         """
         Get a previously saved model using the model_name
@@ -978,6 +1088,9 @@ class SKLearnForQlik:
             self.table.fields.add(name="prediction")
         elif variant == "expression":
             self.table.fields.add(name="result")
+        elif variant == "best_params":
+            self.table.fields.add(name="model_name")
+            self.table.fields.add(name="best_params")
         
         # Debug information is printed to the terminal and logs if the paramater debug = true
         if self.model.debug:
@@ -1126,6 +1239,15 @@ class SKLearnForQlik:
             
             with open(self.logfile,'a') as f:
                 f.write("\nCache updated. Models in cache:\n{0}\n\n".format([k for k,v in self.__class__.model_cache.items()]))
+        
+        elif step == 9:
+            # Output when a parameter grid is set up
+            sys.stdout.write("Model Name: {0}, Estimator: {1}\n\nGrid Search Arguments: {2}\n\nParameter Grid: {1}\n\n".\
+            format(self.model.name, self.model.estimator, self.model.grid_search_args, self.model.param_grid))
+            
+            with open(self.logfile,'a') as f:
+                f.write("Model Name: {0}, Estimator: {1}\n\nGrid Search Arguments: {2}\n\nParameter Grid: {1}\n\n".\
+                format(self.model.name, self.model.estimator, self.model.grid_search_args, self.model.param_grid))
     
     def _print_exception(self, s, e):
         """
