@@ -143,7 +143,7 @@ def get_kwargs(str_kwargs):
     kwargs = dict([arg.split("=") for arg in args])
 
     # Make sure the key words are in lower case
-    kwargs = {k.lower(): v for k, v in kwargs.items()}
+    # kwargs = {k.lower(): v for k, v in kwargs.items()} # Commented as certain parameter names are case sensitive
     
     return kwargs
 
@@ -192,7 +192,11 @@ def get_kwargs_by_type(dict_kwargs):
                 if split[3] in ("boolean", "bool"):
                     b = b.capitalize()
                 
-                d[types[split[2]](a)] = types[split[3]](b)
+                # Handle None as an item in the dictionary
+                if b == "None":
+                    d[types[split[2]](a)] = None
+                else:
+                    d[types[split[2]](a)] = types[split[3]](b)
             
             result_dict[k] = d
         
@@ -205,8 +209,12 @@ def get_kwargs_by_type(dict_kwargs):
                 # Handle conversion from string to boolean
                 if split[2] in ("boolean", "bool"):
                     i = i.capitalize()
-                    
-                l.append(types[split[2]](i))
+
+                # Handle None as an item in the dictionary
+                if i == "None":
+                    l.append(None)
+                else:
+                    l.append(types[split[2]](i))
             
             if split[1] == "array":
                 l = np.array(l)
@@ -278,3 +286,23 @@ def atof(a):
     s = a.translate(str.maketrans("", "", del_chars))
 
     return float(s.replace(",", "."))
+
+def dict_to_sse_arg(d):
+    """
+    Converts a dictionary to the argument syntax for this SSE
+    """
+
+    # Dictionary used to convert argument values to the correct type
+    types = {bool:"bool", int:"int", float:"float", str:"str"}
+
+    # Output string
+    s = ""
+
+    # Format into the required syntax
+    for k, v in d.items():
+        if v is None:
+            s = s + str(k) + "=None, "
+        else:
+            s = s + str(k) + "=" + str(v) + "|" + types[type(v)] + ", "
+    
+    return s[:-2]

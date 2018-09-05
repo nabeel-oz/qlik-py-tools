@@ -89,7 +89,9 @@ class ExtensionService(SSE.ConnectorServicer):
             20: '_sklearn',
             21: '_sklearn',
             22: '_sklearn',
-            23: '_sklearn'
+            23: '_sklearn',
+            24: '_sklearn',
+            25: '_sklearn'
         }
 
     """
@@ -394,7 +396,7 @@ class ExtensionService(SSE.ConnectorServicer):
         
         # Call the function based on the mapping in functions.json
         # The IF conditions are grouped based on similar output structure
-        if function in (9, 10, 21):    
+        if function in (9, 10, 21, 24):    
             if function == 9:
                 # Set up the model and save to disk
                 response = model.setup()
@@ -404,6 +406,9 @@ class ExtensionService(SSE.ConnectorServicer):
             elif function == 10:
                 # Set feature definitions for an existing model
                 response = model.set_features()
+            elif function == 24:
+                # Set a parameter grid for hyperparameter optimization
+                response = model.set_param_grid()
             
             # Get the response as SSE.Rows
             response_rows = utils.get_response_rows(response.values.tolist(), ["str", "str", "str"])
@@ -474,8 +479,13 @@ class ExtensionService(SSE.ConnectorServicer):
                 response_rows = utils.get_response_rows(response.values.tolist(), ["str", "num", "num", "num", "num", "num"])
         
         elif function == 23:
+            # Get the confusion matrix for the classifier
             response = model.get_confusion_matrix()
             response_rows = utils.get_response_rows(response.values.tolist(), ["str", "str", "str", "num"])
+        
+        elif function == 25:
+            response = model.get_best_params()
+            response_rows = utils.get_response_rows(response.values.tolist(), ["str", "str"])
             
         # Yield Row data as Bundled rows
         yield SSE.BundledRows(rows=response_rows)
