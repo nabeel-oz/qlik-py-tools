@@ -44,12 +44,13 @@ class PersistentModel:
             raise FileExistsError("The specified model name already exists: {0}.".format(name + '.joblib')\
                                   +"\nPass overwrite=True if it is ok to overwrite.")
         else:
+            # Update properties
+            self.name = name
+            self.state = 'saved'
+            self.state_timestamp = time.time()
+            
             # Store this instance to file
             joblib.dump(self, filename=Path(f), compress=compress)
-        
-        self.name = name
-        self.state = 'saved'
-        self.state_timestamp = time.time()
                 
         return self
     
@@ -137,7 +138,7 @@ class Preprocessor(TransformerMixin):
             if features is None:
                 features = self.features
             
-            self = self.__init__(features)
+            self.__init__(features)
         
         # Get a subset of the data that requires one hot encoding
         self.ohe_df = X[self.ohe_meta.index.tolist()]

@@ -1242,11 +1242,11 @@ class SKLearnForQlik:
         
         elif step == 9:
             # Output when a parameter grid is set up
-            sys.stdout.write("Model Name: {0}, Estimator: {1}\n\nGrid Search Arguments: {2}\n\nParameter Grid: {1}\n\n".\
+            sys.stdout.write("Model Name: {0}, Estimator: {1}\n\nGrid Search Arguments: {2}\n\nParameter Grid: {3}\n\n".\
             format(self.model.name, self.model.estimator, self.model.grid_search_args, self.model.param_grid))
             
             with open(self.logfile,'a') as f:
-                f.write("Model Name: {0}, Estimator: {1}\n\nGrid Search Arguments: {2}\n\nParameter Grid: {1}\n\n".\
+                f.write("Model Name: {0}, Estimator: {1}\n\nGrid Search Arguments: {2}\n\nParameter Grid: {3}\n\n".\
                 format(self.model.name, self.model.estimator, self.model.grid_search_args, self.model.param_grid))
     
     def _print_exception(self, s, e):
@@ -1259,6 +1259,6 @@ class SKLearnForQlik:
         # Output exception message
         sys.stdout.write("\n{0}: {1} \n\n".format(s, e))
         
-        if self.debug:
+        if self.model.debug:
             with open(self.logfile,'a') as f:
                 f.write("\n{0}: {1} \n\n".format(s, e))
