@@ -164,7 +164,7 @@ Additional metrics can be obtained using the `sklearn_Get_Metrics` and `sklearn_
 
 The `sklearn_Get_Metrics` can be used if the model was evaluated with a test dataset during the call to `sklearn_Fit`. This happens by default unless the `test_size` is set to zero in the execution arguments. 
 
-This function only requires the model name as the input. 
+This function only requires the model name as the input. Arguments to the scikit-learn functions used in calculating the metrics can be provided using the `PyTools.sklearn_Setup_Adv` function. For more details refer to the section on [Metrics Arguments](#metrics-arguments). 
 
 The sample below shows the output fields for a classifier:
 
@@ -273,7 +273,7 @@ EXTENSION PyTools.sklearn_Bulk_Predict(TEMP_SAMPLES_WITH_KEYS{Model_Name, Key, N
 ```
 
 ## Additional Functionality
-The basic flow described above needs to be extended in most real world cases. 
+The basic machine learning flow described above can be enhanced with additional functionality provided by this SSE. 
 
 ### Optimizing hyperparameters for an estimator
 A key step in building a good model is determining the best hyperparameters for the estimator. This process can be automated given a parameter grid and performing a search across combinations of the specified parameter values for the estimator. For more information see the scikit-learn documentation on [tuning the hyper-parameters of an estimator](http://scikit-learn.org/stable/modules/grid_search.html)
@@ -408,7 +408,9 @@ Any of the classification and regression algorithms in scikit-learn can be used 
 
 | Keyword | Description | Sample Values | Remarks |
 | --- | --- | --- | --- |
-| estimator | The chosen estimator for the model | `AdaBoostClassifier`, `AdaBoostRegressor`, `BaggingClassifier`, `BaggingRegressor`, `ExtraTreesClassifier`, `ExtraTreesRegressor`, `GradientBoostingClassifier`, `GradientBoostingRegressor`, `RandomForestClassifier`, `RandomForestRegressor`, `VotingClassifier`, `GaussianProcessClassifier`, `GaussianProcessRegressor`, `LinearRegression`, `LogisticRegression`, `LogisticRegressionCV`, `PassiveAggressiveClassifier`, `PassiveAggressiveRegressor`, `Perceptron`, `RANSACRegressor`, `Ridge`, `RidgeClassifier`, `RidgeCV`, `RidgeClassifierCV`, `SGDClassifier`, `SGDRegressor`, `TheilSenRegressor`, `BernoulliNB`, `GaussianNB`, `MultinomialNB`, `KNeighborsClassifier`, `KNeighborsRegressor`, `RadiusNeighborsClassifier`, `RadiusNeighborsRegressor`, `MLPClassifier`,  `MLPRegressor`, `LinearSVC`, `LinearSVR`, `NuSVC`, `NuSVR`, `SVC`, `SVR`, `DecisionTreeClassifier`, `DecisionTreeRegressor`, `ExtraTreeClassifier`, `ExtraTreeRegressor`, `DummyClassifier`, `DummyRegressor` | Mandatory when supplying estimator arguments.<br><br>Additional arguments for the estimator should be included in the `EstimatorArgs` string using the syntax described under [Specifying keyword arguments for scikit-learn classes](#specifying-keyword-arguments-for-scikit-learn-classes).  |
+| estimator | The chosen estimator for the model | `AdaBoostClassifier`, `AdaBoostRegressor`, `BaggingClassifier`, `BaggingRegressor`, `ExtraTreesClassifier`, `ExtraTreesRegressor`, `GradientBoostingClassifier`, `GradientBoostingRegressor`, `RandomForestClassifier`, `RandomForestRegressor`, `VotingClassifier`, `GaussianProcessClassifier`, `GaussianProcessRegressor`, `LinearRegression`, `LogisticRegression`, `LogisticRegressionCV`, `PassiveAggressiveClassifier`, `PassiveAggressiveRegressor`, `Perceptron`, `RANSACRegressor`, `Ridge`, `RidgeClassifier`, `RidgeCV`, `RidgeClassifierCV`, `SGDClassifier`, `SGDRegressor`, `TheilSenRegressor`, `BernoulliNB`, `GaussianNB`, `MultinomialNB`, `KNeighborsClassifier`, `KNeighborsRegressor`, `RadiusNeighborsClassifier`, `RadiusNeighborsRegressor`, `MLPClassifier`,  `MLPRegressor`, `LinearSVC`, `LinearSVR`, `NuSVC`, `NuSVR`, `SVC`, `SVR`, `DecisionTreeClassifier`, `DecisionTreeRegressor`, `ExtraTreeClassifier`, `ExtraTreeRegressor`, `DummyClassifier`, `DummyRegressor` | Mandatory when supplying estimator arguments.  |
+
+Additional arguments for the estimator should be included in the `estimator_args` string when calling the `PyTools.sklearn_Setup` or `PyTools.sklearn_Setup_Adv` functions. The syntax for this is described under [Specifying keyword arguments for scikit-learn classes](#specifying-keyword-arguments-for-scikit-learn-classes). However, if performing hyperparameter optimisation using a grid search, these additional arguments will be ignored.
 
 ### Grid Search Arguments
 
