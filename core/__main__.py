@@ -419,7 +419,7 @@ class ExtensionService(SSE.ConnectorServicer):
             
             # Get the response as SSE.Rows
             response_rows = utils.get_response_rows(response.values.tolist(), ["str", "num", "str", "str", "str",\
-                                                                               "str", "num"])
+                                                                               "str", "str"])
         
         elif function == 12:
             # Train and Test an existing model, saving the sklearn pipeline for further predictions

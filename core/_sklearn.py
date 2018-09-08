@@ -19,7 +19,9 @@ from sklearn import preprocessing
 from sklearn.pipeline import Pipeline
 from sklearn.model_selection import train_test_split
 from sklearn.model_selection import GridSearchCV
-from sklearn.decomposition import PCA, KernelPCA, IncrementalPCA, TruncatedSVD, FactorAnalysis, FastICA, NMF, SparsePCA
+
+from sklearn.decomposition import PCA, KernelPCA, IncrementalPCA, TruncatedSVD, FactorAnalysis, FastICA, NMF, SparsePCA,\
+                                  DictionaryLearning, LatentDirichletAllocation, MiniBatchDictionaryLearning, MiniBatchSparsePCA
 
 from sklearn.dummy import DummyClassifier, DummyRegressor
 from sklearn.ensemble import AdaBoostClassifier, AdaBoostRegressor, BaggingClassifier,\
@@ -38,6 +40,9 @@ from sklearn.neural_network import BernoulliRBM, MLPClassifier, MLPRegressor
 from sklearn.svm import LinearSVC, LinearSVR, NuSVC, NuSVR, SVC, SVR
 from sklearn.tree import DecisionTreeClassifier, DecisionTreeRegressor, ExtraTreeClassifier,\
                          ExtraTreeRegressor
+
+from sklearn.cluster import AffinityPropagation, AgglomerativeClustering, Birch, DBSCAN, FeatureAgglomeration, KMeans,\
+                            MiniBatchKMeans, MeanShift, SpectralClustering
 
 import _utils as utils
 from _machine_learning import Preprocessor, PersistentModel
@@ -100,10 +105,19 @@ class SKLearnForQlik:
                            "MLPRegressor":MLPRegressor, "LinearSVC":LinearSVC, "LinearSVR":LinearSVR, "NuSVC":NuSVC,\
                            "NuSVR":NuSVR, "SVC":SVC, "SVR":SVR, "DecisionTreeClassifier":DecisionTreeClassifier,\
                            "DecisionTreeRegressor":DecisionTreeRegressor, "ExtraTreeClassifier":ExtraTreeClassifier,\
-                           "ExtraTreeRegressor":ExtraTreeRegressor}
+                           "ExtraTreeRegressor":ExtraTreeRegressor, "PCA":PCA, "KernelPCA":KernelPCA, "IncrementalPCA":IncrementalPCA,\
+                           "TruncatedSVD":TruncatedSVD, "FactorAnalysis":FactorAnalysis, "FastICA":FastICA, "NMF":NMF,\
+                           "SparsePCA":SparsePCA, "DictionaryLearning":DictionaryLearning,\
+                           "LatentDirichletAllocation":LatentDirichletAllocation,\
+                           "MiniBatchDictionaryLearning":MiniBatchDictionaryLearning, "MiniBatchSparsePCA":MiniBatchSparsePCA,\
+                           "AffinityPropagation":AffinityPropagation, "AgglomerativeClustering":AgglomerativeClustering,\
+                           "Birch":Birch, "DBSCAN":DBSCAN, "FeatureAgglomeration":FeatureAgglomeration, "KMeans":KMeans,\
+                            "MiniBatchKMeans":MiniBatchKMeans, "MeanShift":MeanShift, "SpectralClustering":SpectralClustering}
         
         self.decomposers = {"PCA":PCA, "KernelPCA":KernelPCA, "IncrementalPCA":IncrementalPCA, "TruncatedSVD":TruncatedSVD,\
-                            "FactorAnalysis":FactorAnalysis, "FastICA":FastICA, "NMF":NMF, "SparsePCA":SparsePCA}
+                            "FactorAnalysis":FactorAnalysis, "FastICA":FastICA, "NMF":NMF, "SparsePCA":SparsePCA,\
+                            "DictionaryLearning":DictionaryLearning, "LatentDirichletAllocation":LatentDirichletAllocation,\
+                            "MiniBatchDictionaryLearning":MiniBatchDictionaryLearning, "MiniBatchSparsePCA":MiniBatchSparsePCA}
         
         self.classifiers = ["DummyClassifier", "AdaBoostClassifier", "BaggingClassifier", "ExtraTreesClassifier",\
                             "GradientBoostingClassifier", "RandomForestClassifier", "VotingClassifier",\
@@ -119,7 +133,10 @@ class SKLearnForQlik:
                            "SGDRegressor", "TheilSenRegressor", "KNeighborsRegressor", "RadiusNeighborsRegressor",\
                            "MLPRegressor", "LinearSVR", "NuSVR", "SVR", "DecisionTreeRegressor",\
                            "ExtraTreeRegressor"]
-        
+    
+        self.clusterers = ["AffinityPropagation", "AgglomerativeClustering", "Birch", "DBSCAN", "FeatureAgglomeration", "KMeans",\
+                           "MiniBatchKMeans", "MeanShift", "SpectralClustering"]
+
     def list_models(self):
         """
         List available models.
@@ -225,8 +242,8 @@ class SKLearnForQlik:
         """
         
         # Interpret the request data based on the expected row and column structure
-        row_template = ['strData', 'strData', 'strData', 'strData', 'strData', 'numData']
-        col_headers = ['model_name', 'name', 'variable_type', 'data_type', 'feature_strategy', 'hash_features']
+        row_template = ['strData', 'strData', 'strData', 'strData', 'strData', 'strData']
+        col_headers = ['model_name', 'name', 'variable_type', 'data_type', 'feature_strategy', 'strategy_args']
         
         # Create a Pandas Data Frame for the request data
         self.request_df = utils.request_df(self.request, row_template, col_headers)
@@ -281,7 +298,7 @@ class SKLearnForQlik:
         self.response = self.model.features_df
         self.response["sort_order"] = pd.Series([i+1 for i in range(len(self.response.index))], index=self.response.index)
         self.response = self.response[["model_name", "sort_order", "name", "variable_type", "data_type",\
-                                       "feature_strategy", "hash_features"]]
+                                       "feature_strategy", "strategy_args"]]
         
         # Send the reponse table description to Qlik
         self._send_table_description("features")
@@ -374,8 +391,8 @@ class SKLearnForQlik:
                 self.model.y_test = self.y_test
         
         # Construct the preprocessor
-        prep = Preprocessor(self.model.features_df, scale_hashed=self.model.scale_hashed, missing=self.model.missing,\
-                            scaler=self.model.scaler, **self.model.scaler_kwargs)
+        prep = Preprocessor(self.model.features_df, scale_hashed=self.model.scale_hashed, scale_vectors=self.model.scale_vectors,\
+        missing=self.model.missing, scaler=self.model.scaler, **self.model.scaler_kwargs)
         
         # Construct a sklearn pipeline
         self.model.pipe = Pipeline([('preprocessor', prep)])
@@ -776,7 +793,7 @@ class SKLearnForQlik:
         :
         :Additional parameters used by this SSE are: 
         :overwrite, test_size, randon_state, compress, retain_data, debug
-        :For details refer to the GitHub project: https://github.com/nabeel-qlik/qlik-py-tools
+        :For details refer to the GitHub project: https://github.com/nabeel-oz/qlik-py-tools
         """
         
         # Set default values which will be used if execution arguments are not passed
@@ -789,6 +806,7 @@ class SKLearnForQlik:
         self.model.compress = 3
         self.model.retain_data = False
         self.model.scale_hashed = True
+        self.model.scale_vectors = True
         
         # Default metric parameters:
         if metric_args is None:
@@ -861,6 +879,9 @@ class SKLearnForQlik:
                 
                 if 'scale_hashed' in scaler_args:
                     self.model.scale_hashed = 'true' == scaler_args.pop('scale_hashed').lower()
+                
+                if 'scale_vectors' in scaler_args:
+                    self.model.scale_vectors = 'true' == scaler_args.pop('scale_vectors').lower()
                 
                 # Get the rest of the scaler parameters, converting values to the correct data type
                 self.model.scaler_kwargs = utils.get_kwargs_by_type(scaler_args) 
@@ -1055,7 +1076,7 @@ class SKLearnForQlik:
             self.table.fields.add(name="var_type")
             self.table.fields.add(name="data_type")
             self.table.fields.add(name="strategy")
-            self.table.fields.add(name="hash_length", dataType=1)
+            self.table.fields.add(name="strategy_args")
         elif variant == "fit":
             self.table.fields.add(name="model_name")
             self.table.fields.add(name="result")
@@ -1171,9 +1192,9 @@ class SKLearnForQlik:
             # Output the parameters
             sys.stdout.write("Model Name: {0}\n\n".format(self.model.name))
             sys.stdout.write("Execution arguments: {0}\n\n".format(self.exec_params))
-            sys.stdout.write("Scaler: {0}, missing: {1}, scale_hashed: {2}\n".format(\
+            sys.stdout.write("Scaler: {0}, missing: {1}, scale_hashed: {2}, scale_vectors: {3}\n".format(\
                                                                                      self.model.scaler, self.model.missing,\
-                                                                                     self.model.scale_hashed))
+                                                                                     self.model.scale_hashed, self.model.scale_vectors))
             sys.stdout.write("Scaler kwargs: {0}\n\n".format(self.model.scaler_kwargs))
             if self.model.dim_reduction:
                 sys.stdout.write("Reduction: {0}\nReduction kwargs: {1}\n\n".format(self.model.reduction,\
@@ -1184,8 +1205,8 @@ class SKLearnForQlik:
             with open(self.logfile,'a') as f:
                 f.write("Model Name: {0}\n\n".format(self.model.name))
                 f.write("Execution arguments: {0}\n\n".format(self.exec_params))
-                f.write("Scaler: {0}, missing: {1}, scale_hashed: {2}\n".format(self.model.scaler, self.model.missing,\
-                                                                                self.model.scale_hashed))
+                f.write("Scaler: {0}, missing: {1}, scale_hashed: {2}, scale_vectors: {3}\n".format(self.model.scaler,\
+                self.model.missing, self.model.scale_hashed, self.model.scale_vectors))
                 f.write("Scaler kwargs: {0}\n\n".format(self.model.scaler_kwargs))
                 if self.model.dim_reduction:
                     f.write("Reduction: {0}\nReduction kwargs: {1}\n\n".format(self.model.reduction,\

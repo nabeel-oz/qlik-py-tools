@@ -79,8 +79,8 @@ For each feature, i.e. each column in the dataset, we need to define the followi
 | Name | A unique name for the feature | Any string | The feature name must be unique. |
 | Variable Type | Identify whether the variable is a feature or target | `feature`, `target`, `excluded`, `identifier` | Features marked as `excluded` or `identifier` will be ignored. |
 | Data Type | Used to covert the data to the correct type | `bool`, `int`, `float`, `str` | Specifying data types correctly is necessary due to how data will be exchanged between Qlik and this SSE. |
-| Feature Strategy | The feature preparation strategy | `one hot encoding`, `hashing`, `scaling`, `none` | Strings need to be converted to numerical values for machine learning. The strategies implemented in this SSE to do this are one hot encoding and hashing. Numerical values need to be scaled to avoid bias towards larger numbers. <br><br> In general, for discrete values use OHE where the number of unique values is small, otherwise use hashing. For continuous values, use scaling. |
-| Hash Features | The number of features where the feature strategy is hashing | An integer e.g. `4` | The integer should be a power of 2 for the hashing to work correctly. |
+| Feature Strategy | The feature preparation strategy | `one hot encoding`, `hashing`, `count_vectorizing`, `tfidf`, `scaling`, `none` | Strings need to be converted to numerical values for machine learning. The strategies implemented in this SSE to do this are [one hot encoding](https://pandas.pydata.org/pandas-docs/stable/generated/pandas.get_dummies.html), [hashing](http://scikit-learn.org/stable/modules/generated/sklearn.feature_extraction.FeatureHasher.html), [count vectorizing](http://scikit-learn.org/stable/modules/generated/sklearn.feature_extraction.text.CountVectorizer.html) and [TF-IDF vectorizing](http://scikit-learn.org/stable/modules/generated/sklearn.feature_extraction.text.TfidfVectorizer.html).<br><br>Numerical values need to be scaled to avoid bias towards larger numbers.<br><br>In general, for discrete values use OHE where the number of unique values is small, otherwise use hashing. For continuous values, use scaling. |
+| Strategy Arguments | For `hashing`: the number of derived features.<br><br>For `count_vectorizing` and `tfidf`: the keyword arguments that will be passed to the scikit-learn class | For `hashing` this should be an integer e.g. `4`<br><br>For `count_vectorizing` and `tfidf` this should follow the syntax described under [Specifying keyword arguments for scikit-learn classes](#specifying-keyword-arguments-for-scikit-learn-classes) e.g. `'analyzer=char|str, ngram_range=2;2|tuple|int'` | For hashing the integer should be a power of 2 for the algorithm to work correctly. |
    
 The table should look like this:
 
@@ -103,7 +103,7 @@ LOAD
 EXTENSION PyTools.sklearn_Setup(MODEL_INIT{Model_Name, EstimatorArgs, ScalerArgs, ExecutionArgs}); 
 ```
 
-We then send the feature definitions, i.e. the metadata on our features, to the model. In the sample script below the existing table `FEATURES` provides us the inputs: `Model_Name`, `Name`, `Variable_Type`, `Data_Type`, `Feature_Strategy`, `Hash_Features`.
+We then send the feature definitions, i.e. the metadata on our features, to the model. In the sample script below the existing table `FEATURES` provides us the inputs: `Model_Name`, `Name`, `Variable_Type`, `Data_Type`, `Feature_Strategy`, `Strategy_Arguments`.
 
 ```
 [Result-Setup]:
@@ -111,7 +111,7 @@ LOAD
    model_name,
    result,
    timestamp
-EXTENSION PyTools.sklearn_Set_Features(FEATURES{Model_Name, Name, Variable_Type, Data_Type, Feature_Strategy, Hash_Features});
+EXTENSION PyTools.sklearn_Set_Features(FEATURES{Model_Name, Name, Variable_Type, Data_Type, Feature_Strategy, Strategy_Arguments});
 ```
 
 For details on the format of inputs refer to the [Input Specifications](#input-specifications).
@@ -395,8 +395,9 @@ In this implementation we use the [sklearn.preprocessing](http://scikit-learn.or
 | Keyword | Description | Sample Values | Remarks |
 | --- | --- | --- | --- |
 | scaler | scikit-learn class that will be used for scaling numeric data | `StandardScaler`, `MinMaxScaler`, `MaxAbsScaler`, `RobustScaler`, `QuantileTransformer` | Defaults to `StandardScaler`.<br><br>Mandatory argument if the scaler arguments are not an empty string. |
-| missing | Strategy to use for missing/null values | `mean`, `median`, `mode`, `zeros`, `none` | Defaults to `zeros`.<br><br>This setting only applies to numerical features. Null values in features marked for one hot encoding or hashing are simply ignored. If you want Null values to be taken into consideration for such features, replace them with an appropriate string in Qlik. |
+| missing | Strategy to use for missing/null values | `mean`, `median`, `mode`, `zeros`, `none` | Defaults to `zeros`.<br><br>This setting only applies to numerical features. If you want Null values to be taken into consideration for text features, replace them with an appropriate string in Qlik. |
 | scale_hashed | Whether to scale hashed features | `true`, `false` | Defaults to `true`.<br><br>At times machine learning requires trial and error. You may want to control this setting and see the impact on the results. |
+| scale_vectors | Whether to scale count vectorized and TF-IDF vectorized features | `true`, `false` | Defaults to `true`.<br><br>Same as above. You may want to control this setting and see the impact on the results. |
 
 In addition to the standard parameters above, you can provide any valid key word arguments accepted by the scikit-learn preprocesing class specified under the `scaler` argument above. Refer to the specifictions under [Specifying keyword arguments for scikit-learn classes](#specifying-keyword-arguments-for-scikit-learn-classes)
 
