@@ -29,9 +29,11 @@ from sklearn.ensemble import AdaBoostClassifier, AdaBoostRegressor, BaggingClass
                              GradientBoostingClassifier, GradientBoostingRegressor,\
                              RandomForestClassifier, RandomForestRegressor, VotingClassifier
 from sklearn.gaussian_process import GaussianProcessClassifier, GaussianProcessRegressor
-from sklearn.linear_model import LinearRegression, LogisticRegression, LogisticRegressionCV,\
-                                 PassiveAggressiveClassifier, PassiveAggressiveRegressor,\
-                                 Perceptron, RANSACRegressor, Ridge, RidgeClassifier, RidgeCV,\
+from sklearn.linear_model import ARDRegression, BayesianRidge, ElasticNet, ElasticNetCV, HuberRegressor, Lars, LarsCV,\
+                                 Lasso, LassoCV, LassoLars, LassoLarsCV, LassoLarsIC, LinearRegression, LogisticRegression,\
+                                 LogisticRegressionCV, MultiTaskLasso, MultiTaskElasticNet, MultiTaskLassoCV, MultiTaskElasticNetCV,\
+                                 OrthogonalMatchingPursuit, OrthogonalMatchingPursuitCV, PassiveAggressiveClassifier,\
+                                 PassiveAggressiveRegressor, Perceptron, RANSACRegressor, Ridge, RidgeClassifier, RidgeCV,\
                                  RidgeClassifierCV, SGDClassifier, SGDRegressor, TheilSenRegressor
 from sklearn.naive_bayes import BernoulliNB, GaussianNB, MultinomialNB
 from sklearn.neighbors import KNeighborsClassifier, KNeighborsRegressor, RadiusNeighborsClassifier,\
@@ -112,7 +114,13 @@ class SKLearnForQlik:
                            "MiniBatchDictionaryLearning":MiniBatchDictionaryLearning, "MiniBatchSparsePCA":MiniBatchSparsePCA,\
                            "AffinityPropagation":AffinityPropagation, "AgglomerativeClustering":AgglomerativeClustering,\
                            "Birch":Birch, "DBSCAN":DBSCAN, "FeatureAgglomeration":FeatureAgglomeration, "KMeans":KMeans,\
-                            "MiniBatchKMeans":MiniBatchKMeans, "MeanShift":MeanShift, "SpectralClustering":SpectralClustering}
+                            "MiniBatchKMeans":MiniBatchKMeans, "MeanShift":MeanShift, "SpectralClustering":SpectralClustering,\
+                            "ARDRegression":ARDRegression, "BayesianRidge":BayesianRidge, "ElasticNet":ElasticNet,\
+                            "ElasticNetCV":ElasticNetCV, "HuberRegressor":HuberRegressor, "Lars":Lars, "LarsCV":LarsCV,\
+                            "Lasso":Lasso, "LassoCV":LassoCV, "LassoLars":LassoLars, "LassoLarsCV":LassoLarsCV, "LassoLarsIC":LassoLarsIC,\
+                            "MultiTaskLasso":MultiTaskLasso, "MultiTaskElasticNet":MultiTaskElasticNet, "MultiTaskLassoCV":MultiTaskLassoCV,\
+                            "MultiTaskElasticNetCV":MultiTaskElasticNetCV, "OrthogonalMatchingPursuit":OrthogonalMatchingPursuit,\
+                            "OrthogonalMatchingPursuitCV":OrthogonalMatchingPursuitCV}
         
         self.decomposers = {"PCA":PCA, "KernelPCA":KernelPCA, "IncrementalPCA":IncrementalPCA, "TruncatedSVD":TruncatedSVD,\
                             "FactorAnalysis":FactorAnalysis, "FastICA":FastICA, "NMF":NMF, "SparsePCA":SparsePCA,\
@@ -132,7 +140,10 @@ class SKLearnForQlik:
                            "LinearRegression", "PassiveAggressiveRegressor", "RANSACRegressor", "Ridge", "RidgeCV"\
                            "SGDRegressor", "TheilSenRegressor", "KNeighborsRegressor", "RadiusNeighborsRegressor",\
                            "MLPRegressor", "LinearSVR", "NuSVR", "SVR", "DecisionTreeRegressor",\
-                           "ExtraTreeRegressor"]
+                           "ExtraTreeRegressor", "ARDRegression", "BayesianRidge", "ElasticNet", "ElasticNetCV",\
+                           "HuberRegressor", "Lars", "LarsCV", "Lasso", "LassoCV", "LassoLars", "LassoLarsCV",\
+                           "LassoLarsIC", "MultiTaskLasso", "MultiTaskElasticNet", "MultiTaskLassoCV", "MultiTaskElasticNetCV",\
+                           "OrthogonalMatchingPursuit", "OrthogonalMatchingPursuitCV"]
     
         self.clusterers = ["AffinityPropagation", "AgglomerativeClustering", "Birch", "DBSCAN", "FeatureAgglomeration", "KMeans",\
                            "MiniBatchKMeans", "MeanShift", "SpectralClustering"]
@@ -373,6 +384,11 @@ class SKLearnForQlik:
         # Open an existing model and get the training & test dataset and targets
         train_test_df, target_df = self._get_model_and_data()
         
+        # Check that the estimator is an supervised ML algorithm
+        if self.model.estimator_type not in ["classifier", "regressor"]:
+            err = "Incorrect usage. The estimator specified is not a known classifier or regressor: {0}".format(self.model.estimator)
+            raise Exception(err)
+
         if self.model.test_size > 0:        
             # Split the data into training and testing subsets
             self.X_train, self.X_test, self.y_train, self.y_test = \
@@ -392,7 +408,7 @@ class SKLearnForQlik:
         
         # Construct the preprocessor
         prep = Preprocessor(self.model.features_df, scale_hashed=self.model.scale_hashed, scale_vectors=self.model.scale_vectors,\
-        missing=self.model.missing, scaler=self.model.scaler, **self.model.scaler_kwargs)
+        missing=self.model.missing, scaler=self.model.scaler, logfile=self.logfile, **self.model.scaler_kwargs)
         
         # Construct a sklearn pipeline
         self.model.pipe = Pipeline([('preprocessor', prep)])
@@ -483,6 +499,118 @@ class SKLearnForQlik:
     # STAGE 3 : Allow for larger datasets by using partial fitting methods avaialble with some sklearn algorithmns
     # def partial_fit(self):
         
+    def fit_transform(self, load_script=False):
+        """
+        Fit the data to the model and then transform.
+        This method is meant to be used for unsupervised learning models for clustering and dimensionality reduction.
+        The models can be fit and tranformed through the load script or through chart expressions in Qlik.
+        The load_script flag needs to be set accordingly for the correct response.
+        """
+
+        # Interpret the request data based on the expected row and column structure
+        row_template = ['strData', 'strData']
+        col_headers = ['model_name', 'n_features']
+        feature_col_num = 1
+        
+        # An additional key field column is expected if the call is made through the load script
+        if load_script:
+            row_template = ['strData', 'strData', 'strData']
+            col_headers = ['model_name', 'key', 'n_features']
+            feature_col_num = 2
+        
+        # Create a Pandas Data Frame for the request data
+        self.request_df = utils.request_df(self.request, row_template, col_headers)
+               
+        # Initialize the persistent model
+        self.model = PersistentModel()
+        
+        # Get the model name from the request dataframe
+        self.model.name = self.request_df.loc[0, 'model_name']
+        
+        # Get the model from cache or disk
+        self._get_model()
+        
+        # Debug information is printed to the terminal and logs if the paramater debug = true
+        if self.model.debug:
+            self._print_log(3)
+        
+        # Check that the estimator is an unsupervised ML algorithm
+        if self.model.estimator_type not in ["decomposer", "clusterer"]:
+            err = "Incorrect usage. The estimator specified is not a known decompostion or clustering algorithm: {0}".format(self.model.estimator)
+            raise Exception(err)
+
+        if load_script:
+            # Set the key column as the index
+            self.request_df.set_index("key", drop=False, inplace=True)
+
+        # Split the features provided as a string into individual columns
+        self.X = pd.DataFrame([x[feature_col_num].split("|") for x in self.request_df.values.tolist()], columns=self.model.features_df.loc[:,"name"].tolist(),\
+        index=self.request_df.index)
+        
+        # Convert the data types based on feature definitions 
+        self.X = utils.convert_types(self.X, self.model.features_df)
+
+        # Construct the preprocessor
+        prep = Preprocessor(self.model.features_df, scale_hashed=self.model.scale_hashed, scale_vectors=self.model.scale_vectors,\
+        missing=self.model.missing, scaler=self.model.scaler, logfile=self.logfile, **self.model.scaler_kwargs)
+        
+        # Construct a sklearn pipeline
+        self.model.pipe = Pipeline([('preprocessor', prep)])
+
+        if self.model.dim_reduction:
+            # Construct the dimensionality reduction object
+            reduction = self.decomposers[self.model.reduction](**self.model.dim_reduction_args)
+            
+            # Include dimensionality reduction in the sklearn pipeline
+            self.model.pipe.steps.insert(1, ('reduction', reduction))
+            self.model.estimation_step = 2
+        else:
+            self.model.estimation_step = 1  
+
+        # Construct an estimator
+        estimator = self.algorithms[self.model.estimator](**self.model.estimator_kwargs)
+
+        # Add the estimator to the sklearn pipeline
+        self.model.pipe.steps.append(('estimator', estimator))  
+
+        # Fit the data to the pipeline
+        if self.model.estimator_type == "decomposer":
+            # If the estimator is a decomposer we apply the fit_transform method at the end of the pipeline
+            self.y = self.model.pipe.fit_transform(self.X)
+        elif self.model.estimator_type == "clusterer":
+            # If the estimator is a decomposer we apply the fit_predict method at the end of the pipeline
+            self.y = self.model.pipe.fit_predict(self.X)
+                
+        # Update the cache to keep this model in memory
+        self._update_cache()
+        
+        # Prepare the response
+        self.response = pd.DataFrame(self.y, columns=["result"], index=self.X.index)
+        
+        if load_script:
+            # Add the key field column to the response
+            self.response = self.request_df.join(self.response).drop(['n_features'], axis=1)
+        
+            # If the function was called through the load script we return a Data Frame
+            if self.model.estimator_type == "decomposer":
+                self._send_table_description("reduce")
+            elif self.model.estimator_type == "clusterer":
+                self._send_table_description("cluster")
+            
+            # Debug information is printed to the terminal and logs if the paramater debug = true
+            if self.model.debug:
+                self._print_log(4)
+            
+            return self.response
+            
+        # If the function was called through a chart expression we return a Series
+        else:
+            # Debug information is printed to the terminal and logs if the paramater debug = true
+            if self.model.debug:
+                self._print_log(4)
+            
+            return self.response.loc[:,'result']
+    
     def calculate_metrics(self, caller="external"):
         """
         Return key metrics based on a test dataset.
@@ -707,9 +835,6 @@ class SKLearnForQlik:
             
             return self.response.loc[:,'result']
     
-    # STAGE 4 : If feasible, allow transient models that can be setup and used from chart expressions
-    # def fit_predict(self):
-    
     # STAGE 3: Implement feature_importances_ for applicable algorithms
     
     def get_features_expression(self):
@@ -807,6 +932,9 @@ class SKLearnForQlik:
         self.model.retain_data = False
         self.model.scale_hashed = True
         self.model.scale_vectors = True
+        self.model.scaler = "StandardScaler"
+        self.model.scaler_kwargs = {}
+        self.model.missing = "zeros"
         
         # Default metric parameters:
         if metric_args is None:
@@ -906,7 +1034,14 @@ class SKLearnForQlik:
                     self.model.estimator_type = "classifier"
                 elif self.model.estimator in self.regressors:
                     self.model.estimator_type = "regressor"
-                
+                elif self.model.estimator in self.decomposers:
+                    self.model.estimator_type = "decomposer"
+                elif self.model.estimator in self.clusterers:
+                    self.model.estimator_type = "clusterer"
+                else:
+                    err = "Unknown estimator class: {0}".format(self.model.estimator)
+                    raise Exception(err)
+
                 # Get the rest of the estimator parameters, converting values to the correct data type
                 self.model.estimator_kwargs = utils.get_kwargs_by_type(estimator_args)  
             else:
@@ -1000,9 +1135,10 @@ class SKLearnForQlik:
         if self.model.debug:
             self._print_log(3)
     
-    def _get_model_and_data(self):
+    def _get_model_and_data(self, target=True):
         """
-        Get samples and targets based on the request and an existing model's feature definitions
+        Get samples and targets based on the request and an existing model's feature definitions.
+        If target=False, just return the samples.
         """
     
         # Interpret the request data based on the expected row and column structure
@@ -1033,25 +1169,27 @@ class SKLearnForQlik:
         # Convert the data types based on feature definitions 
         samples_df = utils.convert_types(samples_df, self.model.features_df)
         
-        # Get the target feature
-        # NOTE: This code block will need to be reviewed for multi-label classification
-        target = self.model.features_df.loc[self.model.features_df["variable_type"] == "target"]
-        target_name = target.index[0]
+        if target:
+            # Get the target feature
+            # NOTE: This code block will need to be reviewed for multi-label classification
+            target_name = self.model.features_df.loc[self.model.features_df["variable_type"] == "target"].index[0]
 
-        # Get the target data
-        target_df = samples_df.loc[:,[target_name]]
+            # Get the target data
+            target_df = samples_df.loc[:,[target_name]]
 
         # Get the features to be excluded from the model
         exclusions = self.model.features_df['variable_type'].isin(["excluded", "target", "identifier"])
         
         # Update the feature definitions dataframe
-        excluded = self.model.features_df.loc[exclusions]
         self.model.features_df = self.model.features_df.loc[~exclusions]
         
         # Remove excluded features from the data
         samples_df = samples_df[self.model.features_df.index.tolist()]
         
-        return [samples_df, target_df]
+        if target:
+            return [samples_df, target_df]
+        else:
+            return samples_df
         
     def _send_table_description(self, variant):
         """
@@ -1112,6 +1250,17 @@ class SKLearnForQlik:
         elif variant == "best_params":
             self.table.fields.add(name="model_name")
             self.table.fields.add(name="best_params")
+        elif variant == "cluster":
+            self.table.fields.add(name="model_name")
+            self.table.fields.add(name="key")
+            self.table.fields.add(name="label")
+        elif variant == "reduce":
+            self.table.fields.add(name="model_name")
+            self.table.fields.add(name="key")
+            
+            # Add a variable number of columns depending on the response
+            for i in range(self.response.shape[1]):
+                self.table.fields.add(name="dim_{0}".format(i+1))
         
         # Debug information is printed to the terminal and logs if the paramater debug = true
         if self.model.debug:
@@ -1185,32 +1334,47 @@ class SKLearnForQlik:
             # Output log header
             sys.stdout.write("\nSKLearnForQlik Log: {0} \n\n".format(time.ctime(time.time())))
             
-            with open(self.logfile,'w') as f:
+            with open(self.logfile,'w', encoding='utf-8') as f:
                 f.write("SKLearnForQlik Log: {0} \n\n".format(time.ctime(time.time())))
                 
         elif step == 2:
             # Output the parameters
             sys.stdout.write("Model Name: {0}\n\n".format(self.model.name))
             sys.stdout.write("Execution arguments: {0}\n\n".format(self.exec_params))
-            sys.stdout.write("Scaler: {0}, missing: {1}, scale_hashed: {2}, scale_vectors: {3}\n".format(\
-                                                                                     self.model.scaler, self.model.missing,\
-                                                                                     self.model.scale_hashed, self.model.scale_vectors))
-            sys.stdout.write("Scaler kwargs: {0}\n\n".format(self.model.scaler_kwargs))
-            if self.model.dim_reduction:
-                sys.stdout.write("Reduction: {0}\nReduction kwargs: {1}\n\n".format(self.model.reduction,\
-                                                                                    self.model.dim_reduction_args))
+            
+            try:
+                sys.stdout.write("Scaler: {0}, missing: {1}, scale_hashed: {2}, scale_vectors: {3}\n".format(\
+                self.model.scaler, self.model.missing,self.model.scale_hashed, self.model.scale_vectors))
+                sys.stdout.write("Scaler kwargs: {0}\n\n".format(self.model.scaler_kwargs))
+            except AttributeError:
+                sys.stdout.write("scale_hashed: {0}, scale_vectors: {1}\n".format(self.model.scale_hashed, self.model.scale_vectors))
+
+            try:
+                if self.model.dim_reduction:
+                    sys.stdout.write("Reduction: {0}\nReduction kwargs: {1}\n\n".format(self.model.reduction, self.model.dim_reduction_args))
+            except AttributeError:
+                pass
+            
             sys.stdout.write("Estimator: {0}\nEstimator kwargs: {1}\n\n".format(self.model.estimator,\
                                                                                 self.model.estimator_kwargs))
             
-            with open(self.logfile,'a') as f:
+            with open(self.logfile,'a', encoding='utf-8') as f:
                 f.write("Model Name: {0}\n\n".format(self.model.name))
                 f.write("Execution arguments: {0}\n\n".format(self.exec_params))
-                f.write("Scaler: {0}, missing: {1}, scale_hashed: {2}, scale_vectors: {3}\n".format(self.model.scaler,\
-                self.model.missing, self.model.scale_hashed, self.model.scale_vectors))
-                f.write("Scaler kwargs: {0}\n\n".format(self.model.scaler_kwargs))
-                if self.model.dim_reduction:
-                    f.write("Reduction: {0}\nReduction kwargs: {1}\n\n".format(self.model.reduction,\
-                                                                               self.model.dim_reduction_args))
+                
+                try:
+                    f.write("Scaler: {0}, missing: {1}, scale_hashed: {2}, scale_vectors: {3}\n".format(self.model.scaler,\
+                    self.model.missing, self.model.scale_hashed, self.model.scale_vectors))
+                    f.write("Scaler kwargs: {0}\n\n".format(self.model.scaler_kwargs))
+                except AttributeError:
+                    f.write("scale_hashed: {0}, scale_vectors: {1}\n".format(self.model.scale_hashed, self.model.scale_vectors))
+
+                try:
+                    if self.model.dim_reduction:
+                        f.write("Reduction: {0}\nReduction kwargs: {1}\n\n".format(self.model.reduction, self.model.dim_reduction_args))
+                except AttributeError:
+                    pass
+
                 f.write("Estimator: {0}\nEstimator kwargs: {1}\n\n".format(self.model.estimator,self.model.estimator_kwargs))
                 
         elif step == 3:                    
@@ -1218,7 +1382,7 @@ class SKLearnForQlik:
             sys.stdout.write("REQUEST: {0} rows x cols\n\n".format(self.request_df.shape))
             sys.stdout.write("{0} \n\n".format(self.request_df.to_string()))
             
-            with open(self.logfile,'a') as f:
+            with open(self.logfile,'a', encoding='utf-8') as f:
                 f.write("REQUEST: {0} rows x cols\n\n".format(self.request_df.shape))
                 f.write("{0} \n\n".format(self.request_df.to_string()))
         
@@ -1227,7 +1391,7 @@ class SKLearnForQlik:
             sys.stdout.write("RESPONSE: {0} rows x cols\n\n".format(self.response.shape))
             sys.stdout.write("{0} \n\n".format(self.response.to_string()))
             
-            with open(self.logfile,'a') as f:
+            with open(self.logfile,'a', encoding='utf-8') as f:
                 f.write("RESPONSE: {0} rows x cols\n\n".format(self.response.shape))
                 f.write("{0} \n\n".format(self.response.to_string()))
                  
@@ -1236,21 +1400,21 @@ class SKLearnForQlik:
             sys.stdout.write("\nTABLE DESCRIPTION SENT TO QLIK:\n\n{0} \n\n".format(self.table))
             
             # Write the table description to the log file
-            with open(self.logfile,'a') as f:
+            with open(self.logfile,'a', encoding='utf-8') as f:
                 f.write("\nTABLE DESCRIPTION SENT TO QLIK:\n\n{0} \n\n".format(self.table))
         
         elif step == 6:
             # Message when model is loaded from cache
             sys.stdout.write("\nModel {0} loaded from cache.\n\n".format(self.model.name))
             
-            with open(self.logfile,'a') as f:
+            with open(self.logfile,'a', encoding='utf-8') as f:
                 f.write("\nModel {0} loaded from cache.\n\n".format(self.model.name))
             
         elif step == 7:
             # Message when model is loaded from disk
             sys.stdout.write("\nModel {0} loaded from disk.\n\n".format(self.model.name))
             
-            with open(self.logfile,'a') as f:
+            with open(self.logfile,'a', encoding='utf-8') as f:
                 f.write("\nModel {0} loaded from disk.\n\n".format(self.model.name))
             
         elif step == 8:
@@ -1258,7 +1422,7 @@ class SKLearnForQlik:
             sys.stdout.write("\nCache updated. Models in cache:\n{0}\n\n".format\
                              ([k for k,v in self.__class__.model_cache.items()]))
             
-            with open(self.logfile,'a') as f:
+            with open(self.logfile,'a', encoding='utf-8') as f:
                 f.write("\nCache updated. Models in cache:\n{0}\n\n".format([k for k,v in self.__class__.model_cache.items()]))
         
         elif step == 9:
@@ -1266,7 +1430,7 @@ class SKLearnForQlik:
             sys.stdout.write("Model Name: {0}, Estimator: {1}\n\nGrid Search Arguments: {2}\n\nParameter Grid: {3}\n\n".\
             format(self.model.name, self.model.estimator, self.model.grid_search_args, self.model.param_grid))
             
-            with open(self.logfile,'a') as f:
+            with open(self.logfile,'a', encoding='utf-8') as f:
                 f.write("Model Name: {0}, Estimator: {1}\n\nGrid Search Arguments: {2}\n\nParameter Grid: {3}\n\n".\
                 format(self.model.name, self.model.estimator, self.model.grid_search_args, self.model.param_grid))
     

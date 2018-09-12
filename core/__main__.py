@@ -91,7 +91,10 @@ class ExtensionService(SSE.ConnectorServicer):
             22: '_sklearn',
             23: '_sklearn',
             24: '_sklearn',
-            25: '_sklearn'
+            25: '_sklearn',
+            26: '_sklearn',
+            27: '_sklearn',
+            28: '_sklearn'
         }
 
     """
@@ -395,7 +398,7 @@ class ExtensionService(SSE.ConnectorServicer):
         model = SKLearnForQlik(request_list, context)
         
         # Call the function based on the mapping in functions.json
-        # The IF conditions are grouped based on similar output structure
+        # The if conditions are grouped based on similar output structure
         if function in (9, 10, 21, 24):    
             if function == 9:
                 # Set up the model and save to disk
@@ -410,25 +413,19 @@ class ExtensionService(SSE.ConnectorServicer):
                 # Set a parameter grid for hyperparameter optimization
                 response = model.set_param_grid()
             
-            # Get the response as SSE.Rows
-            response_rows = utils.get_response_rows(response.values.tolist(), ["str", "str", "str"])
+            dtypes = ["str", "str", "str"]
         
         elif function == 11:
             # Return the feature definitions for an existing model
             response = model.get_features()
-            
-            # Get the response as SSE.Rows
-            response_rows = utils.get_response_rows(response.values.tolist(), ["str", "num", "str", "str", "str",\
-                                                                               "str", "str"])
+            dtypes = ["str", "num", "str", "str", "str", "str", "str"]
         
         elif function == 12:
             # Train and Test an existing model, saving the sklearn pipeline for further predictions
             response = model.fit()
-            
-            # Get the response as SSE.Rows
-            response_rows = utils.get_response_rows(response.values.tolist(), ["str", "str", "str", "str", "num"])
+            dtypes = ["str", "str", "str", "str", "num"]
         
-        elif function in (14, 16, 19, 20):
+        elif function in (14, 16, 19, 20, 27):
             if function == 14:
                 # Provide predictions in a chart expression based on an existing model
                 response = model.predict(load_script=False)
@@ -441,20 +438,24 @@ class ExtensionService(SSE.ConnectorServicer):
             elif function == 20:
                 # Get a string that can be evaluated to get the features expression for the predict function
                 response = model.get_features_expression()
+            elif function == 27:
+                # Get labels for clustering
+                response = model.fit_transform(load_script=False)
             
-            # Get the response as SSE.Rows
-            response_rows = utils.get_response_rows(response.values.tolist(), ["str"])
+            dtypes = ["str"]
             
-        elif function in (15, 17):
+        elif function in (15, 17, 28):
             if function == 15:
                 # Provide predictions in the load script based on an existing model
                 response = model.predict(load_script=True)    
-            if function == 17:
+            elif function == 17:
                 # Provide prediction probabilities in the load script based on an existing model
                 response = model.predict(load_script=True, variant="predict_proba")
-            
-            # Get the response as SSE.Rows
-            response_rows = utils.get_response_rows(response.values.tolist(), ["str", "str", "str"])
+            elif function == 28:
+                # Provide labels for clustering
+                response = model.fit_transform(load_script=True)
+
+            dtypes = ["str", "str", "str"]
         
         elif function in (18, 22):
             if function == 18:
@@ -471,22 +472,31 @@ class ExtensionService(SSE.ConnectorServicer):
             
             # We convert values to type SSE.Dual, and group columns into a iterable
             if estimator_type == "classifier":
-                # Get the response as SSE.Rows
-                response_rows = utils.get_response_rows(response.values.tolist(), ["str", "str", "num", "num", "num",\
-                                                                                   "num", "num"])
+                dtypes = ["str", "str", "num", "num", "num", "num", "num"]
             elif estimator_type == "regressor":
-                # Get the response as SSE.Rows
-                response_rows = utils.get_response_rows(response.values.tolist(), ["str", "num", "num", "num", "num", "num"])
+                dtypes = ["str", "num", "num", "num", "num", "num"]
         
         elif function == 23:
             # Get the confusion matrix for the classifier
             response = model.get_confusion_matrix()
-            response_rows = utils.get_response_rows(response.values.tolist(), ["str", "str", "str", "num"])
+            dtypes = ["str", "str", "str", "num"]
         
         elif function == 25:
+            # Get the best parameters based on a grid search cross validation
             response = model.get_best_params()
-            response_rows = utils.get_response_rows(response.values.tolist(), ["str", "str"])
-            
+            dtypes = ["str", "str"]
+        
+        elif function == 26:
+            # Get the transformed result
+            response = model.fit_transform(load_script=True)
+            dtypes = ["str", "str"]
+
+            for i in range(response.shape[1]):
+                dtypes.append("str")
+        
+        # Get the response as SSE.Rows
+        response_rows = utils.get_response_rows(response.values.tolist(), dtypes) 
+
         # Yield Row data as Bundled rows
         yield SSE.BundledRows(rows=response_rows)
     

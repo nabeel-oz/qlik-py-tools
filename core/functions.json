@@ -124,7 +124,7 @@
 		  "c_var_type": 0,
         "d_data_type": 0,
         "e_strategy": 0,
-	  	  "f_hash_length": 1
+	  	  "f_hash_length": 0
       }
     },
 	{
@@ -257,7 +257,7 @@
         "a_model_name": 0
       }
     },
-    {
+  {
       "Id": 24,
       "Name": "sklearn_Set_Param_Grid",
       "Type": 0,
@@ -268,13 +268,45 @@
         "c_grid_search_args": 0
       }
     },
-    {
+  {
       "Id": 25,
       "Name": "sklearn_Get_Best_Params",
       "Type": 0,
       "ReturnType": 0,
       "Params": {
         "a_model_name": 0
+      }
+    },
+  {
+      "Id": 26,
+      "Name": "sklearn_Fit_Transform",
+      "Type": 0,
+      "ReturnType": 0,
+      "Params": {
+        "a_model_name": 0,
+		    "b_key": 0,
+		    "n_features": 0
+      }
+    },
+  {
+      "Id": 27,
+      "Name": "sklearn_Fit_Predict",
+      "Type": 0,
+      "ReturnType": 0,
+      "Params": {
+        "a_model_name": 0,
+		    "n_features": 0
+      }
+    },
+	{
+      "Id": 28,
+      "Name": "sklearn_Bulk_Fit_Predict",
+      "Type": 0,
+      "ReturnType": 0,
+      "Params": {
+        "a_model_name": 0,
+		    "b_key": 0,
+		    "n_features": 0
       }
     }
   ]

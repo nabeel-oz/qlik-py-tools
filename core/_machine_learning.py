@@ -1,3 +1,4 @@
+import sys
 import time
 import numpy as np
 import pandas as pd
@@ -75,7 +76,7 @@ class Preprocessor(TransformerMixin):
     This class automates One Hot Encoding, Hashing, Text Vectorizing and Scaling.
     """
     
-    def __init__(self, features, return_type='np', scale_hashed=True, scale_vectors=True, missing="zeros", scaler="StandardScaler", **kwargs):
+    def __init__(self, features, return_type='np', scale_hashed=True, scale_vectors=True, missing="zeros", scaler="StandardScaler", logfile=None, **kwargs):
         """
         Initialize the Preprocessor object based on the features dataframe.
         
@@ -102,6 +103,7 @@ class Preprocessor(TransformerMixin):
         self.tfidf = False
         self.scale = False
         self.no_prep = False
+        self.log = logfile
         
         # Collect features for one hot encoding
         self.ohe_meta = features.loc[features["feature_strategy"] == "one hot encoding"].copy()
@@ -155,8 +157,12 @@ class Preprocessor(TransformerMixin):
         # Set a flag if there are features that don't require preprocessing
         if len(self.none_meta) > 0:
             self.no_prep = True
+
+        # Output information to the terminal and log file if required
+        if self.log is not None:
+            self._print_log(1)
     
-    
+
     def fit(self, X, y=None, features=None, retrain=False):
         """
         Fit to the training dataset, storing information that will be needed for the transform dataset.
@@ -249,7 +255,11 @@ class Preprocessor(TransformerMixin):
         if len(self.scale_df) > 0:
             # Get an instance of the sklearn scaler fit to X
             self.scaler_instance = self.get_scaler(self.scale_df, missing=self.missing, scaler=self.scaler, **self.kwargs)
-        
+
+        # Output information to the terminal and log file if required
+        if self.log is not None:
+            self._print_log(2)
+
         return self
     
     
@@ -396,6 +406,10 @@ class Preprocessor(TransformerMixin):
             else:
                 self.X_transform = self.X_transform.join(self.no_prep_df)
         
+        # Output information to the terminal and log file if required
+        if self.log is not None:
+            self._print_log(3)
+
         if self.return_type == 'np':
             return self.X_transform.values
         
@@ -413,6 +427,80 @@ class Preprocessor(TransformerMixin):
         return self.fit(X, y, features, retrain).transform(X, y)
     
     
+    def _print_log(self, step):
+        """
+        Output useful information to stdout and the log file if debugging is required.
+        step: Print the corresponding step in the log
+        """
+        
+        if step == 1:
+            if self.ohe:
+                sys.stdout.write("Features for one hot encoding: \n{0}\n\n".format(self.ohe_meta))
+                
+                with open(self.log,'a', encoding='utf-8') as f:
+                    f.write("Features for one hot encoding: \n{0}\n\n".format(self.ohe_meta))
+            
+            if self.hash:
+                sys.stdout.write("Features for hashing: \n{0}\n\n".format(self.hash_meta))
+                
+                with open(self.log,'a', encoding='utf-8') as f:
+                    f.write("Features for hashing: \n{0}\n\n".format(self.hash_meta))
+            
+            if self.cv:
+                sys.stdout.write("Features for count vectorization: \n{0}\n\n".format(self.cv_meta))
+                
+                with open(self.log,'a', encoding='utf-8') as f:
+                    f.write("Features for count vectorization: \n{0}\n\n".format(self.cv_meta))
+            
+            if self.tfidf:
+                sys.stdout.write("Features for tfidf vectorization: \n{0}\n\n".format(self.tfidf_meta))
+                
+                with open(self.log,'a', encoding='utf-8') as f:
+                    f.write("Features for tfidf vectorization: \n{0}\n\n".format(self.tfidf_meta))
+            
+            if self.scale:
+                sys.stdout.write("Features for scaling: \n{0}\n\n".format(self.scale_meta))
+                
+                with open(self.log,'a', encoding='utf-8') as f:
+                    f.write("Features for scaling: \n{0}\n\n".format(self.scale_meta))
+
+        elif step == 2:
+            if self.ohe:
+                sys.stdout.write("ohe_df (sample): \n{0}\n\n".format(self.ohe_df.head()))
+                
+                with open(self.log,'a', encoding='utf-8') as f:
+                    f.write("ohe_df (sample): \n{0}\n\n".format(self.ohe_df.head()))
+            
+            if self.hash:
+                sys.stdout.write("hash_df (sample): \n{0}\n\n".format(self.hash_df.head()))
+                
+                with open(self.log,'a', encoding='utf-8') as f:
+                    f.write("hash_df (sample): \n{0}\n\n".format(self.hash_df.head()))
+            
+            if self.cv:
+                sys.stdout.write("cv_df (sample): \n{0}\n\n".format(self.cv_df.head()))
+                
+                with open(self.log,'a', encoding='utf-8') as f:
+                    f.write("cv_df (sample): \n{0}\n\n".format(self.cv_df.head()))
+            
+            if self.tfidf:
+                sys.stdout.write("tfidf_df (sample): \n{0}\n\n".format(self.tfidf_df.head()))
+                
+                with open(self.log,'a', encoding='utf-8') as f:
+                    f.write("tfidf_df (sample): \n{0}\n\n".format(self.tfidf_df.head()))
+            
+            if self.scale:
+                sys.stdout.write("scale_df (sample): \n{0}\n\n".format(self.scale_df.head()))
+                
+                with open(self.log,'a', encoding='utf-8') as f:
+                    f.write("scale_df (sample): \n{0}\n\n".format(self.scale_df.head()))
+        
+        elif step == 3:
+            sys.stdout.write("X_transform (sample): \n{0}\n\n".format(self.X_transform.head()))
+                
+            with open(self.log,'a', encoding='utf-8') as f:
+                f.write("X_transform (sample): \n{0}\n\n".format(self.X_transform.head()))
+
     @staticmethod
     def hasher(df, col, n_features):
         """
@@ -440,7 +528,14 @@ class Preprocessor(TransformerMixin):
             v = CountVectorizer(**kwargs)
         
         vectorized = v.fit_transform(unique.loc[:, col])
-        unique = unique.join(pd.DataFrame(vectorized.toarray(), columns=v.get_feature_names()).add_prefix(col+"_"))
+
+        feature_names = v.get_feature_names()
+        col_names = []
+
+        for i,j in enumerate(feature_names):
+            col_names.append("{}_{}".format(i,j))
+
+        unique = unique.join(pd.DataFrame(vectorized.toarray(), columns=col_names).add_prefix(col+"_"))
         return unique.set_index(col)
     
     @staticmethod
