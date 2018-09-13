@@ -31,8 +31,8 @@ from _sklearn import SKLearnForQlik
 # Set the default port for this SSE Extension
 _DEFAULT_PORT = '50055'
 
-# Set the maximum message length for gRPC in bytes. By default set to 100 MB for this SSE.
-MAX_MESSAGE_LENGTH = 100 * 1024 * 1024
+# Set the maximum message length for gRPC in bytes
+MAX_MESSAGE_LENGTH = 10 * 1024 * 1024
 
 _ONE_DAY_IN_SECONDS = 60 * 60 * 24
 _MINFLOAT = float('-inf')
@@ -156,10 +156,24 @@ class ExtensionService(SSE.ConnectorServicer):
             response_rows = [iter([SSE.Dual(numData=row)]) for row in clusters]
         
         # Values are then structured as SSE.Rows
-        response_rows = [SSE.Row(duals=duals) for duals in response_rows]      
-        
-        # Yield Row data as Bundled rows
-        yield SSE.BundledRows(rows=response_rows)
+        response_rows = [SSE.Row(duals=duals) for duals in response_rows]
+
+        # Get the number of rows in the request
+        num_request_bundles = len(request_list)
+
+        # Get the number of rows in the response
+        num_rows = len(response_rows) 
+
+        # Calculate the number of rows to send per bundle
+        if num_rows >= num_request_bundles:
+            rows_per_bundle = len(response_rows)//len(request_list)
+        else:
+            rows_per_bundle = num_rows
+
+        # Stream response as BundledRows
+        for i in range(0, len(response_rows), rows_per_bundle):
+            # Yield Row data as Bundled rows
+            yield SSE.BundledRows(rows=response_rows[i : i + rows_per_bundle])
     
     @staticmethod
     def _correlation(request, context):
@@ -317,8 +331,22 @@ class ExtensionService(SSE.ConnectorServicer):
         # Values are then structured as SSE.Rows
         response_rows = [SSE.Row(duals=duals) for duals in response_rows]                
         
-        # Yield Row data as Bundled rows
-        yield SSE.BundledRows(rows=response_rows)     
+        # Get the number of rows in the request
+        num_request_bundles = len(request_list)
+
+        # Get the number of rows in the response
+        num_rows = len(response_rows) 
+
+        # Calculate the number of rows to send per bundle
+        if num_rows >= num_request_bundles:
+            rows_per_bundle = len(response_rows)//len(request_list)
+        else:
+            rows_per_bundle = num_rows
+
+        # Stream response as BundledRows
+        for i in range(0, len(response_rows), rows_per_bundle):
+            # Yield Row data as Bundled rows
+            yield SSE.BundledRows(rows=response_rows[i : i + rows_per_bundle])    
     
     @staticmethod
     def _prophet_seasonality(request, context):
@@ -376,10 +404,22 @@ class ExtensionService(SSE.ConnectorServicer):
         # The series is then converted to a list
         response_rows = response_rows.apply(lambda duals: SSE.Row(duals=duals)).tolist()        
         
-        # Iterate over bundled rows
-        for request_rows in request_list:
+        # Get the number of rows in the request
+        num_request_bundles = len(request_list)
+
+        # Get the number of rows in the response
+        num_rows = len(response_rows) 
+
+        # Calculate the number of rows to send per bundle
+        if num_rows >= num_request_bundles:
+            rows_per_bundle = len(response_rows)//len(request_list)
+        else:
+            rows_per_bundle = num_rows
+
+        # Stream response as BundledRows
+        for i in range(0, len(response_rows), rows_per_bundle):
             # Yield Row data as Bundled rows
-            yield SSE.BundledRows(rows=response_rows)  
+            yield SSE.BundledRows(rows=response_rows[i : i + rows_per_bundle]) 
     
     @staticmethod
     def _sklearn(request, context):
@@ -500,8 +540,22 @@ class ExtensionService(SSE.ConnectorServicer):
         # Get the response as SSE.Rows
         response_rows = utils.get_response_rows(response.values.tolist(), dtypes) 
 
-        # Yield Row data as Bundled rows
-        yield SSE.BundledRows(rows=response_rows)
+        # Get the number of rows in the request
+        num_request_bundles = len(request_list)
+
+        # Get the number of rows in the response
+        num_rows = len(response_rows) 
+
+        # Calculate the number of rows to send per bundle
+        if num_rows >= num_request_bundles:
+            rows_per_bundle = len(response_rows)//len(request_list)
+        else:
+            rows_per_bundle = num_rows
+
+        # Stream response as BundledRows
+        for i in range(0, len(response_rows), rows_per_bundle):
+            # Yield Row data as Bundled rows
+            yield SSE.BundledRows(rows=response_rows[i : i + rows_per_bundle])
     
     @staticmethod
     def _get_function_id(context):
