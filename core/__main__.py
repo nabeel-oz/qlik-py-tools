@@ -31,6 +31,9 @@ from _sklearn import SKLearnForQlik
 # Set the default port for this SSE Extension
 _DEFAULT_PORT = '50055'
 
+# Set the maximum message length for gRPC in bytes. By default set to 100 MB for this SSE.
+MAX_MESSAGE_LENGTH = 100 * 1024 * 1024
+
 _ONE_DAY_IN_SECONDS = 60 * 60 * 24
 _MINFLOAT = float('-inf')
 
@@ -487,12 +490,12 @@ class ExtensionService(SSE.ConnectorServicer):
             dtypes = ["str", "str"]
         
         elif function == 26:
-            # Get the transformed result
+            # Provide results from dimensionality reduction
             response = model.fit_transform(load_script=True)
             dtypes = ["str", "str"]
 
-            for i in range(response.shape[1]):
-                dtypes.append("str")
+            for i in range(response.shape[1]-2):
+                dtypes.append("num")
         
         # Get the response as SSE.Rows
         response_rows = utils.get_response_rows(response.values.tolist(), dtypes) 
@@ -579,7 +582,9 @@ class ExtensionService(SSE.ConnectorServicer):
         :param pem_dir: Directory including certificates
         :return: None
         """
-        server = grpc.server(futures.ThreadPoolExecutor(max_workers=10))
+        server = grpc.server(futures.ThreadPoolExecutor(max_workers=10),\
+        options=[('grpc.max_send_message_length', MAX_MESSAGE_LENGTH),('grpc.max_receive_message_length', MAX_MESSAGE_LENGTH)])
+        
         SSE.add_ConnectorServicer_to_server(self, server)
 
         if pem_dir:

@@ -280,7 +280,7 @@
   {
       "Id": 26,
       "Name": "sklearn_Fit_Transform",
-      "Type": 0,
+      "Type": 2,
       "ReturnType": 0,
       "Params": {
         "a_model_name": 0,

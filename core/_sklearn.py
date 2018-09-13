@@ -577,15 +577,19 @@ class SKLearnForQlik:
         if self.model.estimator_type == "decomposer":
             # If the estimator is a decomposer we apply the fit_transform method at the end of the pipeline
             self.y = self.model.pipe.fit_transform(self.X)
+
+            # Prepare the response
+            self.response = pd.DataFrame(self.y, index=self.X.index)
+
         elif self.model.estimator_type == "clusterer":
             # If the estimator is a decomposer we apply the fit_predict method at the end of the pipeline
             self.y = self.model.pipe.fit_predict(self.X)
+
+            # Prepare the response
+            self.response = pd.DataFrame(self.y, columns=["result"], index=self.X.index)
                 
         # Update the cache to keep this model in memory
         self._update_cache()
-        
-        # Prepare the response
-        self.response = pd.DataFrame(self.y, columns=["result"], index=self.X.index)
         
         if load_script:
             # Add the key field column to the response
@@ -605,6 +609,11 @@ class SKLearnForQlik:
             
         # If the function was called through a chart expression we return a Series
         else:
+            # Dimensionality reduction is only possible through the load script
+            if self.model.estimator_type == "decomposer":
+                err = "Dimensionality reduction is only possible through the load script."
+                raise Exception(err)
+            
             # Debug information is printed to the terminal and logs if the paramater debug = true
             if self.model.debug:
                 self._print_log(4)
@@ -1259,8 +1268,8 @@ class SKLearnForQlik:
             self.table.fields.add(name="key")
             
             # Add a variable number of columns depending on the response
-            for i in range(self.response.shape[1]):
-                self.table.fields.add(name="dim_{0}".format(i+1))
+            for i in range(self.response.shape[1]-2):
+                self.table.fields.add(name="dim_{0}".format(i+1), dataType=1)
         
         # Debug information is printed to the terminal and logs if the paramater debug = true
         if self.model.debug:
@@ -1379,21 +1388,21 @@ class SKLearnForQlik:
                 
         elif step == 3:                    
             # Output the request dataframe
-            sys.stdout.write("REQUEST: {0} rows x cols\n\n".format(self.request_df.shape))
-            sys.stdout.write("{0} \n\n".format(self.request_df.to_string()))
+            sys.stdout.write("REQUEST: {0} rows x cols\nSample Data:\n\n".format(self.request_df.shape))
+            sys.stdout.write("{0}\n...\n{1}\n\n".format(self.request_df.head().to_string(), self.request_df.tail().to_string()))
             
             with open(self.logfile,'a', encoding='utf-8') as f:
-                f.write("REQUEST: {0} rows x cols\n\n".format(self.request_df.shape))
-                f.write("{0} \n\n".format(self.request_df.to_string()))
+                f.write("REQUEST: {0} rows x cols\nSample Data:\n\n".format(self.request_df.shape))
+                f.write("{0}\n...\n{1}\n\n".format(self.request_df.head().to_string(), self.request_df.tail().to_string()))
         
         elif step == 4:
             # Output the response dataframe/series
-            sys.stdout.write("RESPONSE: {0} rows x cols\n\n".format(self.response.shape))
-            sys.stdout.write("{0} \n\n".format(self.response.to_string()))
+            sys.stdout.write("RESPONSE: {0} rows x cols\nSample Data:\n\n".format(self.response.shape))
+            sys.stdout.write("{0}\n...\n{1}\n\n".format(self.response.head().to_string(), self.response.tail().to_string()))
             
             with open(self.logfile,'a', encoding='utf-8') as f:
-                f.write("RESPONSE: {0} rows x cols\n\n".format(self.response.shape))
-                f.write("{0} \n\n".format(self.response.to_string()))
+                f.write("RESPONSE: {0} rows x cols\nSample Data:\n\n".format(self.response.shape))
+                f.write("{0}\n...\n{1}\n\n".format(self.response.head().to_string(), self.response.tail().to_string()))
                  
         elif step == 5:
             # Print the table description if the call was made from the load script

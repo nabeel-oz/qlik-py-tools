@@ -252,9 +252,15 @@ class Preprocessor(TransformerMixin):
                 else:
                     self.scale_df = self.tfidf_df 
         
-        if len(self.scale_df) > 0:
-            # Get an instance of the sklearn scaler fit to X
-            self.scaler_instance = self.get_scaler(self.scale_df, missing=self.missing, scaler=self.scaler, **self.kwargs)
+        try:
+            if len(self.scale_df) > 0:
+                # Get an instance of the sklearn scaler fit to X
+                self.scaler_instance = self.get_scaler(self.scale_df, missing=self.missing, scaler=self.scaler, **self.kwargs)
+
+                # Keep a copy of the scaling dataframe structure so we can align the transform dataset 
+                self.scale_df_structure = pd.DataFrame().reindex_like(self.scale_df)
+        except AttributeError:
+            pass
 
         # Output information to the terminal and log file if required
         if self.log is not None:
@@ -288,7 +294,7 @@ class Preprocessor(TransformerMixin):
             
             # Add the encoded columns to the result dataset
             self.X_transform = self.ohe_df
-        
+
         if self.hash:
             # Get a subset of the data that requires feature hashing
             self.hash_df = X[self.hash_meta.index.tolist()]
@@ -354,7 +360,7 @@ class Preprocessor(TransformerMixin):
                 self.X_transform = self.hash_df
             else:
                 self.X_transform = self.X_transform.join(self.hash_df)
-        
+
         # If scale_vectors = True join the count vectorized columns to the scaling dataframe
         if self.cv and self.scale_vectors:
             if self.scale or (self.hash and self.scale_hashed):
@@ -369,7 +375,7 @@ class Preprocessor(TransformerMixin):
                 self.X_transform = self.cv_df
             else:
                 self.X_transform = self.X_transform.join(self.cv_df)
-        
+
         # If scale_vectors = True join the tfidf vectorized columns to the scaling dataframe
         if self.tfidf and self.scale_vectors:
             if self.scale or (self.hash and self.scale_hashed) or self.cv:
@@ -384,18 +390,26 @@ class Preprocessor(TransformerMixin):
                 self.X_transform = self.tfidf_df
             else:
                 self.X_transform = self.X_transform.join(self.tfidf_df)
-        
-        # Perform scaling on the relevant data
-        if len(self.scale_df) > 0:
-            self.scale_df = self.fillna(self.scale_df, missing=self.missing)
-            self.scale_df = pd.DataFrame(self.scaler_instance.transform(self.scale_df), index=self.scale_df.index, columns=self.scale_df.columns)
-            
-            # Add the scaled columns to the result dataset
-            if self.X_transform is None:
-                self.X_transform = self.scale_df
-            else:
-                self.X_transform = self.X_transform.join(self.scale_df)
-               
+
+        try:
+            # Perform scaling on the relevant data
+            if len(self.scale_df) > 0:
+                # Align the columns with the original dataset. 
+                # This is to prevent different number or order of features between training and test datasets.
+                self.scale_df = self.scale_df.align(self.scale_df_structure, join='right', axis=1)[0]
+                
+                self.scale_df = self.fillna(self.scale_df, missing=self.missing)
+
+                self.scale_df = pd.DataFrame(self.scaler_instance.transform(self.scale_df), index=self.scale_df.index, columns=self.scale_df.columns)
+                
+                # Add the scaled columns to the result dataset
+                if self.X_transform is None:
+                    self.X_transform = self.scale_df
+                else:
+                    self.X_transform = self.X_transform.join(self.scale_df)
+        except AttributeError:
+            pass
+
         if self.no_prep:
             # Get a subset of the data that doesn't require preprocessing
             self.no_prep_df = X[self.none_meta.index.tolist()]
@@ -466,40 +480,43 @@ class Preprocessor(TransformerMixin):
 
         elif step == 2:
             if self.ohe:
-                sys.stdout.write("ohe_df (sample): \n{0}\n\n".format(self.ohe_df.head()))
+                sys.stdout.write("ohe_df shape:{0}\nSample Data:\n{1}\n\n".format(self.ohe_df.shape, self.ohe_df.head()))
                 
                 with open(self.log,'a', encoding='utf-8') as f:
-                    f.write("ohe_df (sample): \n{0}\n\n".format(self.ohe_df.head()))
+                    f.write("ohe_df shape:{0}\nSample Data:\n{1}\n\n".format(self.ohe_df.shape, self.ohe_df.head()))
             
             if self.hash:
-                sys.stdout.write("hash_df (sample): \n{0}\n\n".format(self.hash_df.head()))
+                sys.stdout.write("hash_df shape:{0}\nSample Data:\n{1}\n\n".format(self.hash_df.shape, self.hash_df.head()))
                 
                 with open(self.log,'a', encoding='utf-8') as f:
-                    f.write("hash_df (sample): \n{0}\n\n".format(self.hash_df.head()))
+                    f.write("hash_df shape:{0}\nSample Data:\n{1}\n\n".format(self.hash_df.shape, self.hash_df.head()))
             
             if self.cv:
-                sys.stdout.write("cv_df (sample): \n{0}\n\n".format(self.cv_df.head()))
+                sys.stdout.write("cv_df shape:{0}\nSample Data:\n{1}\n\n".format(self.cv_df.shape, self.cv_df.head()))
                 
                 with open(self.log,'a', encoding='utf-8') as f:
-                    f.write("cv_df (sample): \n{0}\n\n".format(self.cv_df.head()))
+                    f.write("cv_df shape:{0}\nSample Data:\n{1}\n\n".format(self.cv_df.shape, self.cv_df.head()))
             
             if self.tfidf:
-                sys.stdout.write("tfidf_df (sample): \n{0}\n\n".format(self.tfidf_df.head()))
+                sys.stdout.write("tfidf_df shape:{0}\nSample Data:\n{1}\n\n".format(self.tfidf_df.shape, self.tfidf_df.head()))
                 
                 with open(self.log,'a', encoding='utf-8') as f:
-                    f.write("tfidf_df (sample): \n{0}\n\n".format(self.tfidf_df.head()))
+                    f.write("tfidf_df shape:{0}\nSample Data:\n{1}\n\n".format(self.tfidf_df.shape, self.tfidf_df.head()))
             
-            if self.scale:
-                sys.stdout.write("scale_df (sample): \n{0}\n\n".format(self.scale_df.head()))
-                
-                with open(self.log,'a', encoding='utf-8') as f:
-                    f.write("scale_df (sample): \n{0}\n\n".format(self.scale_df.head()))
+            try:
+                if len(self.scale_df) > 0:
+                    sys.stdout.write("scale_df shape:{0}\nSample Data:\n{1}\n\n".format(self.scale_df.shape, self.scale_df.head()))
+                    
+                    with open(self.log,'a', encoding='utf-8') as f:
+                        f.write("scale_df shape:{0}\nSample Data:\n{1}\n\n".format(self.scale_df.shape, self.scale_df.head()))
+            except AttributeError:
+                pass
         
         elif step == 3:
-            sys.stdout.write("X_transform (sample): \n{0}\n\n".format(self.X_transform.head()))
+            sys.stdout.write("X_transform shape:{0}\nSample Data:\n{1}\n\n".format(self.X_transform.shape, self.X_transform.head()))
                 
             with open(self.log,'a', encoding='utf-8') as f:
-                f.write("X_transform (sample): \n{0}\n\n".format(self.X_transform.head()))
+                f.write("X_transform shape:{0}\nSample Data:\n{1}\n\n".format(self.X_transform.shape, self.X_transform.head()))
 
     @staticmethod
     def hasher(df, col, n_features):
