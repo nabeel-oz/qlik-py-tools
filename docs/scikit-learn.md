@@ -1,14 +1,17 @@
-# Supervised Machine Learning with scikit-learn
+# Machine Learning with scikit-learn
 
 ## Table of Contents
 
 - [Introduction](#introduction)
-- [Machine learning flow for Qlik](#machine-learning-flow-for-qlik)
+- [Supervised Machine Learning](#supervised-machine-learning)
      - [Preparing data](#preparing-data)
      - [Preparing feature definitions](#preparing-feature-definitions)
      - [Setting up the model](#setting-up-the-model)
      - [Training and testing the model](#training-and-testing-the-model)
      - [Making predictions using the model](#making-predictions-using-the-model)
+- [Unsupervised Machine Learning](#unsupervised-machine-learning)
+     - [Matrix Decomposition](#matrix-decomposition)
+     - [Clustering](#clustering)
 - [Additional Functionality](#additional-functionality)
      - [Optimizing hyperparameters for an estimator](#optimizing-hyperparameters-for-an-estimator)
      - [Training multiple estimators](#training-multiple-estimators)
@@ -30,7 +33,9 @@ Supervised machine learning techniques make use of known samples to train a mode
 
 This SSE provides functions to train, test and evaluate models and then use these models to make predictions. The current implementation scope includes classification and regression algorithms.
 
-## Machine learning flow for Qlik
+In addition this SSE also implements the unsupervised machine learning algorithms available in scikit-learn. These include techniques for inferring structure in unlablelled data such as clustering and dimensionality reduction.
+
+## Supervised Machine Learning
 Machine learning problems can be broken down into general steps. In this SSE each step is carried out with the help of functions that provide a bridge between Qlik and the scikit-learn API. These functions are explained in the sections below.
 
 At a high-level the steps are:
@@ -43,7 +48,7 @@ At a high-level the steps are:
    - `PyTools.sklearn_Set_Param_Grid(model_name, estimator_args, grid_search_args)`
    - `PyTools.sklearn_Get_Best_Params(model_name)`
 5. Set feature definitions for the model
-   - `PyTools.sklearn_Set_Features(model_name, feature_name, variable_type, data_type, feature_strategy, hash_length)`
+   - `PyTools.sklearn_Set_Features(model_name, feature_name, variable_type, data_type, feature_strategy, strategy_args)`
 6. Fit the model using the training data, and optionally evaluate it using test data
    - `PyTools.sklearn_Fit(model_name, n_features)`
    - `PyTools.sklearn_Partial_Fit(model_name, n_features)` _(Work in progress)_
@@ -79,8 +84,8 @@ For each feature, i.e. each column in the dataset, we need to define the followi
 | Name | A unique name for the feature | Any string | The feature name must be unique. |
 | Variable Type | Identify whether the variable is a feature or target | `feature`, `target`, `excluded`, `identifier` | Features marked as `excluded` or `identifier` will be ignored. |
 | Data Type | Used to covert the data to the correct type | `bool`, `int`, `float`, `str` | Specifying data types correctly is necessary due to how data will be exchanged between Qlik and this SSE. |
-| Feature Strategy | The feature preparation strategy | `one hot encoding`, `hashing`, `count_vectorizing`, `tfidf`, `scaling`, `none` | Strings need to be converted to numerical values for machine learning. The strategies implemented in this SSE to do this are [one hot encoding](https://pandas.pydata.org/pandas-docs/stable/generated/pandas.get_dummies.html), [hashing](http://scikit-learn.org/stable/modules/generated/sklearn.feature_extraction.FeatureHasher.html), [count vectorizing](http://scikit-learn.org/stable/modules/generated/sklearn.feature_extraction.text.CountVectorizer.html) and [TF-IDF vectorizing](http://scikit-learn.org/stable/modules/generated/sklearn.feature_extraction.text.TfidfVectorizer.html).<br><br>Numerical values need to be scaled to avoid bias towards larger numbers.<br><br>In general, for discrete values use OHE where the number of unique values is small, otherwise use hashing. For continuous values, use scaling. |
-| Strategy Arguments | For `hashing`: the number of derived features.<br><br>For `count_vectorizing` and `tfidf`: the keyword arguments that will be passed to the scikit-learn class | For `hashing` this should be an integer e.g. `4`<br><br>For `count_vectorizing` and `tfidf` this should follow the syntax described under [Specifying keyword arguments for scikit-learn classes](#specifying-keyword-arguments-for-scikit-learn-classes) e.g. `'analyzer=char|str, ngram_range=2;2|tuple|int'` | For hashing the integer should be a power of 2 for the algorithm to work correctly. |
+| Feature Strategy | The feature preparation strategy | `one hot encoding`, `hashing`, `count_vectorizing`, `tf_idf`, `scaling`, `none` | Strings need to be converted to numerical values for machine learning. The strategies implemented in this SSE to do this are [one hot encoding](https://pandas.pydata.org/pandas-docs/stable/generated/pandas.get_dummies.html), [hashing](http://scikit-learn.org/stable/modules/generated/sklearn.feature_extraction.FeatureHasher.html), [count vectorizing](http://scikit-learn.org/stable/modules/generated/sklearn.feature_extraction.text.CountVectorizer.html) and [TF-IDF vectorizing](http://scikit-learn.org/stable/modules/generated/sklearn.feature_extraction.text.TfidfVectorizer.html).<br><br>Numerical values need to be scaled to avoid bias towards larger numbers.<br><br>In general, for discrete values use OHE where the number of unique values is small, otherwise use hashing. For continuous values, use scaling. |
+| Strategy Arguments | For `hashing`: the number of derived features.<br><br>For `count_vectorizing` and `tf_idf`: the keyword arguments that will be passed to the scikit-learn class | For `hashing` this should be an integer e.g. `4`<br><br>For `count_vectorizing` and `tf_idf` this should follow the syntax described under [Specifying keyword arguments for scikit-learn classes](#specifying-keyword-arguments-for-scikit-learn-classes) e.g. `'analyzer=char|str, ngram_range=2;2|tuple|int'` | For hashing the integer should be a power of 2 for the algorithm to work correctly. |
    
 The table should look like this:
 
@@ -270,6 +275,49 @@ LOAD
    key,
    prediction
 EXTENSION PyTools.sklearn_Bulk_Predict(TEMP_SAMPLES_WITH_KEYS{Model_Name, Key, N_Features});
+```
+## Unsupervised Machine Learning
+This SSE also provides capabilities for dimensionality reduction and clustering. These are implemented using the [Matrix Decomposition](http://scikit-learn.org/stable/modules/classes.html#module-sklearn.decomposition) and [Clustering](http://scikit-learn.org/stable/modules/classes.html#module-sklearn.cluster) classes available in `scikit-learn`. The basic flow for unsupervised machine learning is described below:
+
+1. Prepare the features in Qlik
+2. Prepare feature definitions in Qlik
+3. Setup the model with relevant parameters
+   - `PyTools.sklearn_Setup(model_name, estimator_args, scaler_args, execution_args)`
+   - `PyTools.sklearn_Setup_Adv(model_name, estimator_args, scaler_args, metric_args, dim_reduction_args, execution_args)`
+4. Set feature definitions for the model
+   - `PyTools.sklearn_Set_Features(model_name, feature_name, variable_type, data_type, feature_strategy, strategy_args)`
+5. Fit the model and get the results
+   - `PyTools.sklearn_Fit_Transform(model_name, key, n_features)` _(For use in the load script. Only applicable for dimensionality reduction)_
+   - `PyTools.sklearn_Fit_Predict(model_name, n_features)` _(For use in chart expressions. Only applicable for clustering)_
+   - `PyTools.sklearn_Bulk_Fit_Predict(model_name, key, n_features)` _(For use in the load script. Only applicable for clustering)_
+
+Steps 1 to 4 are described in detail under [Supervised Machine Learning](#supervised-machine-learning).
+
+### Matrix Decomposition
+Matrix decomposition algorithms such as [Principal Component Analysis (PCA)](http://setosa.io/ev/principal-component-analysis/) allow data to be reduced to a smaller number of dimensions. While these algorithms are often used as part of a supervised machine learning pipeline, they can also be used on their own. 
+
+Dimensionality reduction can be called in the Qlik load script with the function `PyTools.sklearn_Fit_Transform`. The function returns the model name, the key field and a number of dimensions based on the estimator arguments, usually based on the `n_components` parameter.
+
+```
+// Call to PCA estimator that was setup with 'estimator=PCA, n_components=2|int'
+[PCA]:
+LOAD 
+    key as PCA_Key,
+    dim_1 as PCA_Dim1,
+    dim_2 as PCA_Dim2
+EXTENSION PyTools.sklearn_Fit_Transform(TEMP_SAMPLES{Model_Name, Key, N_Features});
+```
+
+### Clustering
+Clustering algorithms available in `scikit-learn` can be used using the `PyTools.sklearn_Fit_Predict` and `PyTools.sklearn_Bulk_Fit_Predict` functions for chart expressions and the load script respectively. These functions return the cluster label for each sample in the data.
+
+```
+// Call to the SpectralClustering estimator
+[Clusters]:
+LOAD 
+    key as PCA_Key,
+    label as [Spectral Cluster Label]
+EXTENSION PyTools.sklearn_Bulk_Fit_Predict(TEMP_SAMPLES{Model_Name, Key, N_Features});
 ```
 
 ## Additional Functionality

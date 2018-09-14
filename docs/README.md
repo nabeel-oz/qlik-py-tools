@@ -17,6 +17,7 @@ This repository provides a server side extension (SSE) for Qlik Sense built usin
 The current implementation includes:
 
 - **Supervised Machine Learning** : Implemented using [scikit-learn](http://scikit-learn.org/stable/index.html), the go-to machine learning library for Python. This SSE implements the full machine learning flow from data preparation, model training and evaluation, to making predictions in Qlik.
+- **Unupervised Machine Learning** : Also implemented using [scikit-learn](http://scikit-learn.org/stable/index.html). This provides capabilities for dimensionality reduction and clustering.
 - **Clustering** : Implemented using [HDBSCAN](https://hdbscan.readthedocs.io/en/latest/comparing_clustering_algorithms.html), a high performance algorithm that is great for exploratory data analysis.  
 - **Time series forecasting** : Implemented using [Facebook Prophet](https://research.fb.com/prophet-forecasting-at-scale/), a modern library for easily generating good quality forecasts.
 - **Seasonality and holiday analysis** : Also using Facebook Prophet.
@@ -85,4 +86,4 @@ Sample Qlik Sense apps are provided and each app includes extensive techniques t
 | [Correlations](Correlation.md) | [Sample App - Correlations](Sample_App_Correlations.qvf) | None. |
 | [Clustering](Clustering.md) | [Sample App - Clustering with HDBSCAN](Sample_App_Clustering.qvf) | The [qsVariable](https://github.com/erikwett/qsVariable) extension. <br/><br/>Qlik Sense April 2018 or later to view the multi-layered maps. |
 | [Forecasting](Prophet.md) | [Sample App - Facebook Prophet (Detailed)](Sample_App_Prophet.qvf)<br><br>[Sample App - Facebook Prophet (Simple)](Sample_App_Forecasting_Simple.qvf) | The [qsVariable](https://github.com/erikwett/qsVariable) extension. <br/><br/>Use the bookmarks to step through the sheets with relevant selections. |
-| [Supervised Machine Learning](scikit-learn.md) | [Sample App - Train & Test](Sample-App-scikit-learn-Train-Test.qvf)<br><br>[Sample App - Predict](Sample-App-scikit-learn-Predict.qvf)<br><br>[Sample App - Parameter Tuning](Sample-App-scikit-learn-Parameter-Tuning.qvf) | Make sure you run the load for the Train_Test app before using the Predict app.<br><br>The [qsVariable](https://github.com/erikwett/qsVariable) extension. |
+| [Machine Learning](scikit-learn.md) | [Sample App - Train & Test](Sample-App-scikit-learn-Train-Test.qvf)<br><br>[Sample App - Predict](Sample-App-scikit-learn-Predict.qvf)<br><br>[Sample App - Parameter Tuning](Sample-App-scikit-learn-Parameter-Tuning.qvf) | Make sure you run the load for the Train_Test app before using the Predict app.<br><br>The [qsVariable](https://github.com/erikwett/qsVariable) extension. |
