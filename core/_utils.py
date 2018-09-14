@@ -169,59 +169,63 @@ def get_kwargs_by_type(dict_kwargs):
     for k, v in dict_kwargs.items():
         # Split the value and type
         split = v.split("|")
-        
-        if len(split) == 2:      
-            # Handle conversion from string to boolean
-            if split[1] in ("boolean", "bool"):
-                split[0] = split[0].capitalize()
-            
-            # Convert the value based on the correct type
-            result_dict[k] = types[split[1]](split[0])
-        
-        elif split[1] == "dict":
-            # If the argument is a dictionary convert keys and values according to the correct types
-            items = split[0].split(";")
-            d = {}
-            
-            for i in items:
-                a,b = i.split(":")
-                
-                # Handle conversion from string to boolean
-                if split[2] in ("boolean", "bool"):
-                    a = a.capitalize()
-                if split[3] in ("boolean", "bool"):
-                    b = b.capitalize()
-                
-                # Handle None as an item in the dictionary
-                if b == "None":
-                    d[types[split[2]](a)] = None
-                else:
-                    d[types[split[2]](a)] = types[split[3]](b)
-            
-            result_dict[k] = d
-        
-        elif split[1] in ("list", "array", "tuple"):
-            # If the argument is a list, array or tuple convert keys and values according to the correct types
-            items = split[0].split(";")
-            l = []
-            
-            for i in items:
-                # Handle conversion from string to boolean
-                if split[2] in ("boolean", "bool"):
-                    i = i.capitalize()
 
-                # Handle None as an item in the dictionary
-                if i == "None":
-                    l.append(None)
-                else:
-                    l.append(types[split[2]](i))
-            
-            if split[1] == "array":
-                l = np.array(l)
-            elif split[1] == "tuple":
-                l = tuple(l)
+        try:
+            if len(split) == 2:      
+                # Handle conversion from string to boolean
+                if split[1] in ("boolean", "bool"):
+                    split[0] = split[0].capitalize()
                 
-            result_dict[k] = l
+                # Convert the value based on the correct type
+                result_dict[k] = types[split[1]](split[0])
+            
+            elif split[1] == "dict":
+                # If the argument is a dictionary convert keys and values according to the correct types
+                items = split[0].split(";")
+                d = {}
+                
+                for i in items:
+                    a,b = i.split(":")
+                    
+                    # Handle conversion from string to boolean
+                    if split[2] in ("boolean", "bool"):
+                        a = a.capitalize()
+                    if split[3] in ("boolean", "bool"):
+                        b = b.capitalize()
+                    
+                    # Handle None as an item in the dictionary
+                    if b == "None":
+                        d[types[split[2]](a)] = None
+                    else:
+                        d[types[split[2]](a)] = types[split[3]](b)
+                
+                result_dict[k] = d
+            
+            elif split[1] in ("list", "array", "tuple"):
+                # If the argument is a list, array or tuple convert keys and values according to the correct types
+                items = split[0].split(";")
+                l = []
+                
+                for i in items:
+                    # Handle conversion from string to boolean
+                    if split[2] in ("boolean", "bool"):
+                        i = i.capitalize()
+
+                    # Handle None as an item in the dictionary
+                    if i == "None":
+                        l.append(None)
+                    else:
+                        l.append(types[split[2]](i))
+                
+                if split[1] == "array":
+                    l = np.array(l)
+                elif split[1] == "tuple":
+                    l = tuple(l)
+                    
+                result_dict[k] = l
+        except IndexError:
+            err = "List index out of range. This is most likely due to incorrect syntax of keyword arguments."
+            raise Exception(err)
     
     return result_dict
 
