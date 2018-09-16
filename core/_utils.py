@@ -26,7 +26,6 @@ def request_df(request_list, row_template, col_headers):
         inner = []
         
         for j in range(len(row_template)):
-            
             inner.append(getattr(rows[i].duals[j], row_template[j]))
         
         outer.append(inner)

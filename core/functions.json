@@ -194,7 +194,8 @@
       "ReturnType": 0,
       "Params": {
         "a_model_name": 0,
-		    "n_features": 0
+        "b_key": 0,
+        "n_features": 0
       }
     },
 	{
