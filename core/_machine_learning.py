@@ -101,6 +101,7 @@ class Preprocessor(TransformerMixin):
         self.hash = False
         self.cv = False
         self.tfidf = False
+        self.text = False
         self.scale = False
         self.no_prep = False
         self.log = logfile
@@ -143,6 +144,13 @@ class Preprocessor(TransformerMixin):
             # Convert strategy_args column to key word arguments for the sklearn TfidfVectorizer class
             self.tfidf_meta.loc[:,"strategy_args"] = self.tfidf_meta.loc[:,"strategy_args"].apply(utils.get_kwargs).\
             apply(utils.get_kwargs_by_type)
+        
+         # Collect features for text similarity one hot encoding
+        self.text_meta = features.loc[features["feature_strategy"] == "text_similarity"].copy()
+        
+        # Set a flag if text similarity OHE will be required
+        if len(self.text_meta) > 0:
+            self.text = True
         
         # Collect features for scaling
         self.scale_meta = features.loc[features["feature_strategy"] == "scaling"].copy()
@@ -252,6 +260,20 @@ class Preprocessor(TransformerMixin):
                 else:
                     self.scale_df = self.tfidf_df 
         
+        if self.text:
+            # Get a subset of the data that requires text similarity OHE
+            self.text_df = X[self.text_meta.index.tolist()]
+            text_cols = self.text_df.columns
+
+            # Get text similarity OHE for each relevant column and then join to a dataframe for text similarity OHE data
+            for c in text_cols:
+                unique = self.text_similarity(self.text_df, c)
+                self.text_df = self.text_df.join(unique, on=c)
+                self.text_df = self.text_df.drop(c, axis=1)
+
+            # Keep a copy of the text similarity OHE dataframe structure so we can align the transform dataset 
+            self.text_df_structure = pd.DataFrame().reindex_like(self.text_df)
+
         try:
             if len(self.scale_df) > 0:
                 # Get an instance of the sklearn scaler fit to X
@@ -321,7 +343,7 @@ class Preprocessor(TransformerMixin):
             # This is to prevent different number or order of features between training and test datasets.
             self.cv_df = self.cv_df.align(self.cv_df_structure, join='right', axis=1)[0]
 
-            # Fill missing values in the OHE dataframe, that may appear after alignment, with zeros.
+            # Fill missing values in the dataframe that may appear after alignment with zeros.
             self.cv_df = self.fillna(self.cv_df, missing="zeros")
 
         if self.tfidf:
@@ -339,8 +361,32 @@ class Preprocessor(TransformerMixin):
             # This is to prevent different number or order of features between training and test datasets.
             self.tfidf_df = self.tfidf_df.align(self.tfidf_df_structure, join='right', axis=1)[0]
 
-            # Fill missing values in the OHE dataframe, that may appear after alignment, with zeros.
+            # Fill missing values in the dataframe that may appear after alignment with zeros.
             self.tfidf_df = self.fillna(self.tfidf_df, missing="zeros")
+        
+        if self.text:
+            # Get a subset of the data that requires text similarity OHE
+            self.text_df = X[self.text_meta.index.tolist()]
+            text_cols = self.text_df.columns
+
+            # Get text similarity OHE for each relevant column and then join to a dataframe for text similarity OHE data
+            for c in text_cols:
+                unique = self.text_similarity(self.text_df, c)
+                self.text_df = self.text_df.join(unique, on=c)
+                self.text_df = self.text_df.drop(c, axis=1)
+
+            # Align the columns with the original dataset. 
+            # This is to prevent different number or order of features between training and test datasets.
+            self.text_df = self.text_df.align(self.text_df_structure, join='right', axis=1)[0]
+
+            # Fill missing values in the dataframe that may appear after alignment with zeros.
+            self.text_df = self.fillna(self.text_df, missing="zeros")
+
+            # Add the text similary OHE data to the result dataset
+            if self.X_transform is None:
+                self.X_transform = self.text_df
+            else:
+                self.X_transform = self.X_transform.join(self.text_df)
 
         if self.scale:
             # Get a subset of the data that requires scaling
@@ -555,6 +601,24 @@ class Preprocessor(TransformerMixin):
         unique = unique.join(pd.DataFrame(vectorized.toarray(), columns=col_names).add_prefix(col+"_"))
         return unique.set_index(col)
     
+    @staticmethod
+    def text_similarity(df, col):
+        """
+        Convert strings to their unicode representation and then apply one hot encoding, creating one feature for each unique character in the column. 
+        This can be useful when similarity between strings is significant.
+        """
+        
+        unique = pd.DataFrame(df[col].unique(), columns=[col])
+        
+        encoded = pd.DataFrame(unique.loc[:,col].apply(lambda s: [ord(a) for a in s]), index=unique.index)
+        
+        mlb = preprocessing.MultiLabelBinarizer()
+        encoded = pd.DataFrame(mlb.fit_transform(encoded[col]),columns=mlb.classes_, index=encoded.index).add_prefix(col+"_")
+        
+        unique = unique.join(encoded)
+        
+        return unique.set_index(col)
+
     @staticmethod
     def fillna(df, missing="zeros"):
         """
