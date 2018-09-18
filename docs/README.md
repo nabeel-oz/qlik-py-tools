@@ -3,6 +3,7 @@
 ## Table of Contents
 
 - [Introduction](#introduction)
+    - [Demonstration Video](#demonstration-video)
 - [Note on the approach](#note-on-the-approach)
 - [Pre-requisites](#pre-requisites)
 - [Installation](#installation)
@@ -29,6 +30,8 @@ For more information on Qlik Server Side Extensions see [qlik-oss](https://githu
 
 **Disclaimer:** This project has been started by me in a personal capacity and is not supported by Qlik. 
 
+### Demonstration Video
+[![Demonstration Video](images/YouTube-01.png)](https://youtu.be/7E944kz1l5s)
 
 ## Note on the approach
 In this project we have defined functions that expose open source algorithms to Qlik using the [gRPC framework](http://www.grpc.io/). Each function allows the user to define input data and parameters to control the underlying algorithm's output. 
@@ -86,4 +89,4 @@ Sample Qlik Sense apps are provided and each app includes extensive techniques t
 | [Correlations](Correlation.md) | [Sample App - Correlations](Sample_App_Correlations.qvf) | None. |
 | [Clustering](Clustering.md) | [Sample App - Clustering with HDBSCAN](Sample_App_Clustering.qvf) | The [qsVariable](https://github.com/erikwett/qsVariable) extension. <br/><br/>Qlik Sense April 2018 or later to view the multi-layered maps. |
 | [Forecasting](Prophet.md) | [Sample App - Facebook Prophet (Detailed)](Sample_App_Prophet.qvf)<br><br>[Sample App - Facebook Prophet (Simple)](Sample_App_Forecasting_Simple.qvf) | The [qsVariable](https://github.com/erikwett/qsVariable) extension. <br/><br/>Use the bookmarks to step through the sheets with relevant selections. |
-| [Machine Learning](scikit-learn.md) | [Sample App - Train & Test](Sample-App-scikit-learn-Train-Test.qvf)<br><br>[Sample App - Predict](Sample-App-scikit-learn-Predict.qvf)<br><br>[Sample App - Parameter Tuning](Sample-App-scikit-learn-Parameter-Tuning.qvf) | Make sure you run the load for the Train_Test app before using the Predict app.<br><br>The [qsVariable](https://github.com/erikwett/qsVariable) extension. |
+| [Machine Learning](scikit-learn.md) | [Sample App - Train & Test](Sample-App-scikit-learn-Train-Test.qvf)<br><br>[Sample App - Predict](Sample-App-scikit-learn-Predict.qvf)<br><br>[Sample App - Parameter Tuning](Sample-App-scikit-learn-Parameter-Tuning.qvf) | Make sure you run the load for the Train_Test app before using the Predict app.<br><br>If using Qlik Sense Desktop you will need to download the [data source](HR-Employee-Attrition.xlsx) and set up a connection named AttachedFiles.<br><br>The [qsVariable](https://github.com/erikwett/qsVariable) extension. |
