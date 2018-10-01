@@ -8,6 +8,7 @@
      - [Preparing feature definitions](#preparing-feature-definitions)
      - [Setting up the model](#setting-up-the-model)
      - [Training and testing the model](#training-and-testing-the-model)
+     - [Interpreting the Model](#interpreting-the-model)
      - [Making predictions using the model](#making-predictions-using-the-model)
 - [Unsupervised Machine Learning](#unsupervised-machine-learning)
      - [Matrix Decomposition](#matrix-decomposition)
@@ -31,7 +32,7 @@
 
 Supervised machine learning techniques make use of known samples to train a model, and then use this model to make predictions on new data. One of the best known machine learning libraries is [scikit-learn](http://scikit-learn.org/stable/index.html#), a package that provides efficient versions of a large number of well researched algorithms. A good introduction to machine learning and the scikit-learn API is available in [this excerpt from the Python Data Science Handbook](https://jakevdp.github.io/PythonDataScienceHandbook/05.01-what-is-machine-learning.html). 
 
-This SSE provides functions to train, test and evaluate models and then use these models to make predictions. The current implementation scope includes classification and regression algorithms.
+This SSE provides functions to train, test and evaluate models and then use these models to make predictions. The implementation includes classification and regression algorithms.
 
 In addition this SSE also implements the unsupervised machine learning algorithms available in scikit-learn. These include techniques for inferring structure in unlablelled data such as clustering and dimensionality reduction.
 
@@ -56,7 +57,9 @@ At a high-level the steps are:
    - `PyTools.sklearn_Calculate_Metrics(model_name, n_features)`
    - `PyTools.sklearn_Get_Metrics(model_name)`
    - `PyTools.sklearn_Get_Confusion_Matrix(model_name, n_features)` _(Only applicable to classifiers)_
-8. Get predictions from an existing model
+8. Optionally, calculate feature importances to gain a better understanding of the model
+    - `PyTools.sklearn_Explain_Importances`
+9. Get predictions from an existing model
    - `PyTools.sklearn_Predict(model_name, n_features)` _(For use in chart expressions)_
    - `PyTools.sklearn_Bulk_Predict(model_name, key, n_features)` _(For use in the load script)_
    - `PyTools.sklearn_Predict_Proba(model_name, n_features)` _(For use in chart expressions. Only applicable to classifiers)_
@@ -219,6 +222,34 @@ LOAD
    count
 EXTENSION PyTools.sklearn_Get_Confusion_Matrix(TEMP_SAMPLES{Model_Name});
 ```
+
+### Interpreting the Model
+
+An understanding of the the model can be gained using the `sklearn_Explain_Importances` function. This function makes use of the [Skater](https://www.datascience.com/resources/tools/skater) library to provide a degree of transparency into the model. 
+
+Model interpretability is a developing area in Machine learning, and explaining the results from more complex algorithms is a challenging prospect. For an introduction to the concepts in model interpretability refer to the [Skater documentation](https://datascienceinc.github.io/Skater/overview.html).
+
+We can call the `sklearn_Explain_Importances` function in the load script to understand the importance assigned to each feature by the estimator. This can help guide further exploration of the data with Qlik; analyzing how the target changes with selections made to the most influential features.
+
+This function is only valid if `calculate_importances=true` is passed in the execution arguments. In addition, `test_size` should be greater than zero in the execution arguments or the `sklearn_Calculate_Metrics` function should have been called explicitly with a test dataset.
+
+```
+// Remember to pass calculate_importances=true in the execution arguments
+LET vExecutionArgs = 'overwrite=true,test_size=0.3,calculate_importances=true';
+...
+
+// Use the LOAD...EXTENSION syntax to call the sklearn_Explain_Importances function
+[Result-Importances]:
+LOAD
+    model_name,
+    feature_name,
+    importance
+EXTENSION PyTools.sklearn_Explain_Importances(TEMP_SAMPLES{Model_Name});
+```
+
+This function is valid for all sklearn classifiers and regressors.
+
+For more information on the [Execution Arguments](#execution-arguments) refer to the section on Input Specifications.
 
 ### Making predictions using the model
 
@@ -431,7 +462,8 @@ If you want to use default values you can simply pass an empty string for `Execu
 | test_size | Set the ratio that will be used to split the samples into training and testing data sets | `0.3` | Defaults to `0.33`. |
 | random_state | Seed used by the random number generator when generating the training testing split | `42` | Default to `42`.<br><br>Must be an integer. |
 | compress | Compression level between 1-9 used by joblib when saving the model | `1` | Defaults to `3`. |
-| retain_data | Flag to determine if the training and test data should be saved in the model | `true`, `false` | Defaults to `false`. |
+| retain_data | Flag to determine if the training and test data should be saved in the model | `true`, `false` | Defaults to `false` as this adds to the size of the model on disk. |
+| calculate_importances | Flag to determine if feature importances should be calculated during model evaluation | `true`, `false` | Defaults to `false` as this adds to the processing time. |
 | debug | Flag to output additional information to the terminal and logs | `true`, `false` | Defaults to `false`.<br><br>Information will be printed to the terminal as well to a log file: `qlik-py-tools\qlik-py-env\core\logs\SKLearn Log <n>.txt`. |
 
 ### Scaler Arguments

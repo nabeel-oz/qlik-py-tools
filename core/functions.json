@@ -309,6 +309,15 @@
 		    "b_key": 0,
 		    "n_features": 0
       }
+    },
+  {
+      "Id": 29,
+      "Name": "sklearn_Explain_Importances",
+      "Type": 0,
+      "ReturnType": 0,
+      "Params": {
+        "a_model_name": 0
+      }
     }
   ]
 }

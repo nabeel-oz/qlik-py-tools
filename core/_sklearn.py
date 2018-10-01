@@ -46,6 +46,9 @@ from sklearn.tree import DecisionTreeClassifier, DecisionTreeRegressor, ExtraTre
 from sklearn.cluster import AffinityPropagation, AgglomerativeClustering, Birch, DBSCAN, FeatureAgglomeration, KMeans,\
                             MiniBatchKMeans, MeanShift, SpectralClustering
 
+from skater.model import InMemoryModel
+from skater.core.explanations import Interpretation
+
 import _utils as utils
 from _machine_learning import Preprocessor, PersistentModel
 import ServerSideExtension_pb2 as SSE
@@ -683,6 +686,23 @@ class SKLearnForQlik:
             self.model.confusion_matrix.loc[:,"model_name"] = self.model.name
             self.model.confusion_matrix = self.model.confusion_matrix.loc[:,\
                                                                           ["model_name", "true_label", "pred_label", "count"]]
+
+            if self.model.calc_feature_importances:
+                # Calculate model agnostic feature importances using the skater library
+                interpreter = Interpretation(self.X_test, feature_names=self.model.features_df.index.tolist())
+                
+                try:
+                    # We use the predicted probabilities from the estimator if available
+                    imm = InMemoryModel(self.model.pipe.predict_proba, examples = self.X_test[:10], model_type="classifier")
+                except AttributeError:
+                    # Otherwise we simply use the predict method
+                    imm = InMemoryModel(self.model.pipe.predict, examples = self.X_test[:10], model_type="classifier", \
+                    unique_values = self.model.pipe.classes_)
+                
+                # Add the feature importances to the model as a sorted data frame
+                self.model.importances = interpreter.feature_importance.feature_importance(imm, progressbar=False, ascending=False)
+                self.model.importances = pd.DataFrame(self.model.importances).reset_index()
+                self.model.importances.columns = ["feature_name", "importance"]
             
         elif self.model.estimator_type == "regressor":
             # Get the r2 score
@@ -705,6 +725,18 @@ class SKLearnForQlik:
             metrics_df.loc[:,"model_name"] = self.model.name
             metrics_df = metrics_df.loc[:,["model_name", "r2_score", "mean_squared_error", "mean_absolute_error",\
                                            "median_absolute_error", "explained_variance_score"]]
+
+            if self.model.calc_feature_importances:
+                # Calculate model agnostic feature importances using the skater library
+                interpreter = Interpretation(self.X_test, feature_names=self.model.features_df.index.tolist())
+                
+                # Set up a skater InMemoryModel to calculate feature importances using the predict method
+                imm = InMemoryModel(self.model.pipe.predict, examples = self.X_test[:10], model_type="regressor")
+                
+                # Add the feature importances to the model as a sorted data frame
+                self.model.importances = interpreter.feature_importance.feature_importance(imm, progressbar=False, ascending=False)
+                self.model.importances = pd.DataFrame(self.model.importances).reset_index()
+                self.model.importances.columns = ["feature_name", "importance"]
             
         if caller == "external":
             self.response = metrics_df
@@ -844,7 +876,35 @@ class SKLearnForQlik:
             
             return self.response.loc[:,'result']
     
-    # STAGE 3: Implement feature_importances_ for applicable algorithms
+    def explain_importances(self):
+        """
+        Explain feature importances for the requested model
+        """
+
+        # Get the model from cache or disk based on the model_name in request
+        self._get_model_by_name()
+
+        # Get the feature importances calculated in the calculate_metrics method
+        try:
+            self.response = self.model.importances
+        except AttributeError:
+            err = "Feature importances are not available. Check that the execution argument calculate_importances " +\
+            "is set to True, and that test_size > 0 or the Calculate_Metrics function has been executed."
+            raise Exception(err) 
+
+        # Add the model name to the response and rearrange columns
+        self.response.loc[:, "model_name"] = self.model.name
+        self.response = self.response[["model_name", "feature_name", "importance"]]
+
+        # Send the reponse table description to Qlik
+        self._send_table_description("importances")
+        
+        # Debug information is printed to the terminal and logs if the paramater debug = true
+        if self.model.debug:
+            self._print_log(4)
+        
+        # Finally send the response
+        return self.response
     
     def get_features_expression(self):
         """
@@ -944,6 +1004,7 @@ class SKLearnForQlik:
         self.model.scaler = "StandardScaler"
         self.model.scaler_kwargs = {}
         self.model.missing = "zeros"
+        self.model.calc_feature_importances = False
         
         # Default metric parameters:
         if metric_args is None:
@@ -977,6 +1038,10 @@ class SKLearnForQlik:
             # Flag to determine if the training and test data should be saved in the model
             if 'retain_data' in execution_args:
                 self.model.retain_data = 'true' == execution_args['retain_data'].lower()
+
+            # Flag to determine if feature importances should be calculated when the fit method is called
+            if 'calculate_importances' in execution_args:
+                self.model.calc_feature_importances = 'true' == execution_args['calculate_importances'].lower()
                        
             # Set the debug option for generating execution logs
             # Valid values are: true, false
@@ -1250,6 +1315,10 @@ class SKLearnForQlik:
             self.table.fields.add(name="true_label")
             self.table.fields.add(name="pred_label")
             self.table.fields.add(name="count", dataType=1)
+        elif variant == "importances":
+            self.table.fields.add(name="model_name")
+            self.table.fields.add(name="feature_name")
+            self.table.fields.add(name="importance", dataType=1)
         elif variant == "predict":
             self.table.fields.add(name="model_name")
             self.table.fields.add(name="key")
