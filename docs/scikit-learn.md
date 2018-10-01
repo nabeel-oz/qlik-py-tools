@@ -58,7 +58,7 @@ At a high-level the steps are:
    - `PyTools.sklearn_Get_Metrics(model_name)`
    - `PyTools.sklearn_Get_Confusion_Matrix(model_name, n_features)` _(Only applicable to classifiers)_
 8. Optionally, calculate feature importances to gain a better understanding of the model
-    - `PyTools.sklearn_Explain_Importances`
+    - `PyTools.sklearn_Explain_Importances(model_name)`
 9. Get predictions from an existing model
    - `PyTools.sklearn_Predict(model_name, n_features)` _(For use in chart expressions)_
    - `PyTools.sklearn_Bulk_Predict(model_name, key, n_features)` _(For use in the load script)_
