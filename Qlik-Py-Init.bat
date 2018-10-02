@@ -12,12 +12,13 @@ call activate
 cd ..
 echo.
 echo Installing required packages... & echo.
-python -m pip install --upgrade pip
+python -m pip install --upgrade setuptools pip
 pip install grpcio grpcio-tools numpy scipy pandas cython
 pip install pystan==2.17
 pip install fbprophet
 pip install -U scikit-learn
 pip install hdbscan
+pip install -U skater
 echo.
 echo Creating a new firewall rule for TCP port 50055... & echo.
 netsh advfirewall firewall add rule name="Qlik PyTools" dir=in action=allow protocol=TCP localport=50055

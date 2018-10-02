@@ -97,7 +97,8 @@ class ExtensionService(SSE.ConnectorServicer):
             25: '_sklearn',
             26: '_sklearn',
             27: '_sklearn',
-            28: '_sklearn'
+            28: '_sklearn',
+            29: '_sklearn'
         }
 
     """
@@ -536,6 +537,11 @@ class ExtensionService(SSE.ConnectorServicer):
 
             for i in range(response.shape[1]-2):
                 dtypes.append("num")
+        
+        elif function == 29:
+            # Explain the feature importances for the model
+            response = model.explain_importances()
+            dtypes = ["str", "str", "num"]
         
         # Get the response as SSE.Rows
         response_rows = utils.get_response_rows(response.values.tolist(), dtypes) 
