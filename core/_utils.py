@@ -53,6 +53,9 @@ def get_response_rows(response, template):
             for col in row:
                 # Convert values to type SSE.Dual according to the template list
                 if template[i] == "str":
+                    if type(col) is not str:
+                        col = "{0:.5f}".format(col)
+
                     this_row.append(SSE.Dual(strData=col))
                 elif template[i] == "num":
                     this_row.append(SSE.Dual(numData=col))

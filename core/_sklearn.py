@@ -688,15 +688,18 @@ class SKLearnForQlik:
                                                                           ["model_name", "true_label", "pred_label", "count"]]
 
             if self.model.calc_feature_importances:
+                # Fill null values in the test set according to the model settings
+                X_test = utils.fillna(self.X_test, method=self.model.missing)
+                
                 # Calculate model agnostic feature importances using the skater library
-                interpreter = Interpretation(self.X_test, feature_names=self.model.features_df.index.tolist())
+                interpreter = Interpretation(X_test, feature_names=self.model.features_df.index.tolist())
                 
                 try:
                     # We use the predicted probabilities from the estimator if available
-                    imm = InMemoryModel(self.model.pipe.predict_proba, examples = self.X_test[:10], model_type="classifier")
+                    imm = InMemoryModel(self.model.pipe.predict_proba, examples = X_test[:10], model_type="classifier")
                 except AttributeError:
                     # Otherwise we simply use the predict method
-                    imm = InMemoryModel(self.model.pipe.predict, examples = self.X_test[:10], model_type="classifier", \
+                    imm = InMemoryModel(self.model.pipe.predict, examples = X_test[:10], model_type="classifier", \
                     unique_values = self.model.pipe.classes_)
                 
                 # Add the feature importances to the model as a sorted data frame
@@ -718,8 +721,7 @@ class SKLearnForQlik:
             metrics_df.loc[:,"median_absolute_error"] = metrics.median_absolute_error(self.y_test, self.y_pred)
             
             # Get the explained variance score
-            metrics_df.loc[:,"explained_variance_score"] = metrics.explained_variance_score(self.y_test, self.y_pred,\
-                                                                                            metric_args)
+            metrics_df.loc[:,"explained_variance_score"] = metrics.explained_variance_score(self.y_test, self.y_pred, **metric_args)
             
             # Finalize the structure of the result DataFrame
             metrics_df.loc[:,"model_name"] = self.model.name
@@ -727,11 +729,14 @@ class SKLearnForQlik:
                                            "median_absolute_error", "explained_variance_score"]]
 
             if self.model.calc_feature_importances:
+                # Fill null values in the test set according to the model settings
+                X_test = utils.fillna(self.X_test, method=self.model.missing)
+                
                 # Calculate model agnostic feature importances using the skater library
-                interpreter = Interpretation(self.X_test, feature_names=self.model.features_df.index.tolist())
+                interpreter = Interpretation(X_test, feature_names=self.model.features_df.index.tolist())
                 
                 # Set up a skater InMemoryModel to calculate feature importances using the predict method
-                imm = InMemoryModel(self.model.pipe.predict, examples = self.X_test[:10], model_type="regressor")
+                imm = InMemoryModel(self.model.pipe.predict, examples = X_test[:10], model_type="regressor")
                 
                 # Add the feature importances to the model as a sorted data frame
                 self.model.importances = interpreter.feature_importance.feature_importance(imm, progressbar=False, ascending=False)
