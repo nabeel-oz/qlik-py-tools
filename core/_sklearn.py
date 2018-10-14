@@ -18,6 +18,7 @@ from sklearn import metrics
 from sklearn import preprocessing
 from sklearn.pipeline import Pipeline
 from sklearn.model_selection import train_test_split
+from sklearn.model_selection import cross_validate
 from sklearn.model_selection import GridSearchCV
 
 from sklearn.decomposition import PCA, KernelPCA, IncrementalPCA, TruncatedSVD, FactorAnalysis, FastICA, NMF, SparsePCA,\
@@ -392,7 +393,7 @@ class SKLearnForQlik:
             err = "Incorrect usage. The estimator specified is not a known classifier or regressor: {0}".format(self.model.estimator)
             raise Exception(err)
 
-        if self.model.test_size > 0:        
+        if self.model.cv <= 0 and self.model.test_size > 0:        
             # Split the data into training and testing subsets
             self.X_train, self.X_test, self.y_train, self.y_test = \
             train_test_split(train_test_df, target_df, test_size=self.model.test_size, random_state=self.model.random_state)
@@ -403,11 +404,13 @@ class SKLearnForQlik:
         # Add the training and test data to the model if required
         if self.model.retain_data:
             self.model.X_train = self.X_train
-            self.model.X_test = self.X_test
+            self.model.y_train = self.y_train
             
-            if self.model.test_size > 0: 
-                self.model.y_train = self.y_train
+            try:
+                self.model.X_test = self.X_test
                 self.model.y_test = self.y_test
+            except AttributeError:
+                pass
         
         # Construct the preprocessor
         prep = Preprocessor(self.model.features_df, scale_hashed=self.model.scale_hashed, scale_vectors=self.model.scale_vectors,\
@@ -426,7 +429,7 @@ class SKLearnForQlik:
         else:
             self.model.estimation_step = 1      
         
-        # Check if the pipeline involves a grid search
+        # Try assuming the pipeline involves a grid search
         try:
             # Construct an estimator
             estimator = self.algorithms[self.model.estimator]()
@@ -434,12 +437,12 @@ class SKLearnForQlik:
             # Prepare the grid search using the previously set parameter grid
             grid_search = GridSearchCV(estimator=estimator, param_grid=self.model.param_grid, **self.model.grid_search_args)
             
-            if self.model.test_size <= 0:  
-                err = "A parameter grid was set up, but test_size <= 0 making cross validation impossible."
-                raise Exception(err)
-            
             # Add grid search to the sklearn pipeline
             self.model.pipe.steps.append(('grid_search', grid_search))
+
+            if self.model.cv > 0:
+                # Perform K-fold cross validation
+                self._cross_validate()
 
             # Fit the training data to the pipeline
             self.model.pipe.fit(self.X_train, self.y_train.values.ravel())
@@ -462,13 +465,27 @@ class SKLearnForQlik:
             # Add the estimator to the sklearn pipeline
             self.model.pipe.steps.append(('estimator', estimator))  
 
+            if self.model.cv > 0:
+                # Perform K-fold cross validation
+                self._cross_validate(fit_params=self.model.estimator_kwargs)
+
             # Fit the training data to the pipeline
             self.model.pipe.fit(self.X_train, self.y_train.values.ravel())
         
-        if self.model.test_size > 0:       
+        if self.model.cv <= 0 and self.model.test_size > 0:       
             # Evaluate the model using the test data            
             self.calculate_metrics(caller="internal")
         
+        if self.model.calc_feature_importances:
+            # Select the dataset for calculating importances
+            if self.model.cv <= 0 and self.model.test_size > 0:
+                X = self.X_test
+            else:
+                X = train_test_df
+            
+            # Calculate model agnostic feature importances
+            self._calc_importances(data = X)
+
         # Persist the model to disk
         self.model = self.model.save(self.model.name, self.path, self.model.compress)
         
@@ -476,7 +493,7 @@ class SKLearnForQlik:
         self._update_cache()
         
         # Prepare the output
-        if self.model.test_size > 0: 
+        if self.model.cv > 0 or self.model.test_size > 0: 
             message = [[self.model.name, 'Model successfully trained, tested and saved to disk.',\
                         time.strftime('%X %x %Z', time.localtime(self.model.state_timestamp)),\
                         "{0} model has a score of {1:.3f} against the test data."\
@@ -627,7 +644,7 @@ class SKLearnForQlik:
         """
         Return key metrics based on a test dataset.
         Metrics returned for a classifier are: accuracy, precision, recall, fscore, support
-        Metrics returned for a regressor are: accuracy, 
+        Metrics returned for a regressor are: r2_score, mean_squared_error, mean_absolute_error, median_absolute_error, explained_variance_score
         """
         
         # If the function call was made externally, process the request
@@ -686,26 +703,6 @@ class SKLearnForQlik:
             self.model.confusion_matrix.loc[:,"model_name"] = self.model.name
             self.model.confusion_matrix = self.model.confusion_matrix.loc[:,\
                                                                           ["model_name", "true_label", "pred_label", "count"]]
-
-            if self.model.calc_feature_importances:
-                # Fill null values in the test set according to the model settings
-                X_test = utils.fillna(self.X_test, method=self.model.missing)
-                
-                # Calculate model agnostic feature importances using the skater library
-                interpreter = Interpretation(X_test, feature_names=self.model.features_df.index.tolist())
-                
-                try:
-                    # We use the predicted probabilities from the estimator if available
-                    imm = InMemoryModel(self.model.pipe.predict_proba, examples = X_test[:10], model_type="classifier")
-                except AttributeError:
-                    # Otherwise we simply use the predict method
-                    imm = InMemoryModel(self.model.pipe.predict, examples = X_test[:10], model_type="classifier", \
-                    unique_values = self.model.pipe.classes_)
-                
-                # Add the feature importances to the model as a sorted data frame
-                self.model.importances = interpreter.feature_importance.feature_importance(imm, progressbar=False, ascending=False)
-                self.model.importances = pd.DataFrame(self.model.importances).reset_index()
-                self.model.importances.columns = ["feature_name", "importance"]
             
         elif self.model.estimator_type == "regressor":
             # Get the r2 score
@@ -727,23 +724,13 @@ class SKLearnForQlik:
             metrics_df.loc[:,"model_name"] = self.model.name
             metrics_df = metrics_df.loc[:,["model_name", "r2_score", "mean_squared_error", "mean_absolute_error",\
                                            "median_absolute_error", "explained_variance_score"]]
-
-            if self.model.calc_feature_importances:
-                # Fill null values in the test set according to the model settings
-                X_test = utils.fillna(self.X_test, method=self.model.missing)
-                
-                # Calculate model agnostic feature importances using the skater library
-                interpreter = Interpretation(X_test, feature_names=self.model.features_df.index.tolist())
-                
-                # Set up a skater InMemoryModel to calculate feature importances using the predict method
-                imm = InMemoryModel(self.model.pipe.predict, examples = X_test[:10], model_type="regressor")
-                
-                # Add the feature importances to the model as a sorted data frame
-                self.model.importances = interpreter.feature_importance.feature_importance(imm, progressbar=False, ascending=False)
-                self.model.importances = pd.DataFrame(self.model.importances).reset_index()
-                self.model.importances.columns = ["feature_name", "importance"]
-            
+           
         if caller == "external":
+            
+            if self.model.calc_feature_importances:
+                # Calculate model agnostic feature importances
+                self._calc_importances(data = self.X_test)
+
             self.response = metrics_df
 
             # Send the reponse table description to Qlik
@@ -761,7 +748,7 @@ class SKLearnForQlik:
         else:
             # Save the metrics_df to the model
             self.model.metrics_df = metrics_df
-    
+        
     def get_confusion_matrix(self):
         """
         Returns a confusion matrix calculated previously using testing data with fit or calculate_metrics
@@ -770,8 +757,13 @@ class SKLearnForQlik:
         # Get the model from cache or disk based on the model_name in request
         self._get_model_by_name()
         
-        # Prepare the output
-        self.response = self.model.confusion_matrix
+        try:
+            # Prepare the output
+            self.response = self.model.confusion_matrix
+        except AttributeError:
+            err = "The confusion matrix is only avaialble for classifiers when using hold-out testing. " + \
+            "When using K-fold cross validation use the bulk predict function to build the confusion matrix in Qlik."
+            raise Exception(err)
         
         # Send the reponse table description to Qlik
         self._send_table_description("confusion_matrix")
@@ -967,14 +959,23 @@ class SKLearnForQlik:
         # Get the model from cache or disk based on the model_name in request
         self._get_model_by_name()
         
-        # Prepare the expression as a string
+        # Prepare the response data frame
         self.response = self.model.metrics_df
         
         # Send the reponse table description to Qlik
-        if self.model.estimator_type == "classifier":
-            self._send_table_description("metrics_clf")
-        elif self.model.estimator_type == "regressor":
-            self._send_table_description("metrics_reg")
+        if self.model.cv <= 0 and self.model.test_size > 0:
+            if self.model.estimator_type == "classifier":
+                self._send_table_description("metrics_clf")
+            elif self.model.estimator_type == "regressor":
+                self._send_table_description("metrics_reg")
+        elif self.model.cv > 0:
+            if self.model.estimator_type == "classifier":
+                self._send_table_description("metrics_clf_cv")
+            elif self.model.estimator_type == "regressor":
+                self._send_table_description("metrics_reg_cv")
+        else:
+            err = "Metrics are not available. Make sure the machine learning pipeline includes cross validation or hold-out testing."
+            raise Exception(err)
         
         # Debug information is printed to the terminal and logs if the paramater debug = true
         if self.model.debug:
@@ -1001,6 +1002,7 @@ class SKLearnForQlik:
         self.model.overwrite = False
         self.model.debug = False
         self.model.test_size = 0.33
+        self.model.cv = 0
         self.model.random_state = 42
         self.model.compress = 3
         self.model.retain_data = False
@@ -1031,6 +1033,12 @@ class SKLearnForQlik:
             # Default value is 0.33, i.e. we use 66% of the samples for training and 33% for testing
             if 'test_size' in execution_args:
                 self.model.test_size = utils.atof(execution_args['test_size'])
+
+            # Enable K-fold cross validation. For more information see: http://scikit-learn.org/stable/modules/cross_validation.html#multimetric-cross-validation
+            # Default value is 0 in which case a simple holdout strategy based on the test_size parameter is used.
+            # If cv > 0 then the model is validated used K = cv folds and the test_size parameter is ignored.
+            if 'cv' in execution_args:
+                self.model.cv = utils.atoi(execution_args['cv'])
             
             # Seed used by the random number generator when generating the training testing split
             if 'random_state' in execution_args:
@@ -1269,7 +1277,135 @@ class SKLearnForQlik:
             return [samples_df, target_df]
         else:
             return samples_df
+
+    def _cross_validate(self, fit_params={}):
+        """
+        Perform K-fold cross validation on the model for the dataset provided in the request.
+        """
+
+        if self.model.estimator_type == "classifier":
+
+            # Get unique labels for classification
+            labels = np.unique(self.y_train.values)
+            
+            # Set up a dictionary for the scoring metrics
+            scoring = {'accuracy':'accuracy'}
+
+            # Prepare arguments for the scorers
+            metric_args = self.model.metric_args
+            
+            if 'average' in metric_args and metric_args['average'] is not None:
+                # If the score is being averaged over classes a single scorer per metric is sufficient
+                scoring['precision'] = metrics.make_scorer(metrics.precision_score, **metric_args)
+                scoring['recall'] = metrics.make_scorer(metrics.recall_score, **metric_args)
+                scoring['fscore'] = metrics.make_scorer(metrics.f1_score, **metric_args)
+
+                output_format = "clf_overall"
+            else:
+                # If there is no averaging we will need multiple scorers; one for each class
+                for label in labels:
+                    metric_args['labels'] = label
+                    scoring['precision_'+str(label)] = metrics.make_scorer(metrics.precision_score, **metric_args)
+                    scoring['recall_'+str(label)] = metrics.make_scorer(metrics.recall_score, **metric_args)
+                    scoring['fscore_'+str(label)] = metrics.make_scorer(metrics.f1_score, **metric_args)
+                
+                output_format = "clf_classes"
+
+        elif self.model.estimator_type == "regressor":
+            scoring = ['r2', 'neg_mean_squared_error', 'neg_mean_absolute_error', 'neg_median_absolute_error', 'explained_variance']
         
+        # Perform cross validation using the training data and the model pipeline
+        scores = cross_validate(self.model.pipe, self.X_train, self.y_train.values.ravel(), scoring=scoring, cv=self.model.cv,\
+        fit_params=fit_params, return_train_score=False)
+
+        # Prepare the metrics data frame according to the output format
+        if self.model.estimator_type == "classifier":
+            # Create an empty data frame to set the structure
+            metrics_df = pd.DataFrame(columns=["class", "accuracy", "accuracy_std", "precision", "precision_std", "recall",\
+            "recall_std", "fscore", "fscore_std"])
+
+            if output_format == "clf_overall":               
+                # Add the overall metrics to the data frame
+                metrics_df.loc[0] = ["overall", np.average(scores["test_accuracy"]), np.std(scores["test_accuracy"]),\
+                np.average(scores["test_precision"]), np.std(scores["test_precision"]),\
+                np.average(scores["test_recall"]), np.std(scores["test_recall"]),\
+                np.average(scores["test_fscore"]), np.std(scores["test_fscore"])]
+
+            elif output_format == "clf_classes":
+                # Add accuracy which is calculated at an overall level
+                metrics_df.loc[0] = ["overall", np.average(scores["test_accuracy"]), np.std(scores["test_accuracy"]),\
+                np.NaN, np.NaN, np.NaN, np.NaN, np.NaN, np.NaN]
+
+                # Add the metrics for each class to the data frame
+                for i, label in enumerate(labels):
+                    metrics_df.loc[i+1] = [label, np.NaN, np.NaN, np.average(scores["test_precision_"+str(label)]),\
+                    np.std(scores["test_precision_"+str(label)]), np.average(scores["test_recall_"+str(label)]),\
+                    np.std(scores["test_recall_"+str(label)]), np.average(scores["test_fscore_"+str(label)]),\
+                    np.std(scores["test_fscore_"+str(label)])]
+            
+            # Finalize the structure of the result DataFrame
+            metrics_df.loc[:,"model_name"] = self.model.name
+            metrics_df = metrics_df.loc[:,["model_name", "class", "accuracy", "accuracy_std", "precision", "precision_std", "recall",\
+            "recall_std", "fscore", "fscore_std"]]
+
+            # Add the score to the model
+            self.model.score =  metrics_df["accuracy"].values[0]
+
+        elif self.model.estimator_type == "regressor":
+            # Create an empty data frame to set the structure
+            metrics_df = pd.DataFrame(columns=["r2_score", "r2_score_std", "mean_squared_error", "mean_squared_error_std",\
+            "mean_absolute_error", "mean_absolute_error_std", "median_absolute_error", "median_absolute_error_std",\
+            "explained_variance_score", "explained_variance_score_std"])
+            
+            # Add the overall metrics to the data frame
+            metrics_df.loc[0] = [np.average(scores["test_r2"]), np.std(scores["test_r2"]),\
+            np.average(scores["test_neg_mean_squared_error"]), np.std(scores["test_neg_mean_squared_error"]),\
+            np.average(scores["test_neg_mean_absolute_error"]), np.std(scores["test_neg_mean_absolute_error"]),\
+            np.average(scores["test_neg_median_absolute_error"]), np.std(scores["test_neg_median_absolute_error"]),\
+            np.average(scores["test_explained_variance"]), np.std(scores["test_explained_variance"])]
+        
+            # Finalize the structure of the result DataFrame
+            metrics_df.loc[:,"model_name"] = self.model.name
+            metrics_df = metrics_df.loc[:,["model_name", "r2_score", "r2_score_std", "mean_squared_error", "mean_squared_error_std",\
+            "mean_absolute_error", "mean_absolute_error_std", "median_absolute_error", "median_absolute_error_std",\
+            "explained_variance_score", "explained_variance_score_std"]]
+
+            # Add the score to the model
+            self.model.score =  metrics_df["r2_score"].values[0]
+
+        # Save the metrics_df to the model
+        self.model.metrics_df = metrics_df
+    
+    def _calc_importances(self, data=None):
+        """
+        Calculate feature importances.
+        Importances are calculated using the Skater library to provide this capability for all sklearn algorithms.
+        For more information: https://www.datascience.com/resources/tools/skater
+        """
+
+        # Fill null values in the test set according to the model settings
+        X_test = utils.fillna(data, method=self.model.missing)
+        
+        # Calculate model agnostic feature importances using the skater library
+        interpreter = Interpretation(X_test, feature_names=self.model.features_df.index.tolist())
+        
+        if self.model.estimator_type == "classifier":
+            try:
+                # We use the predicted probabilities from the estimator if available
+                imm = InMemoryModel(self.model.pipe.predict_proba, examples = X_test[:10], model_type="classifier")
+            except AttributeError:
+                # Otherwise we simply use the predict method
+                imm = InMemoryModel(self.model.pipe.predict, examples = X_test[:10], model_type="classifier", \
+                unique_values = self.model.pipe.classes_)
+        elif self.model.estimator_type == "regressor":
+            # Set up a skater InMemoryModel to calculate feature importances using the predict method
+            imm = InMemoryModel(self.model.pipe.predict, examples = X_test[:10], model_type="regressor")
+        
+        # Add the feature importances to the model as a sorted data frame
+        self.model.importances = interpreter.feature_importance.feature_importance(imm, progressbar=False, ascending=False)
+        self.model.importances = pd.DataFrame(self.model.importances).reset_index()
+        self.model.importances.columns = ["feature_name", "importance"]
+
     def _send_table_description(self, variant):
         """
         Send the table description to Qlik as meta data.
@@ -1308,6 +1444,17 @@ class SKLearnForQlik:
             self.table.fields.add(name="recall", dataType=1)
             self.table.fields.add(name="fscore", dataType=1)
             self.table.fields.add(name="support", dataType=1)
+        elif variant == "metrics_clf_cv":
+            self.table.fields.add(name="model_name")
+            self.table.fields.add(name="class")
+            self.table.fields.add(name="accuracy", dataType=1)
+            self.table.fields.add(name="accuracy_std", dataType=1)
+            self.table.fields.add(name="precision", dataType=1)
+            self.table.fields.add(name="precision_std", dataType=1)
+            self.table.fields.add(name="recall", dataType=1)
+            self.table.fields.add(name="recall_std", dataType=1)
+            self.table.fields.add(name="fscore", dataType=1)
+            self.table.fields.add(name="fscore_std", dataType=1)
         elif variant == "metrics_reg":
             self.table.fields.add(name="model_name")
             self.table.fields.add(name="r2_score", dataType=1)
@@ -1315,6 +1462,18 @@ class SKLearnForQlik:
             self.table.fields.add(name="mean_absolute_error", dataType=1)
             self.table.fields.add(name="median_absolute_error", dataType=1)
             self.table.fields.add(name="explained_variance_score", dataType=1)
+        elif variant == "metrics_reg_cv":
+            self.table.fields.add(name="model_name")
+            self.table.fields.add(name="r2_score", dataType=1)
+            self.table.fields.add(name="r2_score_std", dataType=1)
+            self.table.fields.add(name="mean_squared_error", dataType=1)
+            self.table.fields.add(name="mean_squared_error_std", dataType=1)
+            self.table.fields.add(name="mean_absolute_error", dataType=1)
+            self.table.fields.add(name="mean_absolute_error_std", dataType=1)
+            self.table.fields.add(name="median_absolute_error", dataType=1)
+            self.table.fields.add(name="median_absolute_error_std", dataType=1)
+            self.table.fields.add(name="explained_variance_score", dataType=1)
+            self.table.fields.add(name="explained_variance_score_std", dataType=1)
         elif variant == "confusion_matrix":
             self.table.fields.add(name="model_name")
             self.table.fields.add(name="true_label")
