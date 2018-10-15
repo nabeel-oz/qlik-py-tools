@@ -507,16 +507,23 @@ class ExtensionService(SSE.ConnectorServicer):
             elif function == 22:
                 response = model.calculate_metrics()
             
-            # Check whether the metrics are for a classifier
-            if "accuracy" in response.columns:
+            # Check whether the metrics are for a classifier or regressor and whether they come from cross validation or hold-out testing
+            if "accuracy_std" in response.columns:
+                estimator_type = "classifier_cv"
+            elif "accuracy" in response.columns:
                 estimator_type = "classifier"
-            # Check whether the metrics are for a regressor
+            elif "r2_score_std" in response.columns:
+                estimator_type = "regressor_cv"
             elif "r2_score" in response.columns:
                 estimator_type = "regressor"
             
             # We convert values to type SSE.Dual, and group columns into a iterable
-            if estimator_type == "classifier":
+            if estimator_type == "classifier_cv":
+                dtypes = ["str", "str", "num", "num", "num", "num", "num", "num", "num", "num"]
+            elif estimator_type == "classifier":
                 dtypes = ["str", "str", "num", "num", "num", "num", "num"]
+            elif estimator_type == "regressor_cv":
+                dtypes = ["str", "num", "num", "num", "num", "num", "num", "num", "num", "num", "num"]
             elif estimator_type == "regressor":
                 dtypes = ["str", "num", "num", "num", "num", "num"]
         

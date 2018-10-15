@@ -162,48 +162,42 @@ LOAD
 EXTENSION PyTools.sklearn_Fit(TEMP_SAMPLES{Model_Name, N_Features});
 ```
 
-By default the fit method uses `0.33` of the dataset to test the model and provide a score. This can be controlled through the `test_size` parameter passed through the `execution_args`. The SSE handles the shuffling and split of data using the scikit-learn library.
+#### Testing strategy
 
-For classification problems, the score represents accuracy. For regression problems, the score represents the r2 score.
+This SSE allows the use of the hold-out method or k-fold cross validation for testing the model. A good explanation of these concepts is available [here](https://machinelearningmastery.com/train-final-machine-learning-model/). You may also want to refer to the scikit-learn [article on cross validation](http://scikit-learn.org/stable/modules/cross_validation.html).
+
+By default this SSE uses `0.33` of the dataset to test the model and provide a score. This can be controlled through the `test_size` parameter passed through the `execution_args`. In practice, this is a simplistic strategy and k-fold cross validation should be considered the preferred approach. 
+
+K-fold cross validation can be enabled by passing the `cv` parameter in `execution_args`. The value of the parameter should be an integer, e.g. 5 for 5-fold cross validation. For more information refer to the [Execution Arguments](#execution-arguments).
+
+For classification problems, the model score represents accuracy. For regression problems, the model score represents the r2 score.
 
 #### Evaluation Metrics
 
-Additional metrics can be obtained using the `sklearn_Get_Metrics` and `sklearn_Calculate_Metrics` functions.
+Additional metrics are available for evaluating the model when using k-fold cross validation or hold-out testing.
 
-The `sklearn_Get_Metrics` can be used if the model was evaluated with a test dataset during the call to `sklearn_Fit`. This happens by default unless the `test_size` is set to zero in the execution arguments. 
+The `sklearn_Get_Metrics` can be used if the model was evaluated during the call to `sklearn_Fit`. This happens by default unless the `cv` parameter was not passed and `test_size` is set to zero in the execution arguments. 
 
-This function only requires the model name as the input. Arguments to the scikit-learn functions used in calculating the metrics can be provided using the `PyTools.sklearn_Setup_Adv` function. For more details refer to the section on [Metrics Arguments](#metrics-arguments). 
+The `sklearn_Get_Metrics` function only requires the model name as the input. Arguments to the scikit-learn functions used in calculating the metrics can be provided using the `PyTools.sklearn_Setup_Adv` function. For more details refer to the section on [Metrics Arguments](#metrics-arguments). 
 
-The sample below shows the output fields for a classifier:
-
-```
-[Result-Metrics]:
-LOAD
-   model_name,
-   class,
-   accuracy,
-   precision,
-   recall,
-   fscore,
-   support
-EXTENSION PyTools.sklearn_Get_Metrics(TEMP_SAMPLES{Model_Name});
-```
-
-And this sample shows the output fields for a regressor:
+The sample below shows the how the metrics can be obtained from the SSE:
 
 ```
 [Result-Metrics]:
-LOAD
-   model_name,
-   r2_score,
-   mean_squared_error,
-   mean_absolute_error,
-   median_absolute_error,
-   explained_variance_score
+LOAD *
 EXTENSION PyTools.sklearn_Get_Metrics(TEMP_SAMPLES{Model_Name});
 ```
 
-The `sklearn_Calculate_Metrics` function takes in a new test dataset, with exactly the same features as the training data, and calculates the metrics. The output fields are the same as the ones described above for `sklearn_Get_Metrics`.
+The output of the function will depend on the testing method and whether the model is performing classification or regression. Refer to the table below for the output metrics.
+
+| Model Type | Testing Method | Metrics | Remarks |
+| --- | --- | --- | --- |
+| Classification | Hold-out | `accuracy`, `precision`, `recall`, `fscore`, `support` | |
+| Classification | K-fold cross validation | `accuracy`, `precision`, `precision_std`, `recall`, `recall_std`, `fscore`, `fscore_std` | With k-fold cross validation, the metrics represent an average taken over subsets of data. The standard deviation helps indicate how actual performance of the model may vary on unseen data. |
+| Regression | Hold-out | `r2_score`, `mean_squared_error`, `mean_absolute_error`, `median_absolute_error`, `explained_variance_score` | |
+| Regression | K-fold cross validation | `r2_score`, `r2_score_std`, `mean_squared_error`, `mean_squared_error_std`, `mean_absolute_error`, `mean_absolute_error_std`, `median_absolute_error`, `median_absolute_error_std`, `explained_variance_score`, `explained_variance_score_std` | With k-fold cross validation, the metrics represent an average taken over subsets of data. The standard deviation helps indicate how actual performance of the model may vary on unseen data. |
+
+The `sklearn_Calculate_Metrics` function takes in a new test dataset, with exactly the same features as the training data, and calculates the metrics. The output fields are the same as the ones described above for `sklearn_Get_Metrics` for the hold-out method.
 
 ```
 [Result-Metrics]:
@@ -211,7 +205,7 @@ LOAD *
 EXTENSION PyTools.sklearn_Calculate_Metrics(TEMP_SAMPLES{Model_Name, N_Features});
 ```
 
-For classifiers you can also obtain a confusion matrix with the function `sklearn_Get_Confusion_Matrix`.
+For classifiers you can also obtain a confusion matrix with the function `sklearn_Get_Confusion_Matrix`. For hold-out testing the matrix is calculated on the test dataset, while for k-fold cross validation the matrices are calculated for the test data in each fold and added up to give results across the entire training data.
 
 ```
 [Result-ConfusionMatrix]:
@@ -235,7 +229,7 @@ This function is only valid if `calculate_importances=true` is passed in the exe
 
 ```
 // Remember to pass calculate_importances=true in the execution arguments
-LET vExecutionArgs = 'overwrite=true,test_size=0.3,calculate_importances=true';
+LET vExecutionArgs = 'overwrite=true,cv=5,calculate_importances=true';
 ...
 
 // Use the LOAD...EXTENSION syntax to call the sklearn_Explain_Importances function
@@ -400,6 +394,9 @@ A very large number of features can have a negative impact on the model. This is
 This problem can be addressed by using dimensionality reduction before the estimator is fit to the data. You can add dimensionality reduction to the model by specifying it during the setup using the `sklearn_Setup_Adv` function.
 
 ```
+LET DimReductionArgs = 'reduction=PCA';
+...
+
 [Result-Setup]:
 LOAD
    model_name,
@@ -460,6 +457,7 @@ If you want to use default values you can simply pass an empty string for `Execu
 | --- | --- | --- | --- |
 | overwrite | Specify whether any existing model with the same name should be overwritten | `true`, `false` | Defaults to `false`. |
 | test_size | Set the ratio that will be used to split the samples into training and testing data sets | `0.3` | Defaults to `0.33`. |
+| cv | Enable k-fold cross validation | `5` | Defaults to `0` in which case the hold-out testing strategy is used as per `test_size`. <br><br>The value represents the cross validation splitting strategy as defined in the scikit-learn [cross_validate](http://scikit-learn.org/stable/modules/generated/sklearn.model_selection.cross_validate.html#sklearn.model_selection.cross_validate) method. <br><br>Refer to the [Testing strategy](#testing-strategy) section for further explanation. |
 | random_state | Seed used by the random number generator when generating the training testing split | `42` | Default to `42`.<br><br>Must be an integer. |
 | compress | Compression level between 1-9 used by joblib when saving the model | `1` | Defaults to `3`. |
 | retain_data | Flag to determine if the training and test data should be saved in the model | `true`, `false` | Defaults to `false` as this adds to the size of the model on disk. |
@@ -521,9 +519,9 @@ LOAD * INLINE [
 
 Model evaluation metrics are calculated by the `PyTools.sklearn_Fit` and `PyTools.sklearn_Calculate_Metrics` functions. 
 
-For classification, metrics are calculated using the scikit-learn class [metrics.precision_recall_fscore_support](http://scikit-learn.org/stable/modules/generated/sklearn.metrics.precision_recall_fscore_support.html). The accuracy is available from the estimator's `score` method and is not recalculated separately.
+For classification, metrics are calculated using the scikit-learn class [metrics.precision_recall_fscore_support](http://scikit-learn.org/stable/modules/generated/sklearn.metrics.precision_recall_fscore_support.html). The accuracy is available from the estimator's `score` method. When using k-fold cross validation the metrics are calculated using the methods [precision_score](http://scikit-learn.org/stable/modules/generated/sklearn.metrics.precision_score.html), [recall_score](http://scikit-learn.org/stable/modules/generated/sklearn.metrics.recall_score.html), [f1_score](http://scikit-learn.org/stable/modules/generated/sklearn.metrics.f1_score.html).
 
-For regression, metrics are calculated using [metrics.mean_squared_error](http://scikit-learn.org/stable/modules/generated/sklearn.metrics.mean_squared_error.html), [metrics.mean_absolute_error](http://scikit-learn.org/stable/modules/generated/sklearn.metrics.mean_absolute_error.html), [metrics.median_absolute_error](http://scikit-learn.org/stable/modules/generated/sklearn.metrics.median_absolute_error.html), [metrics.explained_variance_score](http://scikit-learn.org/stable/modules/generated/sklearn.metrics.explained_variance_score.html). The r2 score is available from the estimator's `score` method and is not recalculated separately.
+For regression, metrics are calculated using [metrics.mean_squared_error](http://scikit-learn.org/stable/modules/generated/sklearn.metrics.mean_squared_error.html), [metrics.mean_absolute_error](http://scikit-learn.org/stable/modules/generated/sklearn.metrics.mean_absolute_error.html), [metrics.median_absolute_error](http://scikit-learn.org/stable/modules/generated/sklearn.metrics.median_absolute_error.html), [metrics.explained_variance_score](http://scikit-learn.org/stable/modules/generated/sklearn.metrics.explained_variance_score.html). The r2 score is available from the estimator's `score` method.
 
 Arguments for the metrics other than those coming from the estimator's `score` method can be provided by using the `PyTools.sklearn_Setup_Adv` function instead of the standard `PyTools.sklearn_Setup` function.
 
