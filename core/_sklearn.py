@@ -19,6 +19,7 @@ from sklearn import preprocessing
 from sklearn.pipeline import Pipeline
 from sklearn.model_selection import train_test_split
 from sklearn.model_selection import cross_validate
+from sklearn.model_selection import cross_val_predict
 from sklearn.model_selection import GridSearchCV
 
 from sklearn.decomposition import PCA, KernelPCA, IncrementalPCA, TruncatedSVD, FactorAnalysis, FastICA, NMF, SparsePCA,\
@@ -393,7 +394,16 @@ class SKLearnForQlik:
             err = "Incorrect usage. The estimator specified is not a known classifier or regressor: {0}".format(self.model.estimator)
             raise Exception(err)
 
-        if self.model.cv <= 0 and self.model.test_size > 0:        
+        # Check which validation strategy is to be used, if any
+        # For an explanation of cross validation in scikit-learn see: http://scikit-learn.org/stable/modules/cross_validation.html#multimetric-cross-validation
+        if self.model.cv > 0:
+            self.model.validation = "k-fold"
+        elif self.model.test_size > 0:
+            self.model.validation = "hold-out"
+        else:
+            self.model.validation = "external"
+
+        if self.model.validation == "hold-out":        
             # Split the data into training and testing subsets
             self.X_train, self.X_test, self.y_train, self.y_test = \
             train_test_split(train_test_df, target_df, test_size=self.model.test_size, random_state=self.model.random_state)
@@ -440,7 +450,7 @@ class SKLearnForQlik:
             # Add grid search to the sklearn pipeline
             self.model.pipe.steps.append(('grid_search', grid_search))
 
-            if self.model.cv > 0:
+            if self.model.validation == "k-fold":
                 # Perform K-fold cross validation
                 self._cross_validate()
 
@@ -465,20 +475,23 @@ class SKLearnForQlik:
             # Add the estimator to the sklearn pipeline
             self.model.pipe.steps.append(('estimator', estimator))  
 
-            if self.model.cv > 0:
+            if self.model.validation == "k-fold":
+                # Prepare key word arguments for the estimator step in the pipeline
+                # fit_params = {'estimator__' + k: v for k, v in self.model.estimator_kwargs.items()}
+
                 # Perform K-fold cross validation
-                self._cross_validate(fit_params=self.model.estimator_kwargs)
+                self._cross_validate()
 
             # Fit the training data to the pipeline
             self.model.pipe.fit(self.X_train, self.y_train.values.ravel())
         
-        if self.model.cv <= 0 and self.model.test_size > 0:       
+        if self.model.validation == "hold-out":       
             # Evaluate the model using the test data            
             self.calculate_metrics(caller="internal")
         
         if self.model.calc_feature_importances:
             # Select the dataset for calculating importances
-            if self.model.cv <= 0 and self.model.test_size > 0:
+            if self.model.validation == "hold-out":
                 X = self.X_test
             else:
                 X = train_test_df
@@ -493,7 +506,7 @@ class SKLearnForQlik:
         self._update_cache()
         
         # Prepare the output
-        if self.model.cv > 0 or self.model.test_size > 0: 
+        if self.model.validation != "external": 
             message = [[self.model.name, 'Model successfully trained, tested and saved to disk.',\
                         time.strftime('%X %x %Z', time.localtime(self.model.state_timestamp)),\
                         "{0} model has a score of {1:.3f} against the test data."\
@@ -689,20 +702,8 @@ class SKLearnForQlik:
             metrics_df.loc[:,"class"] = metrics_df.index
             metrics_df = metrics_df.loc[:,["model_name", "class", "accuracy", "precision", "recall", "fscore", "support"]]
             
-            # Calculate confusion matrix and flatten it to a simple array
-            confusion_array = metrics.confusion_matrix(self.y_test, self.y_pred).ravel()
-            
-            # Structure into a DataFrame suitable for Qlik
-            result = []
-            i = 0
-            for t in labels:
-                for p in labels:
-                    result.append([str(t), str(p), confusion_array[i]])
-                    i = i + 1
-            self.model.confusion_matrix = pd.DataFrame(result, columns=["true_label", "pred_label", "count"])
-            self.model.confusion_matrix.loc[:,"model_name"] = self.model.name
-            self.model.confusion_matrix = self.model.confusion_matrix.loc[:,\
-                                                                          ["model_name", "true_label", "pred_label", "count"]]
+            # Prepare the confusion matrix and add it to the model
+            self._prep_confusion_matrix(self.y_test, self.y_pred, labels)
             
         elif self.model.estimator_type == "regressor":
             # Get the r2 score
@@ -761,8 +762,8 @@ class SKLearnForQlik:
             # Prepare the output
             self.response = self.model.confusion_matrix
         except AttributeError:
-            err = "The confusion matrix is only avaialble for classifiers when using hold-out testing. " + \
-            "When using K-fold cross validation use the bulk predict function to build the confusion matrix in Qlik."
+            err = "The confusion matrix is only avaialble for classifiers, and when hold-out testing " + \
+            "or K-fold cross validation has been performed."
             raise Exception(err)
         
         # Send the reponse table description to Qlik
@@ -963,18 +964,18 @@ class SKLearnForQlik:
         self.response = self.model.metrics_df
         
         # Send the reponse table description to Qlik
-        if self.model.cv <= 0 and self.model.test_size > 0:
+        if self.model.validation == "hold-out":
             if self.model.estimator_type == "classifier":
                 self._send_table_description("metrics_clf")
             elif self.model.estimator_type == "regressor":
                 self._send_table_description("metrics_reg")
-        elif self.model.cv > 0:
+        elif self.model.validation == "k-fold":
             if self.model.estimator_type == "classifier":
                 self._send_table_description("metrics_clf_cv")
             elif self.model.estimator_type == "regressor":
                 self._send_table_description("metrics_reg_cv")
         else:
-            err = "Metrics are not available. Make sure the machine learning pipeline includes cross validation or hold-out testing."
+            err = "Metrics are not available. Make sure the machine learning pipeline includes K-fold cross validation or hold-out testing."
             raise Exception(err)
         
         # Debug information is printed to the terminal and logs if the paramater debug = true
@@ -1287,6 +1288,9 @@ class SKLearnForQlik:
 
             # Get unique labels for classification
             labels = np.unique(self.y_train.values)
+
+            # Flatten the true labels for the training data
+            y_train = self.y_train.values.ravel()
             
             # Set up a dictionary for the scoring metrics
             scoring = {'accuracy':'accuracy'}
@@ -1304,7 +1308,8 @@ class SKLearnForQlik:
             else:
                 # If there is no averaging we will need multiple scorers; one for each class
                 for label in labels:
-                    metric_args['labels'] = label
+                    metric_args['pos_label'] = label
+                    metric_args['labels'] = [label]
                     scoring['precision_'+str(label)] = metrics.make_scorer(metrics.precision_score, **metric_args)
                     scoring['recall_'+str(label)] = metrics.make_scorer(metrics.recall_score, **metric_args)
                     scoring['fscore_'+str(label)] = metrics.make_scorer(metrics.f1_score, **metric_args)
@@ -1315,11 +1320,16 @@ class SKLearnForQlik:
             scoring = ['r2', 'neg_mean_squared_error', 'neg_mean_absolute_error', 'neg_median_absolute_error', 'explained_variance']
         
         # Perform cross validation using the training data and the model pipeline
-        scores = cross_validate(self.model.pipe, self.X_train, self.y_train.values.ravel(), scoring=scoring, cv=self.model.cv,\
-        fit_params=fit_params, return_train_score=False)
+        scores = cross_validate(self.model.pipe, self.X_train, y_train, scoring=scoring, cv=self.model.cv, fit_params=fit_params, return_train_score=False)
 
         # Prepare the metrics data frame according to the output format
-        if self.model.estimator_type == "classifier":
+        if self.model.estimator_type == "classifier":           
+            # Get cross validation predictions for the confusion matrix
+            y_pred = cross_val_predict(self.model.pipe, self.X_train, y_train, cv=self.model.cv, fit_params=fit_params)
+
+            # Prepare the confusion matrix and add it to the model
+            self._prep_confusion_matrix(y_train, y_pred, labels)
+
             # Create an empty data frame to set the structure
             metrics_df = pd.DataFrame(columns=["class", "accuracy", "accuracy_std", "precision", "precision_std", "recall",\
             "recall_std", "fscore", "fscore_std"])
@@ -1376,6 +1386,25 @@ class SKLearnForQlik:
         # Save the metrics_df to the model
         self.model.metrics_df = metrics_df
     
+    def _prep_confusion_matrix(self, y_test, y_pred, labels):
+        """
+        Calculate a confusion matrix and add it to the model as a data frame suitable for Qlik
+        """
+
+        # Calculate confusion matrix and flatten it to a simple array
+        confusion_array = metrics.confusion_matrix(y_test, y_pred).ravel()
+        
+        # Structure into a DataFrame suitable for Qlik
+        result = []
+        i = 0
+        for t in labels:
+            for p in labels:
+                result.append([str(t), str(p), confusion_array[i]])
+                i = i + 1
+        self.model.confusion_matrix = pd.DataFrame(result, columns=["true_label", "pred_label", "count"])
+        self.model.confusion_matrix.loc[:,"model_name"] = self.model.name
+        self.model.confusion_matrix = self.model.confusion_matrix.loc[:,["model_name", "true_label", "pred_label", "count"]]
+    
     def _calc_importances(self, data=None):
         """
         Calculate feature importances.
@@ -1392,11 +1421,14 @@ class SKLearnForQlik:
         if self.model.estimator_type == "classifier":
             try:
                 # We use the predicted probabilities from the estimator if available
-                imm = InMemoryModel(self.model.pipe.predict_proba, examples = X_test[:10], model_type="classifier")
+                predictor = self.model.pipe.predict_proba
             except AttributeError:
                 # Otherwise we simply use the predict method
-                imm = InMemoryModel(self.model.pipe.predict, examples = X_test[:10], model_type="classifier", \
-                unique_values = self.model.pipe.classes_)
+                predictor = self.model.pipe.predict
+            
+            # Set up a skater InMemoryModel to calculate feature importances
+            imm = InMemoryModel(predictor, examples = X_test[:10], model_type="classifier", unique_values=self.model.pipe.classes_)
+        
         elif self.model.estimator_type == "regressor":
             # Set up a skater InMemoryModel to calculate feature importances using the predict method
             imm = InMemoryModel(self.model.pipe.predict, examples = X_test[:10], model_type="regressor")
