@@ -176,7 +176,7 @@ For classification problems, the model score represents accuracy. For regression
 
 Additional metrics are available for evaluating the model when using k-fold cross validation or hold-out testing.
 
-The `sklearn_Get_Metrics` can be used if the model was evaluated during the call to `sklearn_Fit`. This happens by default unless the `cv` parameter was not passed and `test_size` is set to zero in the execution arguments. 
+The `sklearn_Get_Metrics` function can be used if the model was evaluated during the call to `sklearn_Fit`. This happens by default unless the `cv` parameter was not passed and `test_size` is set to zero in the execution arguments. 
 
 The `sklearn_Get_Metrics` function only requires the model name as the input. Arguments to the scikit-learn functions used in calculating the metrics can be provided using the `PyTools.sklearn_Setup_Adv` function. For more details refer to the section on [Metrics Arguments](#metrics-arguments). 
 
@@ -225,7 +225,7 @@ Model interpretability is a developing area in Machine learning, and explaining 
 
 We can call the `sklearn_Explain_Importances` function in the load script to understand the importance assigned to each feature by the estimator. This can help guide further exploration of the data with Qlik; analyzing how the target changes with selections made to the most influential features.
 
-This function is only valid if `calculate_importances=true` is passed in the execution arguments. In addition, `test_size` should be greater than zero in the execution arguments or the `sklearn_Calculate_Metrics` function should have been called explicitly with a test dataset.
+This function is only valid if `calculate_importances=true` is passed in the execution arguments. In addition, `cv` or `test_size` should be greater than zero in the execution arguments or the `sklearn_Calculate_Metrics` function should have been called explicitly with a test dataset.
 
 ```
 // Remember to pass calculate_importances=true in the execution arguments
