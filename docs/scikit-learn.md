@@ -56,7 +56,7 @@ At a high-level the steps are:
 7. Optionally, calculate metrics on test data if this was not done together with training
    - `PyTools.sklearn_Calculate_Metrics(model_name, n_features)`
    - `PyTools.sklearn_Get_Metrics(model_name)`
-   - `PyTools.sklearn_Get_Confusion_Matrix(model_name, n_features)` _(Only applicable to classifiers)_
+   - `PyTools.sklearn_Get_Confusion_Matrix(model_name)` _(Only applicable to classifiers)_
 8. Optionally, calculate feature importances to gain a better understanding of the model
     - `PyTools.sklearn_Explain_Importances(model_name)`
 9. Get predictions from an existing model
@@ -65,7 +65,7 @@ At a high-level the steps are:
    - `PyTools.sklearn_Predict_Proba(model_name, n_features)` _(For use in chart expressions. Only applicable to classifiers)_
    - `PyTools.sklearn_Bulk_Predict_Proba(model_name, key, n_features)` _(For use in the load script. Only applicable to classifiers)_
 
-Steps 1-7 are done through Qlik's data load processes, while the predictions can be made through either the load script or in real-time using chart expressions.
+Steps 1-8 are done through Qlik's data load processes, while the predictions can be made through either the load script or in real-time using chart expressions.
 
 ### Preparing data
 The first step is to gather the features (i.e. dimensions and measures in Qlik) that will help us predict the target. The target can be discrete labels for a classification problem, or a continuous variable for a regression problem. 
