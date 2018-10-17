@@ -5,6 +5,7 @@
 - [Introduction](#introduction)
     - [Demonstration Video](#demonstration-video)
 - [Note on the approach](#note-on-the-approach)
+- [Docker Image](#docker-image)
 - [Pre-requisites](#pre-requisites)
 - [Installation](#installation)
 - [Usage](#usage)
@@ -41,6 +42,17 @@ While native Python script evaluation is possible in Qlik as demonstrated in the
 I prefer this approach for two key reasons:
 - Separation of the Python implementation from usage in Qlik: App authors in Qlik just need to be able to use the functions, and understand the algorithms at a high level. Any complexity such as handling missing values or scaling the data is abstracted to simple parameters passed in the Qlik expression.
 - Security: This server side extension can not be used to execute arbitrary code from Qlik. Users are restricted to the algorithms exposed through this SSE. Security can be further enhanced by running the SSE on a separate, sandboxed machine, and [securing communication with certificates](https://github.com/qlik-oss/server-side-extension/blob/master/generate_certs_guide/README.md).
+
+
+## Docker Image
+
+A Docker image for qlik-py-tools is available [here](https://hub.docker.com/r/nabeeloz/qlik-py-tools/). If you are familiar with containerisation this is the simplest way to get this SSE running in your environment:
+```
+docker pull nabeeloz/qlik-py-tools
+```
+The image uses port 80 by default. You can add encryption using certificates as explained [here](https://github.com/qlik-oss/server-side-extension/blob/master/generate_certs_guide/README.md).
+
+If you don't know what that means or want to install the SSE on your local machine you can carry on with the instructions below.
 
 
 ## Pre-requisites
