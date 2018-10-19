@@ -52,7 +52,11 @@ docker pull nabeeloz/qlik-py-tools
 ```
 The image uses port 80 by default. You can add encryption using certificates as explained [here](https://github.com/qlik-oss/server-side-extension/blob/master/generate_certs_guide/README.md).
 
-If you don't know what that means or want to install the SSE on your local machine you can carry on with the instructions below.
+```
+docker run -p 50055:80 -it nabeeloz/qlik-py-tools
+```
+
+If you want to install this SSE on a Windows machine you can carry on with the instructions below.
 
 
 ## Pre-requisites

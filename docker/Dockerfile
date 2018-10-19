@@ -9,7 +9,7 @@ COPY . /qlik-py-tools
 
 # Install dependencies
 RUN apt-get update
-RUN apt-get install build-essentials
+RUN apt-get install build-essential
 	
 # Upgrade pip and setuptools
 RUN python -m pip install --upgrade setuptools pip
@@ -27,8 +27,14 @@ RUN pip install -U scikit-learn
 RUN pip install hdbscan
 RUN pip install -U skater
 
+# Copy modified file for skater
+COPY ./feature_importance.py /usr/local/lib/python3.6/site-packages/skater-1.1.2-py3.6.egg/skater/core/global_interpretation/
+
 # Make port 80 available to the world outside this container
 EXPOSE 80
 
+# Set the working directory to /qlik-py-tools/core
+WORKDIR /qlik-py-tools/core
+
 # Run __main__.py when the container launches
-CMD ["python", "./core/__main__.py"]
+CMD ["python", "__main__.py"]
