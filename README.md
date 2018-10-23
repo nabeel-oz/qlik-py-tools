@@ -46,7 +46,11 @@ I prefer this approach for two key reasons:
 
 ## Docker Image
 
-A Docker image for qlik-py-tools is available [here](https://hub.docker.com/r/nabeeloz/qlik-py-tools/). If you are familiar with containerisation this is the simplest way to get this SSE running in your environment:
+A Docker image for qlik-py-tools is available on [Docker Hub](https://hub.docker.com/r/nabeeloz/qlik-py-tools/). If you are familiar with containerisation this is the simplest way to get this SSE running in your environment. 
+
+If you want to install this SSE locally on a Windows machine, you can jump to the [Pre-requisites](#pre-requisites) section.
+
+To pull the image from Docker's public registry use the command below:
 ```
 docker pull nabeeloz/qlik-py-tools
 ```
@@ -55,8 +59,24 @@ The image uses port 80 by default. You can add encryption using certificates as 
 ```
 docker run -p 50055:80 -it nabeeloz/qlik-py-tools
 ```
+Containers built with this image only retain data while they are running. This means that to persist trained models or log files you will need to add a volume or bind mount using [Docker capabilities for managing data](https://docs.docker.com/storage/).
 
-If you want to install this SSE on a Windows machine you can carry on with the instructions below.
+```
+# Store predictive models to a Docker volume on the host machine
+docker run -p 50055:80 -it -v pytools-models:/qlik-py-tools/models nabeeloz/qlik-py-tools
+
+# Store log files to a bind mount on the host machine
+docker run -p 50055:80 -it -v ~/Documents/logs:/qlik-py-tools/core/logs nabeeloz/qlik-py-tools
+
+# Run a container in detached mode, storing predictive models on a volume and logs on a bind mount
+docker run \
+    -p 50055:80 \
+    -d \
+    -v pytools-models:/qlik-py-tools/models \
+    -v ~/Documents/logs:/qlik-py-tools/core/logs \
+    nabeeloz/qlik-py-tools
+```
+_Note that this SSE and Docker do not handle file locking, and so do not support multiple containers writing to the same file._
 
 
 ## Pre-requisites
