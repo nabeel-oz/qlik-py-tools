@@ -493,11 +493,13 @@ class SKLearnForQlik:
             # Select the dataset for calculating importances
             if self.model.validation == "hold-out":
                 X = self.X_test
+                y = self.y_test
             else:
                 X = train_test_df
+                y = target_df.values.ravel()
             
             # Calculate model agnostic feature importances
-            self._calc_importances(data = X)
+            self._calc_importances(X = X, y = y)
 
         # Persist the model to disk
         self.model = self.model.save(self.model.name, self.path, self.model.compress)
@@ -730,7 +732,7 @@ class SKLearnForQlik:
             
             if self.model.calc_feature_importances:
                 # Calculate model agnostic feature importances
-                self._calc_importances(data = self.X_test)
+                self._calc_importances(X = self.X_test, y = self.y_test)
 
             self.response = metrics_df
 
@@ -816,10 +818,14 @@ class SKLearnForQlik:
             # Set the key column as the index
             self.request_df.set_index("key", drop=False, inplace=True)
         
-        # Split the features provided as a string into individual columns
-        self.X = pd.DataFrame([x[feature_col_num].split("|") for x in self.request_df.values.tolist()],\
-                                     columns=self.model.features_df.loc[:,"name"].tolist(),\
-                                     index=self.request_df.index)
+        try:
+            # Split the features provided as a string into individual columns
+            self.X = pd.DataFrame([x[feature_col_num].split("|") for x in self.request_df.values.tolist()],\
+                                        columns=self.model.features_df.loc[:,"name"].tolist(),\
+                                        index=self.request_df.index)
+        except AssertionError as ae:
+            err = "The number of input columns do not match feature definitions. Ensure you are using the | delimiter and that the target is not included in your input to the prediction function."
+            raise AssertionError(err) from ae
         
         # Convert the data types based on feature definitions 
         self.X = utils.convert_types(self.X, self.model.features_df)
@@ -1405,7 +1411,7 @@ class SKLearnForQlik:
         self.model.confusion_matrix.loc[:,"model_name"] = self.model.name
         self.model.confusion_matrix = self.model.confusion_matrix.loc[:,["model_name", "true_label", "pred_label", "count"]]
     
-    def _calc_importances(self, data=None):
+    def _calc_importances(self, X=None, y=None):
         """
         Calculate feature importances.
         Importances are calculated using the Skater library to provide this capability for all sklearn algorithms.
@@ -1413,21 +1419,27 @@ class SKLearnForQlik:
         """
 
         # Fill null values in the test set according to the model settings
-        X_test = utils.fillna(data, method=self.model.missing)
+        X_test = utils.fillna(X, method=self.model.missing)
         
         # Calculate model agnostic feature importances using the skater library
-        interpreter = Interpretation(X_test, feature_names=self.model.features_df.index.tolist())
+        interpreter = Interpretation(X_test, training_labels=y, feature_names=self.model.features_df.index.tolist())
         
         if self.model.estimator_type == "classifier":
             try:
                 # We use the predicted probabilities from the estimator if available
                 predictor = self.model.pipe.predict_proba
+
+                # Set up keyword arguments accordingly
+                imm_kwargs = {"probability": True}
             except AttributeError:
                 # Otherwise we simply use the predict method
                 predictor = self.model.pipe.predict
+
+                # Set up keyword arguments accordingly
+                imm_kwargs = {"probability": False, "unique_values": self.model.pipe.classes_}
             
             # Set up a skater InMemoryModel to calculate feature importances
-            imm = InMemoryModel(predictor, examples = X_test[:10], model_type="classifier", unique_values=self.model.pipe.classes_)
+            imm = InMemoryModel(predictor, examples = X_test[:10], model_type="classifier", **imm_kwargs)
         
         elif self.model.estimator_type == "regressor":
             # Set up a skater InMemoryModel to calculate feature importances using the predict method

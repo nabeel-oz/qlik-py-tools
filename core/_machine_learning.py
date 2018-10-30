@@ -327,6 +327,8 @@ class Preprocessor(TransformerMixin):
                 unique = self.hasher(self.hash_df, c, self.hash_meta["strategy_args"].loc[c])
                 self.hash_df = self.hash_df.join(unique, on=c)
                 self.hash_df = self.hash_df.drop(c, axis=1)
+                # Fill any missing values in the hash dataframe
+                self.hash_df = self.fillna(self.hash_df, missing="zeros")
         
         if self.cv:
             # Get a subset of the data that requires count vectorizing
@@ -386,7 +388,7 @@ class Preprocessor(TransformerMixin):
             if self.X_transform is None:
                 self.X_transform = self.text_df
             else:
-                self.X_transform = self.X_transform.join(self.text_df)
+                self.X_transform = pd.concat([self.X_transform, self.text_df], join='outer', axis=1, sort=False)
 
         if self.scale:
             # Get a subset of the data that requires scaling
@@ -395,7 +397,7 @@ class Preprocessor(TransformerMixin):
         # If scale_hashed = True join the hashed columns to the scaling dataframe
         if self.hash and self.scale_hashed:
             if self.scale:
-                self.scale_df = self.scale_df.join(self.hash_df)
+                self.scale_df = pd.concat([self.scale_df, self.hash_df], join='outer', axis=1, sort=False)
             else:
                 self.scale_df = self.hash_df
                 # If only hashed columns are being scaled, the scaler needs to be instantiated
@@ -405,12 +407,12 @@ class Preprocessor(TransformerMixin):
             if self.X_transform is None:
                 self.X_transform = self.hash_df
             else:
-                self.X_transform = self.X_transform.join(self.hash_df)
+                self.X_transform = pd.concat([self.X_transform, self.hash_df], join='outer', axis=1, sort=False)
 
         # If scale_vectors = True join the count vectorized columns to the scaling dataframe
         if self.cv and self.scale_vectors:
             if self.scale or (self.hash and self.scale_hashed):
-                self.scale_df = self.scale_df.join(self.cv_df)
+                self.scale_df = pd.concat([self.scale_df, self.cv_df], join='outer', axis=1, sort=False)
             else:
                 self.scale_df = self.cv_df
                 # If only count vectorized columns are being scaled, the scaler needs to be instantiated
@@ -420,12 +422,12 @@ class Preprocessor(TransformerMixin):
             if self.X_transform is None:
                 self.X_transform = self.cv_df
             else:
-                self.X_transform = self.X_transform.join(self.cv_df)
+                self.X_transform = pd.concat([self.X_transform, self.cv_df], join='outer', axis=1, sort=False)
 
         # If scale_vectors = True join the tfidf vectorized columns to the scaling dataframe
         if self.tfidf and self.scale_vectors:
             if self.scale or (self.hash and self.scale_hashed) or self.cv:
-                self.scale_df = self.scale_df.join(self.tfidf_df)
+                self.scale_df = pd.concat([self.scale_df, self.tfidf_df], join='outer', axis=1, sort=False)
             else:
                 self.scale_df = self.tfidf_df
                 # If only tfidf vectorized columns are being scaled, the scaler needs to be instantiated
@@ -435,7 +437,7 @@ class Preprocessor(TransformerMixin):
             if self.X_transform is None:
                 self.X_transform = self.tfidf_df
             else:
-                self.X_transform = self.X_transform.join(self.tfidf_df)
+                self.X_transform = pd.concat([self.X_transform, self.tfidf_df], join='outer', axis=1, sort=False)
 
         try:
             # Perform scaling on the relevant data
@@ -452,19 +454,21 @@ class Preprocessor(TransformerMixin):
                 if self.X_transform is None:
                     self.X_transform = self.scale_df
                 else:
-                    self.X_transform = self.X_transform.join(self.scale_df)
+                    self.X_transform = pd.concat([self.X_transform, self.scale_df], join='outer', axis=1, sort=False)
         except AttributeError:
             pass
 
         if self.no_prep:
             # Get a subset of the data that doesn't require preprocessing
             self.no_prep_df = X[self.none_meta.index.tolist()]
+            # Fill any missing values in the no prep dataframe
+            self.no_prep_df = self.fillna(self.no_prep_df, missing="zeros")
         
             # Finally join the columns that do not require preprocessing to the result dataset
             if self.X_transform is None:
                 self.X_transform = self.no_prep_df
             else:
-                self.X_transform = self.X_transform.join(self.no_prep_df)
+                self.X_transform = pd.concat([self.X_transform, self.no_prep_df], join='outer', axis=1, sort=False)
         
         # Output information to the terminal and log file if required
         if self.log is not None:
@@ -559,10 +563,13 @@ class Preprocessor(TransformerMixin):
                 pass
         
         elif step == 3:
-            sys.stdout.write("X_transform shape:{0}\nSample Data:\n{1}\n\n".format(self.X_transform.shape, self.X_transform.head()))
-                
-            with open(self.log,'a', encoding='utf-8') as f:
-                f.write("X_transform shape:{0}\nSample Data:\n{1}\n\n".format(self.X_transform.shape, self.X_transform.head()))
+            try:
+                sys.stdout.write("X_transform shape:{0}\nSample Data:\n{1}\n\n".format(self.X_transform.shape, self.X_transform.head()))
+                    
+                with open(self.log,'a', encoding='utf-8') as f:
+                    f.write("X_transform shape:{0}\nSample Data:\n{1}\n\n".format(self.X_transform.shape, self.X_transform.head()))
+            except AttributeError:
+                pass
 
     @staticmethod
     def hasher(df, col, n_features):

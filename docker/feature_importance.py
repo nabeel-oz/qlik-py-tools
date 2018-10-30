@@ -139,8 +139,8 @@ class FeatureImportance(BaseGlobalInterpretation):
                           scaled=use_scaling,
                           scorer=scorer)
 
-        self.interpreter.logger.warn("Multiprocessing has known issues with GRPC, using single process")
-        self.interpreter.logger.warn("More information here: https://github.com/grpc/grpc/blob/master/doc/fork_support.md")
+        # Multiprocessing results in issues with GRPC when using Docker, using single process
+        # More information here: https://github.com/grpc/grpc/blob/master/doc/fork_support.md
 
         importances = {}
         importance_dicts = []
