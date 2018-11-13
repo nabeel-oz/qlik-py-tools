@@ -138,7 +138,7 @@ The [sample app](Sample_App_Prophet.qvf) can be used as a template for the instr
 
 Firstly, you should set up your Qlik data model with a forecasting calendar. These instructions work with daily and monthly forecasts, but should teach you enough to build a sub daily forecast as well. 
 
-_Note that it is not necessary to build a forecast calendar as explained below. We simply need to include the periods to be forecasted in the input dataset. You could have these columns created in the data source and simply left empty. However, building a forecast calendar as explained below is a robust approach that lets the user control the number of periods they want to forecast, and make selections and exclusions in the source dates without introducing gaps in the forecast._
+_Note that it is not necessary to build a forecast calendar as explained below. We simply need to include the periods to be forecasted in the input dataset. You can create these periods in the data source and simply leave them empty. However, building a forecast calendar as explained below lets the user control the number of periods they want to forecast, and make selections and exclusions for any dimension without introducing gaps in the forecast._
 
 ![Qlik data model snippet](images/Data-01.png)
 
@@ -206,25 +206,25 @@ RESIDENT [Forecast Calendar];
 // Optional bit if you want to consider specific holidays in the forecast.
 // Here we add holidays to the Forecast Calendar. In this case we only have holidays from 2014-2019 so we should only use holiday functions for this range.
 // With a left join we get NULL values in HOLIDAY_NAME if there was no holiday on that date. This is what we want.
-LEFT JOIN ([Forecast Calendar])
-LOAD
-    Date(Date#("Date", 'YYYYMMDD')) as FORECAST_DATE,
-    "Holiday Name" as HOLIDAY_NAME
-FROM [lib://Data/Misc\VIC Public Holidays\australianpublicholidays-2014-2019.xlsx]
-(ooxml, embedded labels, table is australianpublicholidays)
-WHERE "Applicable To" = 'NAT' OR Index("Applicable To", 'VIC') > 0;
+//LEFT JOIN ([Forecast Calendar])
+//LOAD
+//    Date(Date#("Date", 'YYYYMMDD')) as FORECAST_DATE,
+//    "Holiday Name" as HOLIDAY_NAME
+//FROM [lib://Data/Misc\VIC Public Holidays\australianpublicholidays-2014-2019.xlsx]
+//(ooxml, embedded labels, table is australianpublicholidays)
+//WHERE "Applicable To" = 'NAT' OR Index("Applicable To", 'VIC') > 0;
  
 // Add a separate column for each holiday in case we want to analyze it separately
-FOR Each hol in FieldValueList('HOLIDAY_NAME')
-    IF Len('$(hol)') > 0 THEN
-        LEFT JOIN ([Forecast Calendar])
-        LOAD
-            FORECAST_DATE,
-            HOLIDAY_NAME as '$(hol)'
-        RESIDENT [Forecast Calendar]
-        WHERE HOLIDAY_NAME = '$(hol)';
-    END IF
-NEXT hol
+//FOR Each hol in FieldValueList('HOLIDAY_NAME')
+//    IF Len('$(hol)') > 0 THEN
+//        LEFT JOIN ([Forecast Calendar])
+//        LOAD
+//            FORECAST_DATE,
+//            HOLIDAY_NAME as '$(hol)'
+//        RESIDENT [Forecast Calendar]
+//        WHERE HOLIDAY_NAME = '$(hol)';
+//    END IF
+//NEXT hol
  
 // The values to be forecasted are linked to the forecast calendar by the key date
 [Actual to Forecast Link]:
@@ -244,7 +244,11 @@ LOAD DISTINCT
 RESIDENT ACCIDENT;
 ```
 
-Do a reload so that these changes are added to your data model.
+Do a reload so that these changes are added to your data model. Note that based on these associations you will need to use set analysis restricting the `FORECAST_LINK_TYPE` to `Actual` when using a measure with dimensions from the Forecast Calendar table.
+
+```
+Count({$<FORECAST_LINK_TYPE = {'Actual'}>} Distinct ACCIDENT_NO)
+```
 
 Next we create a few variables that will help us in setting up a good user experience:
 
@@ -324,6 +328,14 @@ Prediction (Daily Trend)
 PyTools.Prophet(if(FORECAST_MONTH <= AddMonths(Max(Total [Accident Month & Year]), $(vForecastPeriods)), FORECAST_DATE),
                 Count({$<FORECAST_LINK_TYPE = {'Actual'}>} Distinct ACCIDENT_NO),
                 'freq=D, return=trend')
+```
+
+The `vPausePredictions` variable can also be used inside the forecast measure to conditionally display the forecast:
+
+```
+PyTools.Prophet(if(FORECAST_MONTH <= AddMonths(Max(Total [Accident Month & Year]), $(vForecastPeriods)), FORECAST_MONTH),
+                if('$(vPausePredictions)' <> 'pause', Count({$<FORECAST_LINK_TYPE = {'Actual'}>} Distinct ACCIDENT_NO),
+                'freq=MS, return=yhat')
 ```
 
 For analyzing seasonality we need to set up additional variables which will be used in our `Prophet_Seasonality` expressions:
