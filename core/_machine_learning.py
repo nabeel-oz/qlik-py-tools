@@ -187,106 +187,106 @@ class Preprocessor(TransformerMixin):
         
         if self.ohe:
             # Get a subset of the data that requires one hot encoding
-            self.ohe_df = X[self.ohe_meta.index.tolist()]
+            ohe_df = X[self.ohe_meta.index.tolist()]
                 
             # Apply one hot encoding to relevant columns
-            self.ohe_df = pd.get_dummies(self.ohe_df, columns=self.ohe_df.columns)
+            ohe_df = pd.get_dummies(ohe_df, columns=ohe_df.columns)
             
             # Keep a copy of the OHE dataframe structure so we can align the transform dataset 
-            self.ohe_df_structure = pd.DataFrame().reindex_like(self.ohe_df)
+            self.ohe_df_structure = pd.DataFrame().reindex_like(ohe_df)
         
         # Scaling needs to be fit exclusively on the training data so as not to influence the results
         if self.scale:
             # Get a subset of the data that requires scaling
-            self.scale_df = X[self.scale_meta.index.tolist()]
+            scale_df = X[self.scale_meta.index.tolist()]
                    
         if self.hash:
             # Get a subset of the data that requires feature hashing
-            self.hash_df = X[self.hash_meta.index.tolist()]
-            hash_cols = self.hash_df.columns
+            hash_df = X[self.hash_meta.index.tolist()]
+            hash_cols = hash_df.columns
 
             # Hash unique values for each relevant column and then join to a dataframe for hashed data
             for c in hash_cols:
-                unique = self.hasher(self.hash_df, c, self.hash_meta["strategy_args"].loc[c])
-                self.hash_df = self.hash_df.join(unique, on=c)
-                self.hash_df = self.hash_df.drop(c, axis=1)
+                unique = self.hasher(hash_df, c, self.hash_meta["strategy_args"].loc[c])
+                hash_df = hash_df.join(unique, on=c)
+                hash_df = hash_df.drop(c, axis=1)
 
             # If hashed columns need to be scaled, these need to be considered when setting up the scaler as well    
             if self.scale_hashed:
                 if self.scale:
-                    self.scale_df = self.scale_df.join(self.hash_df)
+                    scale_df = scale_df.join(hash_df)
                 else:
-                    self.scale_df = self.hash_df 
+                    scale_df = hash_df 
         
         if self.cv:
             # Get a subset of the data that requires count vectorizing
-            self.cv_df = X[self.cv_meta.index.tolist()]
-            cv_cols = self.cv_df.columns
+            cv_df = X[self.cv_meta.index.tolist()]
+            cv_cols = cv_df.columns
 
             # Get count vectors for each relevant column and then join to a dataframe for count vectorized data
             for c in cv_cols:
-                unique = self.text_vectorizer(self.cv_df, c, type="count", **self.cv_meta["strategy_args"].loc[c])
-                self.cv_df = self.cv_df.join(unique, on=c)
-                self.cv_df = self.cv_df.drop(c, axis=1)
+                unique = self.text_vectorizer(cv_df, c, type="count", **self.cv_meta["strategy_args"].loc[c])
+                cv_df = cv_df.join(unique, on=c)
+                cv_df = cv_df.drop(c, axis=1)
 
             # Keep a copy of the count vectorized dataframe structure so we can align the transform dataset 
-            self.cv_df_structure = pd.DataFrame().reindex_like(self.cv_df)
+            self.cv_df_structure = pd.DataFrame().reindex_like(cv_df)
 
             # If text vector columns need to be scaled, these need to be considered when setting up the scaler as well    
             if self.scale_vectors:
                 if self.scale or (self.scale_hashed and self.hash):
-                    self.scale_df = self.scale_df.join(self.cv_df)
+                    scale_df = scale_df.join(cv_df)
                 else:
-                    self.scale_df = self.cv_df 
+                    scale_df = cv_df 
 
         if self.tfidf:
             # Get a subset of the data that requires tfidf vectorizing
-            self.tfidf_df = X[self.tfidf_meta.index.tolist()]
-            tfidf_cols = self.tfidf_df.columns
+            tfidf_df = X[self.tfidf_meta.index.tolist()]
+            tfidf_cols = tfidf_df.columns
 
             # Get tfidf vectors for each relevant column and then join to a dataframe for tfidf vectorized data
             for c in tfidf_cols:
-                unique = self.text_vectorizer(self.tfidf_df, c, type="tfidf", **self.tfidf_meta["strategy_args"].loc[c])
-                self.tfidf_df = self.tfidf_df.join(unique, on=c)
-                self.tfidf_df = self.tfidf_df.drop(c, axis=1)
+                unique = self.text_vectorizer(tfidf_df, c, type="tfidf", **self.tfidf_meta["strategy_args"].loc[c])
+                tfidf_df = tfidf_df.join(unique, on=c)
+                tfidf_df = tfidf_df.drop(c, axis=1)
 
             # Keep a copy of the tfidf vectorized dataframe structure so we can align the transform dataset 
-            self.tfidf_df_structure = pd.DataFrame().reindex_like(self.tfidf_df)
+            self.tfidf_df_structure = pd.DataFrame().reindex_like(tfidf_df)
             
             # If text vector columns need to be scaled, these need to be considered when setting up the scaler as well    
             if self.scale_vectors:
                 if self.scale or (self.scale_hashed and self.hash) or self.cv:
-                    self.scale_df = self.scale_df.join(self.tfidf_df)
+                    scale_df = scale_df.join(tfidf_df)
                 else:
-                    self.scale_df = self.tfidf_df 
+                    scale_df = tfidf_df 
         
         if self.text:
             # Get a subset of the data that requires text similarity OHE
-            self.text_df = X[self.text_meta.index.tolist()]
-            text_cols = self.text_df.columns
+            text_df = X[self.text_meta.index.tolist()]
+            text_cols = text_df.columns
 
             # Get text similarity OHE for each relevant column and then join to a dataframe for text similarity OHE data
             for c in text_cols:
-                unique = self.text_similarity(self.text_df, c)
-                self.text_df = self.text_df.join(unique, on=c)
-                self.text_df = self.text_df.drop(c, axis=1)
+                unique = self.text_similarity(text_df, c)
+                text_df = text_df.join(unique, on=c)
+                text_df = text_df.drop(c, axis=1)
 
             # Keep a copy of the text similarity OHE dataframe structure so we can align the transform dataset 
-            self.text_df_structure = pd.DataFrame().reindex_like(self.text_df)
+            self.text_df_structure = pd.DataFrame().reindex_like(text_df)
 
         try:
-            if len(self.scale_df) > 0:
+            if len(scale_df) > 0:
                 # Get an instance of the sklearn scaler fit to X
-                self.scaler_instance = self.get_scaler(self.scale_df, missing=self.missing, scaler=self.scaler, **self.kwargs)
+                self.scaler_instance = self.get_scaler(scale_df, missing=self.missing, scaler=self.scaler, **self.kwargs)
 
                 # Keep a copy of the scaling dataframe structure so we can align the transform dataset 
-                self.scale_df_structure = pd.DataFrame().reindex_like(self.scale_df)
+                self.scale_df_structure = pd.DataFrame().reindex_like(scale_df)
         except AttributeError:
             pass
 
         # Output information to the terminal and log file if required
         if self.log is not None:
-            self._print_log(2)
+            self._print_log(2, ohe_df=ohe_df, scale_df=scale_df, hash_df=hash_df, cv_df=cv_df, tfidf_df=tfidf_df, text_df=text_df)
 
         return self
     
@@ -298,186 +298,186 @@ class Preprocessor(TransformerMixin):
         Returns X_transform as a numpy array or a pandas dataframe based on return_type set in constructor.
         """        
         
-        self.X_transform = None
+        X_transform = None
         
         if self.ohe:
             # Get a subset of the data that requires one hot encoding
-            self.ohe_df = X[self.ohe_meta.index.tolist()]
+            ohe_df = X[self.ohe_meta.index.tolist()]
 
             # Apply one hot encoding to relevant columns
-            self.ohe_df = pd.get_dummies(self.ohe_df, columns=self.ohe_df.columns)
+            ohe_df = pd.get_dummies(ohe_df, columns=ohe_df.columns)
 
             # Align the columns with the original dataset. 
             # This is to prevent different number or order of features between training and test datasets.
-            self.ohe_df = self.ohe_df.align(self.ohe_df_structure, join='right', axis=1)[0]
+            ohe_df = ohe_df.align(self.ohe_df_structure, join='right', axis=1)[0]
 
             # Fill missing values in the OHE dataframe, that may appear after alignment, with zeros.
-            self.ohe_df = self.fillna(self.ohe_df, missing="zeros")
+            ohe_df = self.fillna(ohe_df, missing="zeros")
             
             # Add the encoded columns to the result dataset
-            self.X_transform = self.ohe_df
+            X_transform = ohe_df
 
         if self.hash:
             # Get a subset of the data that requires feature hashing
-            self.hash_df = X[self.hash_meta.index.tolist()]
-            hash_cols = self.hash_df.columns
+            hash_df = X[self.hash_meta.index.tolist()]
+            hash_cols = hash_df.columns
 
             # Hash unique values for each relevant column and then join to a dataframe for hashed data
             for c in hash_cols:
-                unique = self.hasher(self.hash_df, c, self.hash_meta["strategy_args"].loc[c])
-                self.hash_df = self.hash_df.join(unique, on=c)
-                self.hash_df = self.hash_df.drop(c, axis=1)
+                unique = self.hasher(hash_df, c, self.hash_meta["strategy_args"].loc[c])
+                hash_df = hash_df.join(unique, on=c)
+                hash_df = hash_df.drop(c, axis=1)
                 # Fill any missing values in the hash dataframe
-                self.hash_df = self.fillna(self.hash_df, missing="zeros")
+                hash_df = self.fillna(hash_df, missing="zeros")
         
         if self.cv:
             # Get a subset of the data that requires count vectorizing
-            self.cv_df = X[self.cv_meta.index.tolist()]
-            cv_cols = self.cv_df.columns
+            cv_df = X[self.cv_meta.index.tolist()]
+            cv_cols = cv_df.columns
 
             # Get count vectors for each relevant column and then join to a dataframe for count vectorized data
             for c in cv_cols:
-                unique = self.text_vectorizer(self.cv_df, c, type="count", **self.cv_meta["strategy_args"].loc[c])
-                self.cv_df = self.cv_df.join(unique, on=c)
-                self.cv_df = self.cv_df.drop(c, axis=1)
+                unique = self.text_vectorizer(cv_df, c, type="count", **self.cv_meta["strategy_args"].loc[c])
+                cv_df = cv_df.join(unique, on=c)
+                cv_df = cv_df.drop(c, axis=1)
 
             # Align the columns with the original dataset. 
             # This is to prevent different number or order of features between training and test datasets.
-            self.cv_df = self.cv_df.align(self.cv_df_structure, join='right', axis=1)[0]
+            cv_df = cv_df.align(self.cv_df_structure, join='right', axis=1)[0]
 
             # Fill missing values in the dataframe that may appear after alignment with zeros.
-            self.cv_df = self.fillna(self.cv_df, missing="zeros")
+            cv_df = self.fillna(cv_df, missing="zeros")
 
         if self.tfidf:
             # Get a subset of the data that requires tfidf vectorizing
-            self.tfidf_df = X[self.tfidf_meta.index.tolist()]
-            tfidf_cols = self.tfidf_df.columns
+            tfidf_df = X[self.tfidf_meta.index.tolist()]
+            tfidf_cols = tfidf_df.columns
 
             # Get tfidf vectors for each relevant column and then join to a dataframe for tfidf vectorized data
             for c in tfidf_cols:
-                unique = self.text_vectorizer(self.tfidf_df, c, type="tfidf", **self.tfidf_meta["strategy_args"].loc[c])
-                self.tfidf_df = self.tfidf_df.join(unique, on=c)
-                self.tfidf_df = self.tfidf_df.drop(c, axis=1)
+                unique = self.text_vectorizer(tfidf_df, c, type="tfidf", **self.tfidf_meta["strategy_args"].loc[c])
+                tfidf_df = tfidf_df.join(unique, on=c)
+                tfidf_df = tfidf_df.drop(c, axis=1)
 
             # Align the columns with the original dataset. 
             # This is to prevent different number or order of features between training and test datasets.
-            self.tfidf_df = self.tfidf_df.align(self.tfidf_df_structure, join='right', axis=1)[0]
+            tfidf_df = tfidf_df.align(self.tfidf_df_structure, join='right', axis=1)[0]
 
             # Fill missing values in the dataframe that may appear after alignment with zeros.
-            self.tfidf_df = self.fillna(self.tfidf_df, missing="zeros")
+            tfidf_df = self.fillna(tfidf_df, missing="zeros")
         
         if self.text:
             # Get a subset of the data that requires text similarity OHE
-            self.text_df = X[self.text_meta.index.tolist()]
-            text_cols = self.text_df.columns
+            text_df = X[self.text_meta.index.tolist()]
+            text_cols = text_df.columns
 
             # Get text similarity OHE for each relevant column and then join to a dataframe for text similarity OHE data
             for c in text_cols:
-                unique = self.text_similarity(self.text_df, c)
-                self.text_df = self.text_df.join(unique, on=c)
-                self.text_df = self.text_df.drop(c, axis=1)
+                unique = self.text_similarity(text_df, c)
+                text_df = text_df.join(unique, on=c)
+                text_df = text_df.drop(c, axis=1)
 
             # Align the columns with the original dataset. 
             # This is to prevent different number or order of features between training and test datasets.
-            self.text_df = self.text_df.align(self.text_df_structure, join='right', axis=1)[0]
+            text_df = text_df.align(self.text_df_structure, join='right', axis=1)[0]
 
             # Fill missing values in the dataframe that may appear after alignment with zeros.
-            self.text_df = self.fillna(self.text_df, missing="zeros")
+            text_df = self.fillna(text_df, missing="zeros")
 
             # Add the text similary OHE data to the result dataset
-            if self.X_transform is None:
-                self.X_transform = self.text_df
+            if X_transform is None:
+                X_transform = text_df
             else:
-                self.X_transform = pd.concat([self.X_transform, self.text_df], join='outer', axis=1, sort=False)
+                X_transform = pd.concat([X_transform, text_df], join='outer', axis=1, sort=False)
 
         if self.scale:
             # Get a subset of the data that requires scaling
-            self.scale_df = X[self.scale_meta.index.tolist()]
+            scale_df = X[self.scale_meta.index.tolist()]
 
         # If scale_hashed = True join the hashed columns to the scaling dataframe
         if self.hash and self.scale_hashed:
             if self.scale:
-                self.scale_df = pd.concat([self.scale_df, self.hash_df], join='outer', axis=1, sort=False)
+                scale_df = pd.concat([scale_df, hash_df], join='outer', axis=1, sort=False)
             else:
-                self.scale_df = self.hash_df
+                scale_df = hash_df
                 # If only hashed columns are being scaled, the scaler needs to be instantiated
-                self.scaler_instance = self.get_scaler(self.scale_df, missing=self.missing, scaler=self.scaler, **self.kwargs)
+                self.scaler_instance = self.get_scaler(scale_df, missing=self.missing, scaler=self.scaler, **self.kwargs)
         elif self.hash:
             # Add the hashed columns to the result dataset
-            if self.X_transform is None:
-                self.X_transform = self.hash_df
+            if X_transform is None:
+                X_transform = hash_df
             else:
-                self.X_transform = pd.concat([self.X_transform, self.hash_df], join='outer', axis=1, sort=False)
+                X_transform = pd.concat([X_transform, hash_df], join='outer', axis=1, sort=False)
 
         # If scale_vectors = True join the count vectorized columns to the scaling dataframe
         if self.cv and self.scale_vectors:
             if self.scale or (self.hash and self.scale_hashed):
-                self.scale_df = pd.concat([self.scale_df, self.cv_df], join='outer', axis=1, sort=False)
+                scale_df = pd.concat([scale_df, cv_df], join='outer', axis=1, sort=False)
             else:
-                self.scale_df = self.cv_df
+                scale_df = cv_df
                 # If only count vectorized columns are being scaled, the scaler needs to be instantiated
-                self.scaler_instance = self.get_scaler(self.scale_df, missing=self.missing, scaler=self.scaler, **self.kwargs)
+                self.scaler_instance = self.get_scaler(scale_df, missing=self.missing, scaler=self.scaler, **self.kwargs)
         elif self.cv:
             # Add the count vectorized columns to the result dataset
-            if self.X_transform is None:
-                self.X_transform = self.cv_df
+            if X_transform is None:
+                X_transform = cv_df
             else:
-                self.X_transform = pd.concat([self.X_transform, self.cv_df], join='outer', axis=1, sort=False)
+                X_transform = pd.concat([X_transform, cv_df], join='outer', axis=1, sort=False)
 
         # If scale_vectors = True join the tfidf vectorized columns to the scaling dataframe
         if self.tfidf and self.scale_vectors:
             if self.scale or (self.hash and self.scale_hashed) or self.cv:
-                self.scale_df = pd.concat([self.scale_df, self.tfidf_df], join='outer', axis=1, sort=False)
+                scale_df = pd.concat([scale_df, tfidf_df], join='outer', axis=1, sort=False)
             else:
-                self.scale_df = self.tfidf_df
+                scale_df = tfidf_df
                 # If only tfidf vectorized columns are being scaled, the scaler needs to be instantiated
-                self.scaler_instance = self.get_scaler(self.scale_df, missing=self.missing, scaler=self.scaler, **self.kwargs)
+                self.scaler_instance = self.get_scaler(scale_df, missing=self.missing, scaler=self.scaler, **self.kwargs)
         elif self.tfidf:
             # Add the count vectorized columns to the result dataset
-            if self.X_transform is None:
-                self.X_transform = self.tfidf_df
+            if X_transform is None:
+                X_transform = tfidf_df
             else:
-                self.X_transform = pd.concat([self.X_transform, self.tfidf_df], join='outer', axis=1, sort=False)
+                X_transform = pd.concat([X_transform, tfidf_df], join='outer', axis=1, sort=False)
 
         try:
             # Perform scaling on the relevant data
-            if len(self.scale_df) > 0:
+            if len(scale_df) > 0:
                 # Align the columns with the original dataset. 
                 # This is to prevent different number or order of features between training and test datasets.
-                self.scale_df = self.scale_df.align(self.scale_df_structure, join='right', axis=1)[0]
+                scale_df = scale_df.align(self.scale_df_structure, join='right', axis=1)[0]
                 
-                self.scale_df = self.fillna(self.scale_df, missing=self.missing)
+                scale_df = self.fillna(scale_df, missing=self.missing)
 
-                self.scale_df = pd.DataFrame(self.scaler_instance.transform(self.scale_df), index=self.scale_df.index, columns=self.scale_df.columns)
+                scale_df = pd.DataFrame(self.scaler_instance.transform(scale_df), index=scale_df.index, columns=scale_df.columns)
                 
                 # Add the scaled columns to the result dataset
-                if self.X_transform is None:
-                    self.X_transform = self.scale_df
+                if X_transform is None:
+                    X_transform = scale_df
                 else:
-                    self.X_transform = pd.concat([self.X_transform, self.scale_df], join='outer', axis=1, sort=False)
+                    X_transform = pd.concat([X_transform, scale_df], join='outer', axis=1, sort=False)
         except AttributeError:
             pass
 
         if self.no_prep:
             # Get a subset of the data that doesn't require preprocessing
-            self.no_prep_df = X[self.none_meta.index.tolist()]
+            no_prep_df = X[self.none_meta.index.tolist()]
             # Fill any missing values in the no prep dataframe
-            self.no_prep_df = self.fillna(self.no_prep_df, missing="zeros")
+            no_prep_df = self.fillna(no_prep_df, missing="zeros")
         
             # Finally join the columns that do not require preprocessing to the result dataset
-            if self.X_transform is None:
-                self.X_transform = self.no_prep_df
+            if X_transform is None:
+                X_transform = no_prep_df
             else:
-                self.X_transform = pd.concat([self.X_transform, self.no_prep_df], join='outer', axis=1, sort=False)
+                X_transform = pd.concat([X_transform, no_prep_df], join='outer', axis=1, sort=False)
         
         # Output information to the terminal and log file if required
         if self.log is not None:
-            self._print_log(3)
+            self._print_log(3, ohe_df=ohe_df, scale_df=scale_df, hash_df=hash_df, cv_df=cv_df, tfidf_df=tfidf_df, text_df=text_df, X_transform=X_transform)
 
         if self.return_type == 'np':
-            return self.X_transform.values
+            return X_transform.values
         
-        return self.X_transform
+        return X_transform
     
     
     def fit_transform(self, X, y=None, features=None, retrain=False):
@@ -491,10 +491,11 @@ class Preprocessor(TransformerMixin):
         return self.fit(X, y, features, retrain).transform(X, y)
     
     
-    def _print_log(self, step):
+    def _print_log(self, step, **kwargs):
         """
         Output useful information to stdout and the log file if debugging is required.
         step: Print the corresponding step in the log
+        kwargs: dictionary of dataframes to be used in the log
         """
         
         if step == 1:
@@ -530,44 +531,77 @@ class Preprocessor(TransformerMixin):
 
         elif step == 2:
             if self.ohe:
-                sys.stdout.write("ohe_df shape:{0}\nSample Data:\n{1}\n\n".format(self.ohe_df.shape, self.ohe_df.head()))
+                sys.stdout.write("Fit ohe_df shape:{0}\nSample Data:\n{1}\n\n".format(kwargs['ohe_df'].shape, kwargs['ohe_df'].head()))
                 
                 with open(self.log,'a', encoding='utf-8') as f:
-                    f.write("ohe_df shape:{0}\nSample Data:\n{1}\n\n".format(self.ohe_df.shape, self.ohe_df.head()))
+                    f.write("Fit ohe_df shape:{0}\nSample Data:\n{1}\n\n".format(kwargs['ohe_df'].shape, kwargs['ohe_df'].head()))
             
             if self.hash:
-                sys.stdout.write("hash_df shape:{0}\nSample Data:\n{1}\n\n".format(self.hash_df.shape, self.hash_df.head()))
+                sys.stdout.write("Fit hash_df shape:{0}\nSample Data:\n{1}\n\n".format(kwargs['hash_df'].shape, kwargs['hash_df'].head()))
                 
                 with open(self.log,'a', encoding='utf-8') as f:
-                    f.write("hash_df shape:{0}\nSample Data:\n{1}\n\n".format(self.hash_df.shape, self.hash_df.head()))
+                    f.write("Fit hash_df shape:{0}\nSample Data:\n{1}\n\n".format(kwargs['hash_df'].shape, kwargs['hash_df'].head()))
             
             if self.cv:
-                sys.stdout.write("cv_df shape:{0}\nSample Data:\n{1}\n\n".format(self.cv_df.shape, self.cv_df.head()))
+                sys.stdout.write("Fit cv_df shape:{0}\nSample Data:\n{1}\n\n".format(kwargs['cv_df'].shape, kwargs['cv_df'].head()))
                 
                 with open(self.log,'a', encoding='utf-8') as f:
-                    f.write("cv_df shape:{0}\nSample Data:\n{1}\n\n".format(self.cv_df.shape, self.cv_df.head()))
+                    f.write("Fit cv_df shape:{0}\nSample Data:\n{1}\n\n".format(self.cv_df.shape, self.cv_df.head()))
             
             if self.tfidf:
-                sys.stdout.write("tfidf_df shape:{0}\nSample Data:\n{1}\n\n".format(self.tfidf_df.shape, self.tfidf_df.head()))
+                sys.stdout.write("Fit tfidf_df shape:{0}\nSample Data:\n{1}\n\n".format(kwargs['tfidf_df'].shape, kwargs['tfidf_df'].head()))
                 
                 with open(self.log,'a', encoding='utf-8') as f:
-                    f.write("tfidf_df shape:{0}\nSample Data:\n{1}\n\n".format(self.tfidf_df.shape, self.tfidf_df.head()))
+                    f.write("Fit tfidf_df shape:{0}\nSample Data:\n{1}\n\n".format(kwargs['tfidf_df'].shape, kwargs['tfidf_df'].head()))
             
             try:
                 if len(self.scale_df) > 0:
-                    sys.stdout.write("scale_df shape:{0}\nSample Data:\n{1}\n\n".format(self.scale_df.shape, self.scale_df.head()))
+                    sys.stdout.write("Fit scale_df shape:{0}\nSample Data:\n{1}\n\n".format(kwargs['scale_df'].shape, kwargs['scale_df'].head()))
                     
                     with open(self.log,'a', encoding='utf-8') as f:
-                        f.write("scale_df shape:{0}\nSample Data:\n{1}\n\n".format(self.scale_df.shape, self.scale_df.head()))
+                        f.write("Fit scale_df shape:{0}\nSample Data:\n{1}\n\n".format(kwargs['scale_df'].shape, kwargs['scale_df'].head()))
             except AttributeError:
                 pass
         
         elif step == 3:
+            if self.ohe:
+                sys.stdout.write("Transform ohe_df shape:{0}\nSample Data:\n{1}\n\n".format(kwargs['ohe_df'].shape, kwargs['ohe_df'].head()))
+                
+                with open(self.log,'a', encoding='utf-8') as f:
+                    f.write("Transform ohe_df shape:{0}\nSample Data:\n{1}\n\n".format(kwargs['ohe_df'].shape, kwargs['ohe_df'].head()))
+            
+            if self.hash:
+                sys.stdout.write("Transform hash_df shape:{0}\nSample Data:\n{1}\n\n".format(kwargs['hash_df'].shape, kwargs['hash_df'].head()))
+                
+                with open(self.log,'a', encoding='utf-8') as f:
+                    f.write("Transform hash_df shape:{0}\nSample Data:\n{1}\n\n".format(kwargs['hash_df'].shape, kwargs['hash_df'].head()))
+            
+            if self.cv:
+                sys.stdout.write("Transform cv_df shape:{0}\nSample Data:\n{1}\n\n".format(kwargs['cv_df'].shape, kwargs['cv_df'].head()))
+                
+                with open(self.log,'a', encoding='utf-8') as f:
+                    f.write("Transform cv_df shape:{0}\nSample Data:\n{1}\n\n".format(self.cv_df.shape, self.cv_df.head()))
+            
+            if self.tfidf:
+                sys.stdout.write("Transform tfidf_df shape:{0}\nSample Data:\n{1}\n\n".format(kwargs['tfidf_df'].shape, kwargs['tfidf_df'].head()))
+                
+                with open(self.log,'a', encoding='utf-8') as f:
+                    f.write("Transform tfidf_df shape:{0}\nSample Data:\n{1}\n\n".format(kwargs['tfidf_df'].shape, kwargs['tfidf_df'].head()))
+            
             try:
-                sys.stdout.write("X_transform shape:{0}\nSample Data:\n{1}\n\n".format(self.X_transform.shape, self.X_transform.head()))
+                if len(self.scale_df) > 0:
+                    sys.stdout.write("Transform scale_df shape:{0}\nSample Data:\n{1}\n\n".format(kwargs['scale_df'].shape, kwargs['scale_df'].head()))
+                    
+                    with open(self.log,'a', encoding='utf-8') as f:
+                        f.write("Transform scale_df shape:{0}\nSample Data:\n{1}\n\n".format(kwargs['scale_df'].shape, kwargs['scale_df'].head()))
+            except AttributeError:
+                pass
+
+            try:
+                sys.stdout.write("X_transform shape:{0}\nSample Data:\n{1}\n\n".format(kwargs['X_transform'].shape, kwargs['X_transform'].head()))
                     
                 with open(self.log,'a', encoding='utf-8') as f:
-                    f.write("X_transform shape:{0}\nSample Data:\n{1}\n\n".format(self.X_transform.shape, self.X_transform.head()))
+                    f.write("X_transform shape:{0}\nSample Data:\n{1}\n\n".format(kwargs['X_transform'].shape, kwargs['X_transform'].head()))
             except AttributeError:
                 pass
 

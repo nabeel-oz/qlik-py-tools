@@ -855,7 +855,7 @@ class SKLearnForQlik:
         else:
             # Predict y for X using the previously fit pipeline
             self.y = self.model.pipe.predict(self.X)
-            
+        
         # Prepare the response
         self.response = pd.DataFrame(self.y, columns=["result"], index=self.X.index)
         
@@ -1556,14 +1556,14 @@ class SKLearnForQlik:
         table_header = (('qlik-tabledescription-bin', self.table.SerializeToString()),)
         self.context.send_initial_metadata(table_header)
     
-    def _get_model(self):
+    def _get_model(self, use_cache=True):
         """
         Get the model from the class model cache or disk.
         Update the cache if loading from disk.
         Return the model.
         """
         
-        if self.model.name in self.__class__.model_cache:
+        if use_cache and self.model.name in self.__class__.model_cache:
             # Load the model from cache
             self.model = self.__class__.model_cache[self.model.name]
             

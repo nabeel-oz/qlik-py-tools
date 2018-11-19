@@ -121,10 +121,10 @@
       "Params": {
         "a_model_name": 0,
         "b_feature_name": 0,
-		  "c_var_type": 0,
+		    "c_var_type": 0,
         "d_data_type": 0,
         "e_strategy": 0,
-	  	  "f_hash_length": 0
+	  	  "f_strategy_args": 0
       }
     },
 	{
