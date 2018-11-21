@@ -82,19 +82,19 @@ _Note that this SSE and Docker do not handle file locking, and so do not support
 ## Pre-requisites
 
 - Qlik Sense Enterprise or Qlik Sense Desktop
-- Python >= 3.4 < 3.7. The recommended version is 3.6.6.
-    - _Note: The latest stable version of python is 3.6. The `pystan` library, which is required for `fbprophet`, is known to have issues with Python 3.7 on Windows._
+- Python >= 3.4 < 3.7. The recommended version is 3.6.7.
+    - _Note: The latest stable version of Python for this SSE is 3.6. The `pystan` library, which is required for `fbprophet`, is known to have issues with Python 3.7 on Windows._
 - Microsoft Visual C++ Build Tools
 
 
 ## Installation
 
-1. Get Python from [here](https://www.python.org/downloads/release/python-366/). Remember to select the option to add Python to your PATH environment variable.
+1. Get Python from [here](https://www.python.org/downloads/release/python-367/). Remember to select the option to add Python to your PATH environment variable.
 
 2. You'll also need a recent C++ compiler as this is a requirement for the `pystan` library used by `fbprophet`. One option is to use [Microsoft Visual C++ Build Tools](https://visualstudio.microsoft.com/downloads/#build-tools-for-visual-studio-2017). If you are having trouble finding the correct installer try [this direct link](https://www.visualstudio.com/thank-you-downloading-visual-studio/?sku=BuildTools&rel=15). An alternative is to use the `mingw-w64` compiler as described in the [PyStan documentation](http://pystan.readthedocs.io/en/latest/windows.html). 
      - If you're using the Visual Studio installer, select the Visual C++ Build Tools workload in the installer and make sure you select the C++ compilers in the optional components:<br/><br/>![C++ Compiler Installation](images/Install-01.png)
 
-3. Download this git repository or get the [latest release](https://github.com/nabeel-qlik/qlik-py-tools/releases) and extract it to a location of your choice. The machine where you are placing this repository should have access to a local or remote Qlik Sense instance.
+3. Download the [latest release](https://github.com/nabeel-qlik/qlik-py-tools/releases) for this SSE and extract it to a location of your choice. The machine where you are placing this repository should have access to a local or remote Qlik Sense instance.
 
 4. Right click `Qlik-Py-Init.bat` and chose 'Run as Administrator'. You can open this file in a text editor to review the commands that will be executed. If everything goes smoothly you will see a Python virtual environment being set up, project files being copied, some packages being installed and TCP Port `50055` being opened for inbound communication. 
      - Note that the script always ends with a "All done" message and does not check for errors. 
