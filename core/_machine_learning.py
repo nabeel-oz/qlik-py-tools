@@ -546,7 +546,7 @@ class Preprocessor(TransformerMixin):
                 sys.stdout.write("Fit cv_df shape:{0}\nSample Data:\n{1}\n\n".format(kwargs['cv_df'].shape, kwargs['cv_df'].head()))
                 
                 with open(self.log,'a', encoding='utf-8') as f:
-                    f.write("Fit cv_df shape:{0}\nSample Data:\n{1}\n\n".format(self.cv_df.shape, self.cv_df.head()))
+                    f.write("Fit cv_df shape:{0}\nSample Data:\n{1}\n\n".format(kwargs['cv_df'].shape, kwargs['cv_df'].head()))
             
             if self.tfidf:
                 sys.stdout.write("Fit tfidf_df shape:{0}\nSample Data:\n{1}\n\n".format(kwargs['tfidf_df'].shape, kwargs['tfidf_df'].head()))
@@ -580,7 +580,7 @@ class Preprocessor(TransformerMixin):
                 sys.stdout.write("Transform cv_df shape:{0}\nSample Data:\n{1}\n\n".format(kwargs['cv_df'].shape, kwargs['cv_df'].head()))
                 
                 with open(self.log,'a', encoding='utf-8') as f:
-                    f.write("Transform cv_df shape:{0}\nSample Data:\n{1}\n\n".format(self.cv_df.shape, self.cv_df.head()))
+                    f.write("Transform cv_df shape:{0}\nSample Data:\n{1}\n\n".format(kwargs['cv_df'].shape, kwargs['cv_df'].head()))
             
             if self.tfidf:
                 sys.stdout.write("Transform tfidf_df shape:{0}\nSample Data:\n{1}\n\n".format(kwargs['tfidf_df'].shape, kwargs['tfidf_df'].head()))
