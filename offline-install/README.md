@@ -20,7 +20,7 @@ Use a Windows machine with Internet access for these steps.
     - The Python version on this machine should match the target machine.
     - Download the required packages from a terminal using pip.
         ```
-        pip download setuptools wheel grpcio grpcio-tools numpy scipy pandas cython pystan==2.17 fbprophet scikit-learn hdbscan skater
+        pip download setuptools wheel grpcio grpcio-tools numpy scipy pandas cython pystan==2.17 fbprophet==0.3.post2 scikit-learn hdbscan skater
         ```
     - Copy the package files to the target machine into a folder named `offline`.
 4. Download the [latest release](https://github.com/nabeel-qlik/qlik-py-tools/releases) for this SSE and copy it to the target machine.
