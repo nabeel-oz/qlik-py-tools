@@ -24,7 +24,7 @@ Use a Windows machine with Internet access for these steps.
         ```
     - Copy the package files to the target machine into a folder named `offline`.
 4. Download the [latest release](https://github.com/nabeel-qlik/qlik-py-tools/releases) for this SSE and copy it to the target machine.
-5. Download `Qlik-Py-Init Offline.bat` from the project's repository on GitHub under `offline install`. 
+5. Download `Qlik-Py-Init Offline.bat` from the project's repository on GitHub under `offline-install`. 
 
 
 ## Install on the offline machine

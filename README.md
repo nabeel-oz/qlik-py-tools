@@ -89,6 +89,8 @@ _Note that this SSE and Docker do not handle file locking, and so do not support
 
 ## Installation
 
+For installing this SSE on a machine without Internet access, use the instructions [here](offline-install/README.md).
+
 1. Get Python from [here](https://www.python.org/downloads/release/python-367/). Remember to select the option to add Python to your PATH environment variable.
 
 2. You'll also need a recent C++ compiler as this is a requirement for the `pystan` library used by `fbprophet`. One option is to use [Microsoft Visual C++ Build Tools](https://visualstudio.microsoft.com/downloads/#build-tools-for-visual-studio-2017). If you are having trouble finding the correct installer try [this direct link](https://www.visualstudio.com/thank-you-downloading-visual-studio/?sku=BuildTools&rel=15). An alternative is to use the `mingw-w64` compiler as described in the [PyStan documentation](http://pystan.readthedocs.io/en/latest/windows.html). 
