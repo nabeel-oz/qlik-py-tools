@@ -15,7 +15,7 @@ echo.
 echo Installing required packages... & echo.
 pip install --no-index --find-links=offline grpcio grpcio-tools numpy scipy pandas cython
 pip install --no-index --find-links=offline pystan==2.17
-pip install --no-index --find-links=offline fbprophet==0.3.post2
+pip install --no-index --find-links=offline fbprophet
 pip install --no-index --find-links=offline scikit-learn
 pip install --no-index --find-links=offline setuptools wheel hdbscan
 pip install --no-index --find-links=offline skater

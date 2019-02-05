@@ -9,7 +9,7 @@ Write-Output "Installing required packages..."
 python -m pip install --upgrade setuptools pip
 pip install grpcio grpcio-tools numpy scipy pandas cython
 pip install pystan==2.17
-pip install fbprophet==0.3.post2
+pip install fbprophet
 pip install -U scikit-learn
 pip install hdbscan
 pip install -U skater

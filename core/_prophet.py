@@ -5,7 +5,7 @@ import string
 import locale
 import numpy as np
 import pandas as pd
-from fbprophet import Prophet
+from fbprophet import Prophet, plot
 import _utils as utils
 import ServerSideExtension_pb2 as SSE
 
@@ -495,7 +495,7 @@ class ProphetForQlik:
                 # Prepare the seasonality data frame
                 # Parameter start needs to be any arbitrary week starting on a Sunday
                 days = (pd.date_range(start='2017-01-01', periods=7) + pd.Timedelta(days=self.weekly_start))
-                df_w = self.model.seasonality_plot_df(days)
+                df_w = plot.seasonality_plot_df(self.model, days)
 
                 # Calculate seasonal components 
                 self.forecast = self.model.predict_seasonal_components(df_w)
@@ -504,7 +504,7 @@ class ProphetForQlik:
                 # Prepare the seasonality data frame
                 # Parameter start needs to be 1st January for any arbitrary year
                 days = (pd.date_range(start='2017-01-01', periods=365) + pd.Timedelta(days=self.yearly_start))
-                df_y = self.model.seasonality_plot_df(days)
+                df_y = plot.seasonality_plot_df(self.model, days)
 
                 # Calculate seasonal components 
                 self.forecast = self.model.predict_seasonal_components(df_y)
@@ -520,7 +520,7 @@ class ProphetForQlik:
                 # However, it seems to make more sense to use period given the expected usage in Qlik
                 intervals = pd.to_datetime(np.linspace(start.value, end.value, period)) 
                 
-                df_x = self.model.seasonality_plot_df(intervals)
+                df_x = plot.seasonality_plot_df(self.model, intervals)
 
                 # Calculate seasonal components 
                 self.forecast = self.model.predict_seasonal_components(df_x)
