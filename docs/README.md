@@ -108,10 +108,15 @@ _Note that this SSE and Docker do not handle file locking, and so do not support
 
 6. Now you need to [set up an Analytics Connection in Qlik Sense Enterprise](https://help.qlik.com/en-US/sense/September2018/Subsystems/ManagementConsole/Content/Sense_QMC/create-analytic-connection.htm) or [update the Settings.ini file in Qlik Sense Desktop](https://help.qlik.com/en-US/sense/September2018/Subsystems/Hub/Content/Sense_Hub/Introduction/configure-analytic-connection-desktop.htm). If you are using the sample apps make sure you use `PyTools` as the name for the analytics connection, or alternatively, update all of the expressions to use the new name.
      - For Qlik Sense Desktop you need to update the `settings.ini` file:<br/><br/>![QSD Analytics Connection](images/Install-04.png)
+        ```
+        SSEPlugin=PyTools,localhost:50055;
+        ```
      - For Qlik Sense Enterprise you need to create an Analytics Connection through QMC:<br/><br/>![QSE Analytics Connection](images/Install-02.png)
      - The Analytics Connection can point to a different machine and can be [secured with certificates](https://github.com/qlik-oss/server-side-extension/blob/master/generate_certs_guide/README.md):<br/><br/>![QSE Secure Analytics Connection](images/Install-03.png)
 
-7. Finally restart the Qlik Sense engine service for Qlik Sense Enterprise or close and reopen Qlik Sense Desktop. This step may not be required if you are using Qlik Sense April 2018. If a connection between Python and Qlik is established you should see the capabilities listed in the terminal.
+7. Finally restart the Qlik Sense engine service for Qlik Sense Enterprise or close and reopen Qlik Sense Desktop. This step may not be required if you are using Qlik Sense April 2018.
+
+    If a connection between Python and Qlik is established you should see the capabilities listed in the terminal.
 
 ![handshake log](images/Run-02.png)
 *Capabilities may change as this is an ongoing project.*
@@ -126,6 +131,6 @@ Sample Qlik Sense apps are provided and each app includes extensive techniques t
 | Documentation | Sample App | App Dependencies |
 | --- | --- | --- |
 | [Correlations](Correlation.md) | [Sample App - Correlations](Sample_App_Correlations.qvf) | None. |
-| [Clustering](Clustering.md) | [Sample App - Clustering with HDBSCAN](Sample_App_Clustering.qvf) | The [qsVariable](https://developer.qlik.com/garden/56728f52d1e497241ae697f8) extension. <br/><br/>Qlik Sense April 2018 or later to view the multi-layered maps. |
-| [Forecasting](Prophet.md) | [Sample App - Facebook Prophet (Detailed)](Sample_App_Prophet.qvf)<br><br>[Sample App - Facebook Prophet (Simple)](Sample_App_Forecasting_Simple.qvf) | The [qsVariable](https://developer.qlik.com/garden/56728f52d1e497241ae697f8) and [Sheet Navigation](https://developer.qlik.com/garden/56728f52d1e497241ae698a0) extensions. <br/><br/>Use the bookmarks to step through the sheets with relevant selections. |
-| [Machine Learning](scikit-learn.md) | [Sample App - Train & Test](Sample-App-scikit-learn-Train-Test.qvf)<br><br>[Sample App - Predict](Sample-App-scikit-learn-Predict.qvf)<br><br>[Sample App - K-fold Cross Validation](Sample-App-scikit-learn-K-fold-Cross-Validation.qvf)<br><br>[Sample App - Parameter Tuning](Sample-App-scikit-learn-Parameter-Tuning.qvf)<br><br>[Sample App - K-fold CV & Parameter Tuning](Sample-App-scikit-learn-K-fold-CV-Grid-Search.qvf) | Make sure you reload the K-fold Cross Validation or Train & Test app before using the Predict app.<br><br>If using Qlik Sense Desktop you will need to download the [data source](HR-Employee-Attrition.xlsx), create a data connection named `AttachedFiles` in the app, and point the connection to the folder containing the source file.<br><br>The [qsVariable](https://developer.qlik.com/garden/56728f52d1e497241ae697f8) extension. |
+| [Clustering](Clustering.md) | [Sample App - Clustering with HDBSCAN](Sample_App_Clustering.qvf) | Qlik Sense November 2018 or later with the Dashboard Extension Bundle. |
+| [Forecasting](Prophet.md) | [Sample App - Facebook Prophet (Detailed)](Sample_App_Prophet.qvf)<br><br>[Sample App - Facebook Prophet (Simple)](Sample_App_Forecasting_Simple.qvf) | Qlik Sense November 2018 or later with the Dashboard Extension Bundle. <br/><br/>Use the bookmarks to step through the sheets with relevant selections. |
+| [Machine Learning](scikit-learn.md) | [Sample App - Train & Test](Sample-App-scikit-learn-Train-Test.qvf)<br><br>[Sample App - Predict](Sample-App-scikit-learn-Predict.qvf)<br><br>[Sample App - K-fold Cross Validation](Sample-App-scikit-learn-K-fold-Cross-Validation.qvf)<br><br>[Sample App - Parameter Tuning](Sample-App-scikit-learn-Parameter-Tuning.qvf)<br><br>[Sample App - K-fold CV & Parameter Tuning](Sample-App-scikit-learn-K-fold-CV-Grid-Search.qvf) | Make sure you reload the K-fold Cross Validation or Train & Test app before using the Predict app.<br><br>If using Qlik Sense Desktop you will need to download the [data source](HR-Employee-Attrition.xlsx), create a data connection named `AttachedFiles` in the app, and point the connection to the folder containing the source file.<br><br>For the Prediction app you will need Qlik Sense November 2018 or later with the Dashboard Extension Bundle. |
