@@ -290,7 +290,7 @@ class ExtensionService(SSE.ConnectorServicer):
         :
         :For more information on these parameters go here: https://facebook.github.io/prophet/docs/quick_start.html
         :
-        :Additional parameters used are: return, take_log, debug
+        :Additional parameters used are: return, take_log, debug, load_script
         :
         :cap = 1000 : A logistic growth model can be defined using cap and floor. Values should be double or integer
         :changepoint_prior_scale = 0.05 : Decrease if the trend changes are being overfit, increase for underfit
@@ -318,16 +318,23 @@ class ExtensionService(SSE.ConnectorServicer):
                        
         # Create an instance of the ProphetForQlik class
         # This will take the request data from Qlik and prepare it for forecasting
-        predictor = ProphetForQlik(request_list)
+        predictor = ProphetForQlik(request_list, context)
         
         # Calculate the forecast and store in a Pandas series
         forecast = predictor.predict()  
         
+        # Check if the response is a DataFrame. 
+        # This occurs when the load_script=true argument is passed in the Qlik expression.
+        response_is_df = isinstance(forecast, pd.DataFrame)   
+
         # Convert the response to a list of rows
         forecast = forecast.values.tolist()
-        
+
         # We convert values to type SSE.Dual, and group columns into a iterable
-        response_rows = [iter([SSE.Dual(numData=row)]) for row in forecast]
+        if response_is_df:
+            response_rows = [iter([SSE.Dual(strData=row[0]),SSE.Dual(numData=row[1])]) for row in forecast]
+        else:
+            response_rows = [iter([SSE.Dual(numData=row)]) for row in forecast]
         
         # Values are then structured as SSE.Rows
         response_rows = [SSE.Row(duals=duals) for duals in response_rows]                
@@ -393,7 +400,7 @@ class ExtensionService(SSE.ConnectorServicer):
                               
         # Create an instance of the ProphetForQlik class
         # This will take the request data from Qlik and prepare it for forecasting
-        predictor = ProphetForQlik.init_seasonality(request_list)
+        predictor = ProphetForQlik.init_seasonality(request_list, context)
         
         # Calculate the forecast and store in a Pandas series
         forecast = predictor.predict()
