@@ -27,15 +27,16 @@ class ProphetForQlik:
     # This variable denotes the unit of time used in Qlik for numerical representation of datetime values
     qlik_cal_unit = 'D'
     
-    def __init__(self, request):
+    def __init__(self, request, context):
         """
         Class initializer.
         :param request: an iterable sequence of RowData
         :Sets up the input data frame and parameters based on the request
         """
         
-        # Set the request variable for this object instance
+        # Set the request and context variables for this object instance
         self.request = request
+        self.context = context
 
         # Create a Pandas Data Frame with column ds for the dates and column y for values
         self.request_df = pd.DataFrame([(row.duals[0].numData, row.duals[1].numData) \
@@ -132,7 +133,7 @@ class ProphetForQlik:
             self._print_log(2)
     
     @classmethod
-    def init_seasonality(cls, request):
+    def init_seasonality(cls, request, context):
         """
         Alternative initialization method for this class
         Used when the request contains the timeseries as a contatenated string, repeated for every row
@@ -195,7 +196,7 @@ class ProphetForQlik:
         updated_request = [SSE.BundledRows(rows=request_list)]
                 
         # Call the default initialization method
-        instance = ProphetForQlik(updated_request)
+        instance = ProphetForQlik(updated_request, context)
         
         # Handle null value row in the request dataset
         instance.NaT_df = request_df.loc[request_df.ds.isnull()].copy()
@@ -263,7 +264,19 @@ class ProphetForQlik:
         if self.debug:
             self._print_log(4)
         
-        return self.forecast.loc[:,self.result_type]
+        # If the function was called through the load script we return a Data Frame
+        if self.load_script:            
+            # Create an additional series to be added to the response with input ds values as strings
+            ds = self.request_df['ds'].dt.strftime('%Y-%m-%d %r')
+            # Add the ds column to the output
+            self.response = pd.concat([ds, self.forecast.loc[:,self.result_type]], axis=1)
+
+            # Send meta data on the response to Qlik
+            self._send_table_description()
+            
+            return self.response
+        else:
+            return self.forecast.loc[:,self.result_type]
     
     def _set_params(self):
         """
@@ -283,6 +296,7 @@ class ProphetForQlik:
         self.request_row_count = len(self.request_df) + len(self.NaT_df)
         
         # Set default values which will be used if an argument is not passed
+        self.load_script = False
         self.result_type = 'yhat'
         self.take_log  = False
         self.seasonality = 'yearly'
@@ -336,6 +350,11 @@ class ProphetForQlik:
             
             # Make sure the key words are in lower case
             self.kwargs = {k.lower(): v for k, v in self.kwargs.items()}
+            
+            # Set the load_script parameter to determine the output format 
+            # Set to 'true' if calling the functions from the load script in the Qlik app
+            if 'load_script' in self.kwargs:
+                self.load_script = 'true' == self.kwargs['load_script'].lower()
             
             # Set the return type 
             # Valid values are: yhat, trend, seasonal, seasonalities. 
@@ -564,6 +583,28 @@ class ProphetForQlik:
             self.NaT_df = self.NaT_df.rename({'y': self.result_type}, axis='columns')
             self.forecast = self.forecast.append(self.NaT_df)
         
+    def _send_table_description(self):
+        """
+        Send the table description to Qlik as meta data.
+        Only used when the SSE is called from the Qlik load script.
+        """
+        
+        # Set up the table description to send as metadata to Qlik
+        self.table = SSE.TableDescription()
+        self.table.name = "ProphetForecast"
+        self.table.numberOfRows = len(self.response)
+
+        # Set up fields for the table
+        self.table.fields.add(name="ds")
+        self.table.fields.add(name=self.result_type, dataType=1)
+        
+        if self.debug:
+            self._print_log(5)
+        
+        # Send table description
+        table_header = (('qlik-tabledescription-bin', self.table.SerializeToString()),)
+        self.context.send_initial_metadata(table_header)
+    
     def _print_log(self, step):
         """
         Output useful information to stdout and the log file if debugging is required.
@@ -638,6 +679,14 @@ class ProphetForQlik:
                 [f.write("{}\n".format(col)) for col in self.forecast]
                 f.write("\nSAMPLE RESULTS:\n{0} \n\n".format(self.forecast.tail(self.periods).to_string()))
                 f.write("FORECAST RETURNED:\n{0}\n\n".format(self.forecast.loc[:,self.result_type].to_string()))
+        
+        elif step == 5:
+            # Print the table description if the call was made from the load script
+            sys.stdout.write("\nTABLE DESCRIPTION SENT TO QLIK:\n\n{0} \n\n".format(self.table))
+            
+            # Write the table description to the log file
+            with open(self.logfile,'a') as f:
+                f.write("\nTABLE DESCRIPTION SENT TO QLIK:\n\n{0} \n\n".format(self.table))
     
     @staticmethod
     def timeit(request):

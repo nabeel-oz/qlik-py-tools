@@ -9,6 +9,7 @@
 - [Seasonality](#seasonality)
 - [Holidays](#holidays)
 - [Use Prophet with your own app](#use-prophet-with-your-own-app)
+- [Precalculating forecasts in the load script](#precalculating-forecasts-in-the-load-script)
 - [Attribution](#attribution)
 
 ## Introduction
@@ -52,6 +53,7 @@ Any of these arguments can be included in the final string parameter for the Pro
 | return | The output of the expression | `yhat`, `yhat_upper`, `yhat_lower`, `y_then_yhat`, `y_then_yhat_upper`, `y_then_yhat_lower`, `trend`, `trend_upper`, `trend_lower`, `seasonal`, `seasonal_upper`, `seasonal_lower`, `yearly`, `yearly_upper`, `yearly_lower` & any other column in the forecast output | `yhat` refers to the forecast values. This is the default value. The `y_then_yhat` options allow you to plot the actual values for historical data and forecast values only for future dates. Upper and lower limits are available for each type of output. |
 | freq | The frequency of the time series | `D`, `MS`, `M`, `H`, `T`, `S`, `ms`, `us` | The most common options would be D for Daily, MS for Month Start and M for Month End. The default value is D, however this will mess up results if you provide the values in a different frequency, so always specify the frequency. See the full set of options [here](http://pandas.pydata.org/pandas-docs/stable/user_guide/timeseries.html#offset-aliases). |
 | debug | Flag to output additional information to the terminal and logs | `true`, `false` | Information will be printed to the terminal as well to a log file: `..\qlik-py-env\core\logs\Prophet Log <n>.txt`. Particularly useful is looking at the Request Data Frame to see what you are sending to the algorithm and the Forecast Data Frame to see the possible result columns. |
+| load_script | Flag for calling the function from the Qlik load script. | `true`, `false` | Set to `true` if calling the Prophet function from the load script in the Qlik app. This will change the output to a table consisting of two fields; `ds` which is the datetime dimension passed to Prophet, and the specified return value (`yhat` by default). `ds` is returned as a string in the format `YYYY-MM-DD hh:mm:ss TT`.<br/><br/>This parameter only applies to the `Prophet` function. |
 | take_log | Take a logarithm of the values before forecasting | `true`, `false` | Default value is `false`. This can be applied when making the time series more stationary might improve forecast values. You can just try both options and compare the results. In either case the values are returned in the original scale. |
 | cap | A saturating maximum for the forecast | A decimal or integer value e.g. `1000000` | You can apply a logistic growth trend model using this argument. For example when the maximum market size is known. More information [here](https://facebook.github.io/prophet/docs/saturating_forecasts.html). |
 | floor | A saturating minimum for the forecast | A decimal or integer value e.g. `0` | This argument must be used in combination with a cap. |
@@ -399,6 +401,64 @@ PyTools.Prophet_Holidays(if(FORECAST_MONTH <= AddMonths(Max(Total [Accident Mont
                 Count({$<FORECAST_LINK_TYPE = {'Actual'}>} Distinct ACCIDENT_NO),
                 [Christmas Day],
                 'freq=D, return=holidays, lower_window=-$(vHolidayWindow), upper_window=$(vHolidayWindow)')
+```
+
+## Precalculating forecasts in the load script
+
+The approach explained above provides the forecast in the context of the user's selections in Qlik. This is a powerful user experience and does not require the app author to think of the granularity at which the forecast needs to be generated.
+
+However, in some cases, you may want to precalculate the forecast for a given set of dimensions, e.g. by product and region. This can be done through the Qlik load script. 
+
+For an example, refer to the [simple sample app](Sample_App_Forecasting_Simple.qvf)
+
+```
+// Generate forecasts for each value in the Hospital field
+FOR EACH vHospital in FieldValueList('Hospital')
+
+    // Load the actual data and arguments to be passed to the Prophet function
+    // Future periods must be included in the date dimension with NULL values for the measure
+    temp:
+    LOAD
+    	[Month Start] as ds,
+        Attendances as y,
+        'freq=M, take_log=true, load_script=true' as args
+    RESIDENT Sheet1
+    WHERE Hospital = '$(vHospital)';
+    
+    // Call the Prophet function and store the results in the Response table
+    Response:
+    LOAD
+    	ds, // Datetime is returned as string with format 'YYYY-MM-DD hh:mm:ss TT'
+        yhat,
+    	'$(vHospital)' as Hospital
+    Extension PyTools.Prophet(temp{ds, y, args});
+    
+    Drop table temp;
+	
+Next vHospital
+
+// Add a composite key to the original table. This will be used to link to the forecasts.
+Left Join (Sheet1)
+Load
+    Hospital,
+    [Month Start],
+    Period,
+    AutoNumber(Hospital & '|' & Period) as ForecastKey
+Resident Sheet1;
+
+// Create a Forecasts table with the same composite key.
+Forecasts:
+Load
+    AutoNumber(Hospital & '|' & Period) as ForecastKey,
+    [Forecast by Hospital];
+Load
+    Hospital,
+    Floor(Date#(ds, 'YYYY-MM-DD hh:mm:ss TT')) as Period,
+    yhat as [Forecast by Hospital]
+Resident Response;
+
+// Drop the Response table from the final model
+Drop table Response
 ```
 
 ## Attribution

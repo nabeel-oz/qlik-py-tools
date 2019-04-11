@@ -16,9 +16,9 @@ python -m pip install --upgrade setuptools pip
 pip install grpcio grpcio-tools numpy scipy pandas cython
 pip install pystan==2.17
 pip install fbprophet
-pip install -U scikit-learn
+pip install scikit-learn
 pip install hdbscan
-pip install -U skater
+pip install skater==1.1.2
 echo.
 echo Creating a new firewall rule for TCP port 50055... & echo.
 netsh advfirewall firewall add rule name="Qlik PyTools" dir=in action=allow protocol=TCP localport=50055
