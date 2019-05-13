@@ -1,12 +1,12 @@
 import sys
 import time
+import joblib
 import numpy as np
 import pandas as pd
 from pathlib import Path
 from sklearn import preprocessing
 from sklearn.base import TransformerMixin
 from sklearn.pipeline import Pipeline
-from sklearn.externals import joblib
 from sklearn.feature_extraction import FeatureHasher
 from sklearn.feature_extraction.text import CountVectorizer
 from sklearn.feature_extraction.text import TfidfVectorizer

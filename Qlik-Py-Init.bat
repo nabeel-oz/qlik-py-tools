@@ -13,10 +13,10 @@ cd ..
 echo.
 echo Installing required packages... & echo.
 python -m pip install --upgrade setuptools pip
-pip install grpcio grpcio-tools numpy scipy pandas cython
+pip install grpcio grpcio-tools numpy scipy pandas cython joblib
 pip install pystan==2.17
 pip install fbprophet
-pip install scikit-learn
+pip install scikit-learn==0.20.3
 pip install hdbscan
 pip install skater==1.1.2
 echo.

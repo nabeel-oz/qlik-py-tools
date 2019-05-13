@@ -7,10 +7,10 @@ Write-Output "Activating the virtual environment..."
 & $PSScriptRoot\qlik-py-env\Scripts\activate.ps1
 Write-Output "Installing required packages..."
 python -m pip install --upgrade setuptools pip
-pip install grpcio grpcio-tools numpy scipy pandas cython
+pip install grpcio grpcio-tools numpy scipy pandas cython joblib
 pip install pystan==2.17
 pip install fbprophet
-pip install scikit-learn
+pip install scikit-learn==0.20.3
 pip install hdbscan
 pip install skater==1.1.2
 Write-Output "Creating a new firewall rule for TCP port 50055..."
