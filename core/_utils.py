@@ -3,10 +3,16 @@ import sys
 import ast
 import string
 import locale
+import warnings
 import numpy as np
 import pandas as pd
-from sklearn import preprocessing
 import ServerSideExtension_pb2 as SSE
+
+# Suppress warnings 
+if not sys.warnoptions:
+    warnings.simplefilter("ignore")
+
+from sklearn import preprocessing
 
 # Add Generated folder to module path.
 PARENT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))

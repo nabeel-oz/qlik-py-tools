@@ -3,11 +3,17 @@ import sys
 import time
 import string
 import locale
+import warnings
 import numpy as np
 import pandas as pd
-import hdbscan
 import _utils as utils
 import ServerSideExtension_pb2 as SSE
+
+# Suppress warnings
+if not sys.warnoptions:
+    warnings.simplefilter("ignore")
+
+import hdbscan
 
 # Add Generated folder to module path
 PARENT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))

@@ -9,6 +9,7 @@
 - [Pre-requisites](#pre-requisites)
 - [Installation](#installation)
 - [Usage](#usage)
+- [Qonnections 2019 Workshop](#qonnections-2019-workshop)
 
 
 ## Introduction
@@ -136,3 +137,9 @@ Sample Qlik Sense apps are provided and each app includes extensive techniques t
 | [Clustering](docs/Clustering.md) | [Sample App - Clustering with HDBSCAN](docs/Sample_App_Clustering.qvf) | Qlik Sense November 2018 or later with the Dashboard Extension Bundle. |
 | [Forecasting](docs/Prophet.md) | [Sample App - Facebook Prophet (Detailed)](docs/Sample_App_Prophet.qvf)<br><br>[Sample App - Facebook Prophet (Simple)](docs/Sample_App_Forecasting_Simple.qvf) | Qlik Sense November 2018 or later with the Dashboard Extension Bundle. <br/><br/>For the detailed app, use the bookmarks to step through the sheets with relevant selections.<br><br>For calling Prophet through the load script refer to the simple app. If you want to reload the app using Qlik Sense Desktop you will need to download the [data source](docs/VIC-Emergency-Department-Attendances.xlsx), create a data connection named `AttachedFiles` in the app, and point the connection to the folder containing the source file. |
 | [Machine Learning](docs/scikit-learn.md) | [Sample App - Train & Test](docs/Sample-App-scikit-learn-Train-Test.qvf)<br><br>[Sample App - Predict](docs/Sample-App-scikit-learn-Predict.qvf)<br><br>[Sample App - K-fold Cross Validation](docs/Sample-App-scikit-learn-K-fold-Cross-Validation.qvf)<br><br>[Sample App - Parameter Tuning](docs/Sample-App-scikit-learn-Parameter-Tuning.qvf)<br><br>[Sample App - K-fold CV & Parameter Tuning](docs/Sample-App-scikit-learn-K-fold-CV-Grid-Search.qvf) | Make sure you reload the K-fold Cross Validation or Train & Test app before using the Predict app.<br><br>If using Qlik Sense Desktop you will need to download the [data source](docs/HR-Employee-Attrition.xlsx), create a data connection named `AttachedFiles` in the app, and point the connection to the folder containing the source file.<br><br>For the Prediction app you will need Qlik Sense November 2018 or later with the Dashboard Extension Bundle. |
+
+## Qonnections 2019 Workshop
+
+At Qonnections 2019 we ran hands-on workshops with PyTools and Qlik Sense. The content for these workshops, including the sample apps and exercise intructions, is available [here](docs/hands-on/README.md).
+
+The workshop exercises can be used as a tutorial for using this Server Side Extension with Qlik Sense Enterprise or Desktop.

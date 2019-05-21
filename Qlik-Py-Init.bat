@@ -15,9 +15,9 @@ echo Installing required packages... & echo.
 python -m pip install --upgrade setuptools pip
 pip install grpcio grpcio-tools numpy scipy pandas cython joblib
 pip install pystan==2.17
-pip install fbprophet
+pip install fbprophet==0.4.post2
 pip install scikit-learn==0.20.3
-pip install hdbscan
+pip install hdbscan==0.8.22
 pip install skater==1.1.2
 echo.
 echo Creating a new firewall rule for TCP port 50055... & echo.

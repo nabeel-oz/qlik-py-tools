@@ -16,7 +16,7 @@ sys.path.append(os.path.join(PARENT_DIR, 'generated'))
 import ServerSideExtension_pb2 as SSE
 import grpc
 
-# Turn off warnings by default
+# Suppress warnings
 if not sys.warnoptions:
     warnings.simplefilter("ignore")
 

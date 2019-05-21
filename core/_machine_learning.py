@@ -3,6 +3,12 @@ import time
 import joblib
 import numpy as np
 import pandas as pd
+import warnings
+
+# Suppress warnings 
+if not sys.warnoptions:
+    warnings.simplefilter("ignore")
+    
 from pathlib import Path
 from sklearn import preprocessing
 from sklearn.base import TransformerMixin

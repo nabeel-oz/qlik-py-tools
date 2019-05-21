@@ -10,7 +10,7 @@ import numpy as np
 import pandas as pd
 from collections import OrderedDict
 
-# Turn off warnings by default
+# Suppress warnings
 if not sys.warnoptions:
     warnings.simplefilter("ignore")
 
@@ -23,27 +23,27 @@ from sklearn.model_selection import cross_val_predict
 from sklearn.model_selection import GridSearchCV
 
 from sklearn.decomposition import PCA, KernelPCA, IncrementalPCA, TruncatedSVD, FactorAnalysis, FastICA, NMF, SparsePCA,\
-                                  DictionaryLearning, LatentDirichletAllocation, MiniBatchDictionaryLearning, MiniBatchSparsePCA
+                                DictionaryLearning, LatentDirichletAllocation, MiniBatchDictionaryLearning, MiniBatchSparsePCA
 
 from sklearn.dummy import DummyClassifier, DummyRegressor
 from sklearn.ensemble import AdaBoostClassifier, AdaBoostRegressor, BaggingClassifier,\
-                             BaggingRegressor, ExtraTreesClassifier, ExtraTreesRegressor,\
-                             GradientBoostingClassifier, GradientBoostingRegressor,\
-                             RandomForestClassifier, RandomForestRegressor, VotingClassifier
+                            BaggingRegressor, ExtraTreesClassifier, ExtraTreesRegressor,\
+                            GradientBoostingClassifier, GradientBoostingRegressor,\
+                            RandomForestClassifier, RandomForestRegressor, VotingClassifier
 from sklearn.gaussian_process import GaussianProcessClassifier, GaussianProcessRegressor
 from sklearn.linear_model import ARDRegression, BayesianRidge, ElasticNet, ElasticNetCV, HuberRegressor, Lars, LarsCV,\
-                                 Lasso, LassoCV, LassoLars, LassoLarsCV, LassoLarsIC, LinearRegression, LogisticRegression,\
-                                 LogisticRegressionCV, MultiTaskLasso, MultiTaskElasticNet, MultiTaskLassoCV, MultiTaskElasticNetCV,\
-                                 OrthogonalMatchingPursuit, OrthogonalMatchingPursuitCV, PassiveAggressiveClassifier,\
-                                 PassiveAggressiveRegressor, Perceptron, RANSACRegressor, Ridge, RidgeClassifier, RidgeCV,\
-                                 RidgeClassifierCV, SGDClassifier, SGDRegressor, TheilSenRegressor
+                                Lasso, LassoCV, LassoLars, LassoLarsCV, LassoLarsIC, LinearRegression, LogisticRegression,\
+                                LogisticRegressionCV, MultiTaskLasso, MultiTaskElasticNet, MultiTaskLassoCV, MultiTaskElasticNetCV,\
+                                OrthogonalMatchingPursuit, OrthogonalMatchingPursuitCV, PassiveAggressiveClassifier,\
+                                PassiveAggressiveRegressor, Perceptron, RANSACRegressor, Ridge, RidgeClassifier, RidgeCV,\
+                                RidgeClassifierCV, SGDClassifier, SGDRegressor, TheilSenRegressor
 from sklearn.naive_bayes import BernoulliNB, GaussianNB, MultinomialNB
 from sklearn.neighbors import KNeighborsClassifier, KNeighborsRegressor, RadiusNeighborsClassifier,\
-                              RadiusNeighborsRegressor
+                            RadiusNeighborsRegressor
 from sklearn.neural_network import BernoulliRBM, MLPClassifier, MLPRegressor
 from sklearn.svm import LinearSVC, LinearSVR, NuSVC, NuSVR, SVC, SVR
 from sklearn.tree import DecisionTreeClassifier, DecisionTreeRegressor, ExtraTreeClassifier,\
-                         ExtraTreeRegressor
+                        ExtraTreeRegressor
 
 from sklearn.cluster import AffinityPropagation, AgglomerativeClustering, Birch, DBSCAN, FeatureAgglomeration, KMeans,\
                             MiniBatchKMeans, MeanShift, SpectralClustering
