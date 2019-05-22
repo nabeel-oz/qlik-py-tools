@@ -179,7 +179,7 @@ We will now try to improve on these results. You may think that this involves ch
 
 *This process has traditionally been done programmatically by Data Scientists, however, auto feature engineering tools are gaining popularity.*
 
-Add a new section to your load script after the `Suburbs & Regions` section. We will calculate how often an individual has previously skipped an appointment, and whether the person has several appointments on the same day
+Add a new section to your load script after the `Suburbs & Regions` section. We will calculate how often an individual has previously skipped an appointment, and whether the person has several appointments on the same day.
 
 Copy and paste the script below into the new section:
 
@@ -258,7 +258,7 @@ Run the load and check whether we have improved the model using the `Model Evalu
 
 Review the `Key Drivers` sheet and identify the most important features.
 
-####Know where to find more information
+#### Know where to find more information
 The GitHub project for this SSE includes sample apps and documentation. 
 <br>https://github.com/nabeel-oz/qlik-py-tools#usage
 
