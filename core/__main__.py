@@ -23,6 +23,8 @@ if not sys.warnoptions:
 # Import libraries for added functions
 import numpy as np
 import pandas as pd
+from pandas.api.types import is_string_dtype
+from pandas.api.types import is_numeric_dtype
 import _utils as utils
 from _prophet import ProphetForQlik
 from _clustering import HDBSCANForQlik
@@ -493,7 +495,11 @@ class ExtensionService(SSE.ConnectorServicer):
                 # Get labels for clustering
                 response = model.fit_transform(load_script=False)
             
-            dtypes = ["str"]
+            # Set the correct data type for the response
+            if is_numeric_dtype(response):
+                dtypes = ["num"]
+            else:
+                dtypes = ["str"]
             
         elif function in (15, 17, 28):
             if function == 15:
@@ -506,7 +512,13 @@ class ExtensionService(SSE.ConnectorServicer):
                 # Provide labels for clustering
                 response = model.fit_transform(load_script=True)
 
-            dtypes = ["str", "str", "str"]
+            # Set the correct data type for the response
+            if is_numeric_dtype(response.iloc[:,2]):
+                dt = "num"
+            else:
+                dt = "str"
+            
+            dtypes = ["str", "str", dt]
         
         elif function in (18, 22):
             if function == 18:

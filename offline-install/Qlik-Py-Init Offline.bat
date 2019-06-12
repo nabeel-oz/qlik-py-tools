@@ -13,12 +13,12 @@ call activate
 cd ..
 echo.
 echo Installing required packages... & echo.
-pip install --no-index --find-links=offline grpcio grpcio-tools numpy scipy pandas cython
+pip install --no-index --find-links=offline grpcio grpcio-tools numpy scipy pandas cython joblib
 pip install --no-index --find-links=offline pystan==2.17
-pip install --no-index --find-links=offline fbprophet
-pip install --no-index --find-links=offline scikit-learn
-pip install --no-index --find-links=offline setuptools wheel hdbscan
-pip install --no-index --find-links=offline skater
+pip install --no-index --find-links=offline fbprophet==0.4.post2
+pip install --no-index --find-links=offline scikit-learn==0.20.3
+pip install --no-index --find-links=offline setuptools wheel hdbscan==0.8.22
+pip install --no-index --find-links=offline skater==1.1.2
 echo.
 echo Creating a new firewall rule for TCP port 50055... & echo.
 netsh advfirewall firewall add rule name="Qlik PyTools" dir=in action=allow protocol=TCP localport=50055
