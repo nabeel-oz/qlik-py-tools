@@ -495,11 +495,7 @@ class ExtensionService(SSE.ConnectorServicer):
                 # Get labels for clustering
                 response = model.fit_transform(load_script=False)
             
-            # Set the correct data type for the response
-            if is_numeric_dtype(response):
-                dtypes = ["num"]
-            else:
-                dtypes = ["str"]
+            dtypes = ["str"]
             
         elif function in (15, 17, 28):
             if function == 15:
@@ -512,13 +508,7 @@ class ExtensionService(SSE.ConnectorServicer):
                 # Provide labels for clustering
                 response = model.fit_transform(load_script=True)
 
-            # Set the correct data type for the response
-            if is_numeric_dtype(response.iloc[:,2]):
-                dt = "num"
-            else:
-                dt = "str"
-            
-            dtypes = ["str", "str", dt]
+            dtypes = ["str", "str", "str"]
         
         elif function in (18, 22):
             if function == 18:

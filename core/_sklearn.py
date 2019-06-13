@@ -1530,13 +1530,7 @@ class SKLearnForQlik:
         elif variant == "predict":
             self.table.fields.add(name="model_name")
             self.table.fields.add(name="key")
-            
-            # We return numerical predictions for regression and text for classification
-            if self.model.estimator_type == "regressor":
-                dt = 1
-            else:
-                dt = 0
-            self.table.fields.add(name="prediction", dataType=dt)
+            self.table.fields.add(name="prediction")
         elif variant == "expression":
             self.table.fields.add(name="result")
         elif variant == "best_params":
