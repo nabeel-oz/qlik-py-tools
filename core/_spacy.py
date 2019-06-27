@@ -1,8 +1,10 @@
 import os
+import re
 import sys
 import time
 import string
 import pathlib
+import random
 import warnings
 import numpy as np
 import pandas as pd
@@ -12,6 +14,8 @@ if not sys.warnoptions:
     warnings.simplefilter("ignore")
 
 import spacy
+from spacy.util import minibatch, compounding, decaying
+from spacy.gold import GoldParse
 import _utils as utils
 import ServerSideExtension_pb2 as SSE
 
@@ -83,27 +87,65 @@ class SpaCyForQlik:
         self._send_table_description("entities")
         
         return self.response_df
+    
+    def retrain(self):
+        """
+        Retrain a spacy model for NER using training data.
+        """
 
+        # The request provides training data texts, entities, entity types together with the model name and any other arguments
+        row_template = ['strData', 'strData', 'strData', 'strData', 'strData']
+        col_headers = ['text', 'entity', 'entity_type', 'model_name', 'kwargs']
+        
+        # Create a Pandas DataFrame for the request data
+        self.request_df = utils.request_df(self.request, row_template, col_headers)
+
+        # Get the argument strings from the request dataframe
+        kwargs = self.request_df.loc[0, 'kwargs']
+        # Set the relevant parameters using the argument strings
+        self._set_params(kwargs)
+
+        # Check that a model name has been set
+        if self.model in ["en_core_web_sm"]:
+            err = "Incorrect usage: A name for the custom model needs to be specified. The name must start with the prefix '{0}'".format(self.custom_prefix)
+            raise Exception(err)
+
+        # A custom model name must start with a special prefix
+        if not self.model.startswith(self.custom_prefix):
+            err = "Invalid model name: Custom models must have a name starting with the prefix '{0}'.".format(self.custom_prefix)
+            raise Exception(err)
+        
+        # Transform the training data to spaCy's training data format
+        # This call populates the self.train object
+        self._prep_data()
+
+
+
+    
     def _set_params(self, kwargs):
         """
         Set input parameters based on the request.
         :
-        :Parameters used by this SSE are: 
-        :overwrite, debug
         :For details refer to the GitHub project: https://github.com/nabeel-oz/qlik-py-tools
         """
         
         # Set default values which will be used if execution arguments are not passed
         
         # Default parameters:
-        self.overwrite = False
         self.debug = False
         self.model = 'en_core_web_sm'
+        self.custom = False
+        self.base_model = 'en_core_web_sm'
+        self.blank = False
+        self.epochs = 100
+        self.batch_size = compounding(4.0, 32.0, 1.001)
+        self.drop = 0.25
               
         # Extract the model path if required
         try:
-            # Get the model name from the first row in the request_df and prefix it with the path
-            self.model = self.path + self.request_df.loc[0, ['model_name']]
+            # Get the model name from the first row in the request_df 
+            self.model = self.request_df.loc[0, ['model_name']]
+
             # Remove the model_name column from the request_df
             self.request_df = self.request_df.drop(['model_name'], axis=1)
         except KeyError:
@@ -114,10 +156,6 @@ class SpaCyForQlik:
             
             # Transform the string of arguments into a dictionary
             self.kwargs = utils.get_kwargs(kwargs)
-            
-            # Set the overwite parameter if any existing model with the specified name should be overwritten
-            if 'overwrite' in self.kwargs:
-                self.overwrite = 'true' == self.kwargs['overwrite'].lower()
             
             # Set the debug option for generating execution logs
             # Valid values are: true, false
@@ -134,7 +172,56 @@ class SpaCyForQlik:
                     self.logfile = os.path.join(os.getcwd(), 'logs', 'SpaCy Log {}.txt'.format(self.log_no))
 
                     self._print_log(1)
-                
+            
+            # Set whether the model (if getting named entites) or base model (if retraining) is a custom model
+            # i.e. not one of the pre-trained models provided by spaCy
+            if 'custom' in self.kwargs:
+                self.custom = 'true' == self.kwargs['custom'].lower()
+           
+            # Set the base model, i.e an existing spaCy model to be retrained.
+            if 'base_model' in self.kwargs:
+                self.base_model = self.kwargs['base_model'].lower()
+
+                # Identify if the base model is a standard spaCy model or a custom one
+                if self.base_model.startswith(self.custom_prefix):
+                    # Prefix the model name with the path and suffix with a slash as this is a directory
+                    self.base_model = self.path + self.base_model + "/"
+            
+            # Set the retraining to be done on a blank Language class
+            if 'blank' in self.kwargs:
+                self.blank = 'true' == self.kwargs['blank'].lower()
+            
+            # Set the epochs for training the model. 
+            # This is the the number times that the learning algorithm will work through the entire training dataset.
+            # Valid values are an integer e.g. 200
+            if 'epochs' in self.kwargs:
+                self.epochs = utils.atoi(self.kwargs['epochs'])
+            
+            # Set the batch size to be used during model training. 
+            # The model's internal parameters will be updated at the end of each batch.
+            # Valid values are a single integer or compounding or decaying parameters.
+            if 'batch_size' in self.kwargs:
+                # The batch size may be a single integer
+                try:
+                    self.batch_size = utils.atoi(self.kwargs['batch_size'])
+                # Or a list of floats
+                except ValueError:
+                    sizes = utils.get_kwargs_by_type(self.kwargs['batch_size']) 
+
+                    # If the start < end, batch sizes will be compounded
+                    if sizes[0] < sizes[1]:
+                        self.batch_size = compounding(sizes[0], sizes[1], sizes[2])
+                    # else bath sizes will decay during training
+                    else:
+                        self.batch_size = decaying(sizes[0], sizes[1], sizes[2])
+            
+            # Set the dropout rate for retraining the model
+            # This determines the likelihood that a feature or internal representation in the model will be dropped,
+            # making it harder for the model to memorize the training data.
+            # Valid values are a float lesser than 1.0 e.g. 0.35
+            if 'drop' in self.kwargs:
+                self.drop = utils.atof(self.kwargs['drop'])
+               
         # Debug information is printed to the terminal and logs if the paramater debug = true
         if self.debug:
             self._print_log(2)
@@ -146,6 +233,10 @@ class SpaCyForQlik:
         """
         Get named entities from the spaCy model for each text in the request dataframe.
         """
+
+        # If this is a custom model, set the path to the directory
+        if self.custom:
+            self.model = self.path + self.model + "/"
 
         # Load the spaCy model
         nlp = spacy.load(self.model)
@@ -167,6 +258,137 @@ class SpaCyForQlik:
         
         return entities
 
+    def _prep_data(self):
+        """
+        Prepare the data for retraining the model.
+        This transforms the data into spaCy's training data format with tuples of text and entity offsets.
+        """
+
+        # Firstly, we transform the dataframe which has repeated texts with one row per entity...
+        # to a list of each text with its corresponding dictionary of entities.
+
+        prev_text = ''
+        self.train = []
+        entities = {"entities": []}
+
+        # For each sample in the dataframe
+        for i in self.request_df.index:
+            # Extract the text for the current index
+            text = self.request_df.loc[i, 'text']    
+
+            # If this is not the first record and we have reached a new text
+            if i > 0 and text != prev_text:
+                # Add the text and dictionary of entities to the training set
+                self.train.append((prev_text, entities))
+
+                # Reset variables
+                entities = {"entities": []}
+                prev_text = text
+            # For the first record we set previous text to this text
+            elif i == 0:
+                prev_text = text
+
+            # Extract the entity and entity type for the current index
+            entity = (self.request_df.loc[i, 'entity'], self.request_df.loc[i, 'entity_type'])
+
+            # Add entity to the entities dictionary 
+            entities["entities"].append(entity)
+
+        # Add the final text and dictionary of entities to the training set
+        self.train.append((prev_text, entities))
+        
+        # Print the semi-transformed data to the logs
+        if self.debug:
+            self._print_log(6)
+
+        # Complete the data prep by calculating entity offsets and finalizing the format for spaCy
+
+        # Format the training data for spaCy
+        for sample in self.train:
+            # Get the text and named entities for the current sample
+            text = sample[0]
+            entities = sample[1]["entities"]
+            entity_boundaries = []
+            
+            # For each entity
+            for entity in entities:
+                
+                # Set up a regex pattern to look for the entity w.r.t. word boundaries 
+                pattern = re.compile(r"\b" + entity[0] + r"\b")
+                
+                # Find all occurrences of the entity in the text
+                for match in re.finditer(pattern, text):
+                    entity_boundaries.append((match.start(), match.end(), entity[1]))
+            
+            # Add the entity boundaries to the sample
+            sample[1]["entities"] = entity_boundaries
+
+        # Print the final training data to the logs
+        if self.debug:
+            self._print_log(6)
+    
+    def _retrain_model(self):
+        """
+        Update an existing spaCy model with labelled training data.
+        """
+
+        # Load the model, set up the pipeline and train the entity recognizer
+        
+        # Load existing spaCy model
+        if not self.blank:
+            # If this is a custom model, set the path to the directory
+            if self.custom:
+                self.base_model = self.path + self.base_model + "/"
+            
+            nlp = spacy.load(self.base_model)  
+        # If the parameter blank=true is passed we start with a blank Language class, e.g. en
+        else:
+            nlp = spacy.blank(self.base_model)  
+
+        # create the built-in pipeline components and add them to the pipeline
+
+        # nlp.create_pipe works for built-ins that are registered with spaCy
+        if "ner" not in nlp.pipe_names:
+            ner = nlp.create_pipe("ner")
+            nlp.add_pipe(ner, last=True)
+        # otherwise, get it so we can add labels
+        else:
+            ner = nlp.get_pipe("ner")
+
+        # add labels
+        for _, annotations in self.train:
+            for ent in annotations.get("entities"):
+                ner.add_label(ent[2])
+
+        # get names of other pipes to disable them during training
+        other_pipes = [pipe for pipe in nlp.pipe_names if pipe != "ner"]
+        with nlp.disable_pipes(*other_pipes):  # only train NER
+            # reset and initialize the weights randomly – but only if we're
+            # training a new model
+            if self.blank:
+                nlp.begin_training()
+            for epoch in range(self.epochs): 
+                random.shuffle(self.train)
+                self.losses = {}
+                # batch up the examples using spaCy's minibatch
+                batches = minibatch(self.train, size=self.batch_size)
+                for batch in batches:
+                    texts, annotations = zip(*batch)
+                    nlp.update(
+                        texts,  # batch of texts
+                        annotations,  # batch of annotations
+                        drop=self.drop,  # dropout - make it harder to memorise data
+                        losses=self.losses,
+                    )
+
+        # evaluate the model
+
+        # save model to output directory
+        output_dir = pathlib.Path(self.path + self.model + '/')
+        if not output_dir.exists():
+            output_dir.mkdir()
+        nlp.to_disk(output_dir)
+    
     def _send_table_description(self, variant):
         """
         Send the table description to Qlik as meta data.
@@ -201,6 +423,9 @@ class SpaCyForQlik:
         :step: Print the corresponding step in the log
         """
         
+        # Set mode to append to log file
+        mode = 'a'
+
         if self.logfile is None:
             # Increment log counter for the class. Each instance of the class generates a new log.
             self.__class__.log_no += 1
@@ -211,48 +436,40 @@ class SpaCyForQlik:
         
         if step == 1:
             # Output log header
-            sys.stdout.write("\nSpaCyForQlik Log: {0} \n\n".format(time.ctime(time.time())))
-            
-            with open(self.logfile,'w', encoding='utf-8') as f:
-                f.write("SpaCyForQlik Log: {0} \n\n".format(time.ctime(time.time())))
+            output = "\nSpaCyForQlik Log: {0} \n\n".format(time.ctime(time.time()))
+            # Set mode to write new log file
+            mode = 'w'
                                 
         elif step == 2:
-            # Output the model name to the terminal
-            sys.stdout.write("Model: {0}\n\n".format(self.model))
-            # Output the execution parameters to the terminal
-            sys.stdout.write("Execution parameters: {0}\n\n".format(self.kwargs))
-            
-            # Output the same information to the log file 
-            with open(self.logfile,'a', encoding='utf-8') as f:
-                f.write("Model: {0}\n\n".format(self.model))
-                f.write("Execution parameters: {0}\n\n".format(self.kwargs))
+            # Output the model name and execution parameters to the terminal and log file
+            output = "Model: {0}\n\n".format(self.model)
+            output += "\nExecution parameters: {0}\n\n".format(self.kwargs) 
         
         elif step == 3:
-            # Output the request data frame to the terminal
-            sys.stdout.write("REQUEST: {0} rows x cols\nSample Data:\n\n".format(self.request_df.shape))
-            sys.stdout.write("{0}\n...\n{1}\n\n".format(self.request_df.head().to_string(), self.request_df.tail().to_string()))
-            
-            with open(self.logfile,'a', encoding='utf-8') as f:
-                f.write("REQUEST: {0} rows x cols\nSample Data:\n\n".format(self.request_df.shape))
-                f.write("{0}\n...\n{1}\n\n".format(self.request_df.head().to_string(), self.request_df.tail().to_string()))
+            # Output the request data frame to the terminal and log file
+            output = "REQUEST: {0} rows x cols\nSample Data:\n\n".format(self.request_df.shape)
+            output += "{0}\n...\n{1}\n\n".format(self.request_df.head().to_string(), self.request_df.tail().to_string())
         
         elif step == 4:
-            # Output the response data frame to the terminal
-            sys.stdout.write("RESPONSE: {0} rows x cols\nSample Data:\n\n".format(self.response_df.shape))
-            sys.stdout.write("{0}\n...\n{1}\n\n".format(self.response_df.head().to_string(), self.response_df.tail().to_string()))
-            
-            with open(self.logfile,'a', encoding='utf-8') as f:
-                f.write("RESPONSE: {0} rows x cols\nSample Data:\n\n".format(self.response_df.shape))
-                f.write("{0}\n...\n{1}\n\n".format(self.response_df.head().to_string(), self.response_df.tail().to_string()))
+            # Output the response data frame to the terminal and log file
+            output = "RESPONSE: {0} rows x cols\nSample Data:\n\n".format(self.response_df.shape)
+            output += "{0}\n...\n{1}\n\n".format(self.response_df.head().to_string(), self.response_df.tail().to_string())
         
         elif step == 5:
-            # Print the table description if the call was made from the load script
-            sys.stdout.write("\nTABLE DESCRIPTION SENT TO QLIK:\n\n{0} \n\n".format(self.table))
+            # Output the table description if the call was made from the load script
+            output = "\nTABLE DESCRIPTION SENT TO QLIK:\n\n{0} \n\n".format(self.table)
+        
+        elif step == 6:
+            output = "TRANSFORMED {0} SAMPLES.\nTop and bottom 3 samples:\n\n".format(len(self.train))
             
-            # Write the table description to the log file
-            with open(self.logfile,'a', encoding='utf-8') as f:
-                f.write("\nTABLE DESCRIPTION SENT TO QLIK:\n\n{0} \n\n".format(self.table))
-    
+            # Output the top and bottom 3 results from data transformations
+            for text, annotations in self.train[:3] + self.train[-3:]:
+                output += '{0}\n\n {1}\n\n'.format(text, annotations)
+
+        sys.stdout.write(output)
+        with open(self.logfile, mode, encoding='utf-8') as f:
+            f.write(output)
+
     def _print_exception(self, s, e):
         """
         Output exception message to stdout and also to the log file if debugging is required.

@@ -104,8 +104,7 @@ class ExtensionService(SSE.ConnectorServicer):
             29: '_sklearn',
             30: '_spacy',
             31: '_spacy',
-            32: '_spacy',
-            33: '_spacy'
+            32: '_spacy'
         }
 
     """
@@ -617,17 +616,10 @@ class ExtensionService(SSE.ConnectorServicer):
             dtypes = ["str", "str", "num", "num", "str", "str"]
         
         elif function == 32:
-            # Set example texts for retraining a model
-            response = model.set_texts()
-
-            # return three columns: model_name, result, timestamp
-            dtypes = ["str", "str", "str"]
-
-        elif function == 33:
-            # Retrain a model using labeled entities
+            # Retrain a model by supplying texts and labeled entities
             response = model.retrain()
 
-            # return three columns: model_name, result, timestamp
+            # return three columns: model_name, metric, value
             dtypes = ["str", "str", "str"]
 
         # Get the response as SSE.Rows
