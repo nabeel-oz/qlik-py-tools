@@ -16,6 +16,7 @@ if not sys.warnoptions:
 import spacy
 from spacy.util import minibatch, compounding, decaying
 from spacy.gold import GoldParse
+from sklearn.model_selection import train_test_split
 import _utils as utils
 import ServerSideExtension_pb2 as SSE
 
@@ -107,20 +108,29 @@ class SpaCyForQlik:
 
         # Check that a model name has been set
         if self.model in ["en_core_web_sm"]:
-            err = "Incorrect usage: A name for the custom model needs to be specified. The name must start with the prefix '{0}'".format(self.custom_prefix)
-            raise Exception(err)
-
-        # A custom model name must start with a special prefix
-        if not self.model.startswith(self.custom_prefix):
-            err = "Invalid model name: Custom models must have a name starting with the prefix '{0}'.".format(self.custom_prefix)
+            err = "Incorrect usage: A name for the custom model needs to be specified."
             raise Exception(err)
         
         # Transform the training data to spaCy's training data format
-        # This call populates the self.train object
+        # This call populates the self.train and self.validation (if a test set is specified in the request arguments) objects
         self._prep_data()
 
+        # Retrain the model and calculate evaluation metrics
+        # This call saves the retrained model to disk and pepares the self.metrics dataframe for the response
+        self._retrain_model()
 
+        # Prepare the response, which will be the evaluation metrics prepared during retraining
+        self.response_df = self.metrics
 
+        # Debug information is printed to the terminal and logs if the paramater debug = true
+        if self.model.debug:
+            self._print_log(11)
+        
+        # Send the reponse table description to Qlik
+        self._send_table_description("metrics")
+        
+        # Finally send the response
+        return self.response_df
     
     def _set_params(self, kwargs):
         """
@@ -140,6 +150,7 @@ class SpaCyForQlik:
         self.epochs = 100
         self.batch_size = compounding(4.0, 32.0, 1.001)
         self.drop = 0.25
+        self.test = 0
               
         # Extract the model path if required
         try:
@@ -181,11 +192,6 @@ class SpaCyForQlik:
             # Set the base model, i.e an existing spaCy model to be retrained.
             if 'base_model' in self.kwargs:
                 self.base_model = self.kwargs['base_model'].lower()
-
-                # Identify if the base model is a standard spaCy model or a custom one
-                if self.base_model.startswith(self.custom_prefix):
-                    # Prefix the model name with the path and suffix with a slash as this is a directory
-                    self.base_model = self.path + self.base_model + "/"
             
             # Set the retraining to be done on a blank Language class
             if 'blank' in self.kwargs:
@@ -221,6 +227,12 @@ class SpaCyForQlik:
             # Valid values are a float lesser than 1.0 e.g. 0.35
             if 'drop' in self.kwargs:
                 self.drop = utils.atof(self.kwargs['drop'])
+            
+            # Set the ratio of data to be used for testing. 
+            # This data will be held out from training and just used to provide evaluation metrics.
+            # Valid values are a float >= zero and < 1.0 e.g. 0.3
+            if 'test' in self.kwargs:
+                self.test = utils.atof(self.kwargs['test'])
                
         # Debug information is printed to the terminal and logs if the paramater debug = true
         if self.debug:
@@ -268,7 +280,7 @@ class SpaCyForQlik:
         # to a list of each text with its corresponding dictionary of entities.
 
         prev_text = ''
-        self.train = []
+        train = []
         entities = {"entities": []}
 
         # For each sample in the dataframe
@@ -279,7 +291,7 @@ class SpaCyForQlik:
             # If this is not the first record and we have reached a new text
             if i > 0 and text != prev_text:
                 # Add the text and dictionary of entities to the training set
-                self.train.append((prev_text, entities))
+                train.append((prev_text, entities))
 
                 # Reset variables
                 entities = {"entities": []}
@@ -295,7 +307,7 @@ class SpaCyForQlik:
             entities["entities"].append(entity)
 
         # Add the final text and dictionary of entities to the training set
-        self.train.append((prev_text, entities))
+        train.append((prev_text, entities))
         
         # Print the semi-transformed data to the logs
         if self.debug:
@@ -304,7 +316,7 @@ class SpaCyForQlik:
         # Complete the data prep by calculating entity offsets and finalizing the format for spaCy
 
         # Format the training data for spaCy
-        for sample in self.train:
+        for sample in train:
             # Get the text and named entities for the current sample
             text = sample[0]
             entities = sample[1]["entities"]
@@ -323,6 +335,14 @@ class SpaCyForQlik:
             # Add the entity boundaries to the sample
             sample[1]["entities"] = entity_boundaries
 
+        # If required, split the data into training and testing sets
+        if self.test > 0:
+            self.train, self.validation = train_test_split(train, test_size=self.test)
+        # Otherwise use the entire dataset for training
+        else:
+            self.train = train
+            self.validation = None
+
         # Print the final training data to the logs
         if self.debug:
             self._print_log(6)
@@ -332,7 +352,7 @@ class SpaCyForQlik:
         Update an existing spaCy model with labelled training data.
         """
 
-        # Load the model, set up the pipeline and train the entity recognizer
+        # Load the model, set up the pipeline and train the entity recognizer:
         
         # Load existing spaCy model
         if not self.blank:
@@ -344,6 +364,10 @@ class SpaCyForQlik:
         # If the parameter blank=true is passed we start with a blank Language class, e.g. en
         else:
             nlp = spacy.blank(self.base_model)  
+
+        # Debug information is printed to the terminal and logs if the paramater debug = true
+        if self.model.debug:
+            self._print_log(7)
 
         # create the built-in pipeline components and add them to the pipeline
 
@@ -360,16 +384,23 @@ class SpaCyForQlik:
             for ent in annotations.get("entities"):
                 ner.add_label(ent[2])
 
+        # Retrain the model:
+        
         # get names of other pipes to disable them during training
         other_pipes = [pipe for pipe in nlp.pipe_names if pipe != "ner"]
         with nlp.disable_pipes(*other_pipes):  # only train NER
+           
+            # Setup lists to store the loss for each epoch
+            self.losses_train = []
+            self.losses_test = []
+            
             # reset and initialize the weights randomly – but only if we're
             # training a new model
             if self.blank:
                 nlp.begin_training()
             for epoch in range(self.epochs): 
                 random.shuffle(self.train)
-                self.losses = {}
+                losses = {}
                 # batch up the examples using spaCy's minibatch
                 batches = minibatch(self.train, size=self.batch_size)
                 for batch in batches:
@@ -378,17 +409,109 @@ class SpaCyForQlik:
                         texts,  # batch of texts
                         annotations,  # batch of annotations
                         drop=self.drop,  # dropout - make it harder to memorise data
-                        losses=self.losses,
+                        losses=losses,
                     )
+                # Store loss for the epoch to a list
+                self.losses_train.append((epoch, losses['ner']))
 
-        # evaluate the model
+                # Debug information is printed to the terminal and logs if the paramater debug = true
+                if self.model.debug:
+                    self._print_log(8)
+                
+                # If a test dataset is available, calculate losses for it as well
+                if self.validation is not None:
+                    losses = {}
 
-        # save model to output directory
+                    # batch up the examples using spaCy's minibatch
+                    batches = minibatch(self.validation, size=self.batch_size)
+                    for batch in batches:
+                        texts, annotations = zip(*batch)
+                        # Get losses for the test data without updating the model 
+                        nlp.update(
+                            texts,  # batch of texts
+                            annotations,  # batch of annotations
+                            sgd = None,  # do not update model weights
+                            losses=losses,
+                        )
+                    # Store loss for the epoch to a list
+                    self.losses_test.append((epoch, losses['ner']))
+
+                    # Debug information is printed to the terminal and logs if the paramater debug = true
+                    if self.model.debug:
+                        self._print_log(9)
+
+        # Save model to output directory:
+        
         output_dir = pathlib.Path(self.path + self.model + '/')
         if not output_dir.exists():
             output_dir.mkdir()
         nlp.to_disk(output_dir)
+
+        # Debug information is printed to the terminal and logs if the paramater debug = true
+        if self.model.debug:
+            self._print_log(10)
+
+        # Evaluate the model:
+
+        # Prepare spaCy docs and golds for getting evaluation metrics
+        docs_golds = []
+        for sample in self.train:
+            doc = nlp.make_doc(sample[0])
+            gold = GoldParse(doc, entities=sample[1]["entities"])
+            docs_golds.append((doc, gold))
+        
+        # Get scores for training data
+        scorer_train = nlp.evaluate(docs_golds)
+        # Add the training scores to evaluation metrics
+        self.metrics = self._prep_scores(scorer_train)
+
+        # Get scores for testing data and add to the evaluation metrics
+        if self.validation is not None:
+            docs_golds = []
+            for sample in self.validation:
+                doc = nlp.make_doc(sample[0])
+                gold = GoldParse(doc, entities=sample[1]["entities"])
+                docs_golds.append((doc, gold))
+            
+            scorer_test = nlp.evaluate(docs_golds)
+            self.metrics = pd.concat([self.metrics, self._prep_scores(scorer_test, subset='test')], ignore_index=True)
+
+        # Add loss metrics
+        self.metrics = pd.concat([self.metrics, self._prep_losses(self.losses_train)], ignore_index=True)
+        if self.validation is not None:
+            self.metrics = pd.concat([self.metrics, self._prep_losses(self.losses_test, subset='test')], ignore_index=True)
     
+    def _prep_scores(self, scorer, subset='train'):
+        """
+        Prepare score metrics using a spaCy scrorer 
+        Returns a dataframe formatted for output
+        """
+        columns = ["metric", "value"]
+
+        # Prepare scorer metrics
+        scores = {"Precision": scorer.scores["ents_p"], "Recall": scorer.scores["ents_r"], "F-score": scorer.scores["ents_f"]}
+        metrics_df = pd.DataFrame([(k, v) for k, v in scores.items()], columns=columns)
+
+        metrics_df.loc[:,'model'] = self.model
+        metrics_df.loc[:,'subset'] = subset
+        metrics_df = metrics_df[['model', 'subset'] + columns]
+
+        return metrics_df
+    
+    def _prep_losses(self, losses, subset='train'):
+        """
+        Prepare loss metrics using a list of tuples of the format: (epoch, loss)
+        Where epoch is an integer and loss is a float 
+        Returns a dataframe formatted for output
+        """
+        columns = ["metric", "value"]
+        metrics_df = pd.DataFrame(losses, columns=columns)
+        metrics_df.loc[:,'model'] = self.model
+        metrics_df.loc[:,'subset'] = subset
+        metrics_df = metrics_df[['model', 'subset'] + columns]
+
+        return metrics_df
+
     def _send_table_description(self, variant):
         """
         Send the table description to Qlik as meta data.
@@ -408,6 +531,11 @@ class SpaCyForQlik:
             self.table.fields.add(name="end", dataType=1)
             self.table.fields.add(name="type")
             self.table.fields.add(name="description")
+        elif variant == "metrics":
+            self.table.fields.add(name="model_name")
+            self.table.fields.add(name="subset")
+            self.table.fields.add(name="metric")
+            self.table.fields.add(name="value")
                 
         # Debug information is printed to the terminal and logs if the paramater debug = true
         if self.debug:
@@ -460,11 +588,43 @@ class SpaCyForQlik:
             output = "\nTABLE DESCRIPTION SENT TO QLIK:\n\n{0} \n\n".format(self.table)
         
         elif step == 6:
-            output = "TRANSFORMED {0} SAMPLES.\nTop and bottom 3 samples:\n\n".format(len(self.train))
+            output = "Completed transformations.\nTop and bottom 3 samples for training:\n\n"
             
-            # Output the top and bottom 3 results from data transformations
+            # Output the top and bottom 3 results from training data
             for text, annotations in self.train[:3] + self.train[-3:]:
                 output += '{0}\n\n {1}\n\n'.format(text, annotations)
+            
+            # Print the top and bottom 3 testing samples as well if the data has been split into subsets
+            try:
+                output += "Data split into {0} samples for training and {1} samples for testing.\n".format(len(self.train), len(self.validation))
+                output += "Top and bottom 3 samples for testing:\n\n"
+
+                # Output the top and bottom 3 results from the testing data
+                for text, annotations in self.validation[:3] + self.validation[-3:]:
+                    output += '{0}\n\n {1}\n\n'.format(text, annotations)
+            except AttributeError:
+                pass
+        
+        elif step == 7:
+            # Output after a model is successfully loaded for training
+            output = "Loaded model {0}\n\n".format(self.base_model)
+
+        elif step == 8:
+            # Print loss at current epoch with training data
+            output = "Epoch {0}, Losses with Training data: {1}\n".format(self.losses_train[0], self.losses_train[1])
+
+        elif step == 9:
+            # Print loss at current epoch with testing data
+            output = "Epoch {0}, Losses with Testing data: {1}\n".format(self.losses_test[0], self.losses_test[1])
+
+        elif step == 10:
+            # Output after model is successfully saved to disk
+            output = "\nModel successfully saved to disk at directory: {0}\n\n".format(self.path + self.model + '/')
+
+        elif step == 11:
+            # Output after evaluation metrics have been calculated
+            output = "RESPONSE: {0} rows x cols\nSample Data:\n\n".format(self.response_df.shape)
+            output += "{0}\n...\n{1}\n\n".format(self.response_df.head(10).to_string(), self.response_df.tail(5).to_string())
 
         sys.stdout.write(output)
         with open(self.logfile, mode, encoding='utf-8') as f:

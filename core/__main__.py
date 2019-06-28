@@ -619,8 +619,8 @@ class ExtensionService(SSE.ConnectorServicer):
             # Retrain a model by supplying texts and labeled entities
             response = model.retrain()
 
-            # return three columns: model_name, metric, value
-            dtypes = ["str", "str", "str"]
+            # return four columns: model_name, subset, metric, value
+            dtypes = ["str", "str", "str", "num"]
 
         # Get the response as SSE.Rows
         response_rows = utils.get_response_rows(response.values.tolist(), dtypes) 
