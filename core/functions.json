@@ -354,6 +354,17 @@
         "d_model_name": 0,
         "e_other_args": 0
       }
+    },
+    {
+      "Id": 33,
+      "Name": "Association_Rules",
+      "Type": 0,
+      "ReturnType": 0,
+      "Params": {
+        "a_group": 0,
+        "b_item": 0,
+        "c_other_args": 0
+      }
     }
   ]
 }

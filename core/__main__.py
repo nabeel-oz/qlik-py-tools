@@ -30,6 +30,7 @@ from _prophet import ProphetForQlik
 from _clustering import HDBSCANForQlik
 from _sklearn import SKLearnForQlik
 from _spacy import SpaCyForQlik
+from _common import CommonFunction
 
 # Set the default port for this SSE Extension
 _DEFAULT_PORT = '50055'
@@ -104,7 +105,8 @@ class ExtensionService(SSE.ConnectorServicer):
             29: '_sklearn',
             30: '_spacy',
             31: '_spacy',
-            32: '_spacy'
+            32: '_spacy',
+            33: '_common'
         }
 
     """
@@ -442,8 +444,6 @@ class ExtensionService(SSE.ConnectorServicer):
         :param request: an iterable sequence of RowData
         :param context:
         :return: Refer to comments below as the response depends on the function called
-        :Qlik expression examples:
-        :<AAI Connection Name>.
         """
         # Get a list from the generator object so that it can be iterated over multiple times
         request_list = [request_rows for request_rows in request]
@@ -590,8 +590,6 @@ class ExtensionService(SSE.ConnectorServicer):
         :param request: an iterable sequence of RowData
         :param context:
         :return: Refer to comments below as the response depends on the function called
-        :Qlik expression examples:
-        :<AAI Connection Name>.
         """
         # Get a list from the generator object so that it can be iterated over multiple times
         request_list = [request_rows for request_rows in request]
@@ -621,6 +619,52 @@ class ExtensionService(SSE.ConnectorServicer):
 
             # return four columns: model_name, subset, metric, value
             dtypes = ["str", "str", "str", "num"]
+
+        # Get the response as SSE.Rows
+        response_rows = utils.get_response_rows(response.values.tolist(), dtypes) 
+
+        # Get the number of rows in the request
+        num_request_bundles = len(request_list)
+
+        # Get the number of rows in the response
+        num_rows = len(response_rows) 
+
+        # Calculate the number of rows to send per bundle
+        if num_rows >= num_request_bundles:
+            rows_per_bundle = len(response_rows)//len(request_list)
+        else:
+            rows_per_bundle = num_rows
+
+        # Stream response as BundledRows
+        for i in range(0, len(response_rows), rows_per_bundle):
+            # Yield Row data as Bundled rows
+            yield SSE.BundledRows(rows=response_rows[i : i + rows_per_bundle])
+    
+    @staticmethod
+    def _common(request, context):
+        """
+        Execute functions that provide common data science capabilities for Qlik.
+        :param request: an iterable sequence of RowData
+        :param context:
+        :return: Refer to comments below as the response depends on the function called
+        """
+        # Get a list from the generator object so that it can be iterated over multiple times
+        request_list = [request_rows for request_rows in request]
+        
+        # Get the function id from the header to determine the variant being called
+        function = ExtensionService._get_function_id(context)
+        
+        # Create an instance of the CommonFunction class
+        handle = CommonFunction(request_list, context)
+        
+        # Call the function based on the mapping in functions.json
+        # The if conditions are grouped based on similar output structure
+        if function == 33:    
+            # Get entities from the default model
+            response = handle.association_rules()
+            
+            # return six columns: 'rule', 'rule_lhs', 'rule_rhs', 'support', 'confidence', 'lift'
+            dtypes = ["str", "str", "str", "num", "num", "num"]
 
         # Get the response as SSE.Rows
         response_rows = utils.get_response_rows(response.values.tolist(), dtypes) 
