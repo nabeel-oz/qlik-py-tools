@@ -69,6 +69,12 @@ class CommonFunction:
             desc = "{0} -> {1}".format(lhs, rhs)
             response.append((desc, lhs, rhs, rule.support, rule.confidence, rule.lift))
 
+        # if no association rules were found the parameters may need to be adjusted
+        if len(response) == 0:
+            err = "No association rules could be found. You may get results by lowering the limits imposed by "
+            + "the min_support and min_confidence parameters.\ne.g. by passing min_support=0.2|float in the arguments."
+            raise Exception(err) 
+
         self.response_df = pd.DataFrame(response, columns=['rule', 'rule_lhs', 'rule_rhs', 'support', 'confidence', 'lift'])
 
         # Print the response dataframe to the logs
@@ -121,7 +127,7 @@ class CommonFunction:
             # Set the debug option for generating execution logs
             # Valid values are: true, false
             if 'debug' in self.kwargs:
-                self.debug = 'true' == self.kwargs['debug'].lower()
+                self.debug = 'true' == self.kwargs.pop('debug').lower()
                 
                 # Additional information is printed to the terminal and logs if the paramater debug = true
                 if self.debug:
@@ -129,8 +135,8 @@ class CommonFunction:
                     self.__class__.log_no += 1
 
                     # Create a log file for the instance
-                    # Logs will be stored in ..\logs\SpaCy Log <n>.txt
-                    self.logfile = os.path.join(os.getcwd(), 'logs', 'SpaCy Log {}.txt'.format(self.log_no))
+                    # Logs will be stored in ..\logs\Common Functions Log <n>.txt
+                    self.logfile = os.path.join(os.getcwd(), 'logs', 'Common Functions Log {}.txt'.format(self.log_no))
 
                     self._print_log(1)
             
