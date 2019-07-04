@@ -318,6 +318,53 @@
       "Params": {
         "a_model_name": 0
       }
+    },
+  {
+      "Id": 30,
+      "Name": "spaCy_Get_Entities",
+      "Type": 0,
+      "ReturnType": 0,
+      "Params": {
+        "a_key": 0,
+        "b_text": 0,
+        "c_other_args": 0
+      }
+    },
+  {
+      "Id": 31,
+      "Name": "spaCy_Get_Entities_From_Model",
+      "Type": 0,
+      "ReturnType": 0,
+      "Params": {
+        "a_key": 0,
+        "b_text": 0,
+        "c_model_name": 0,
+        "d_other_args": 0
+      }
+    },
+  {
+      "Id": 32,
+      "Name": "spaCy_Retrain",
+      "Type": 0,
+      "ReturnType": 0,
+      "Params": {
+        "a_text": 0,
+        "b_entity": 0,
+        "c_entity_type": 0,
+        "d_model_name": 0,
+        "e_other_args": 0
+      }
+    },
+    {
+      "Id": 33,
+      "Name": "Association_Rules",
+      "Type": 0,
+      "ReturnType": 0,
+      "Params": {
+        "a_group": 0,
+        "b_item": 0,
+        "c_other_args": 0
+      }
     }
   ]
 }

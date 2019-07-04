@@ -59,9 +59,10 @@ def get_response_rows(response, template):
             for col in row:
                 # Convert values to type SSE.Dual according to the template list
                 if template[i] == "str":
-                    if type(col) is not str:
+                    if col is None:
+                        col = "\x00"
+                    elif type(col) is not str:
                         col = "{0:.5f}".format(col)
-
                     this_row.append(SSE.Dual(strData=col))
                 elif template[i] == "num":
                     this_row.append(SSE.Dual(numData=col))
@@ -71,7 +72,9 @@ def get_response_rows(response, template):
         else:
             # Convert values to type SSE.Dual according to the template list
             if template[0] == "str":
-                if type(row) is not str:
+                if row is None:
+                    row = "\x00"
+                elif type(row) is not str:
                     row = "{0:.5f}".format(row)
                 this_row.append(SSE.Dual(strData=row))
             elif template[0] == "num":
