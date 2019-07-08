@@ -106,7 +106,7 @@ class ExtensionService(SSE.ConnectorServicer):
             30: '_spacy',
             31: '_spacy',
             32: '_spacy',
-            33: '_common'
+            33: '_misc'
         }
 
     """
@@ -641,7 +641,7 @@ class ExtensionService(SSE.ConnectorServicer):
             yield SSE.BundledRows(rows=response_rows[i : i + rows_per_bundle])
     
     @staticmethod
-    def _common(request, context):
+    def _misc(request, context):
         """
         Execute functions that provide common data science capabilities for Qlik.
         :param request: an iterable sequence of RowData

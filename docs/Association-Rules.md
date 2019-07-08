@@ -7,6 +7,7 @@
 - [Quick Start](#quick-start)
 - [Additional Parameters](#additional-parameters)
 - [Finding associations in the Lord of the Rings](#finding-associations-in-the-lord-of-the-rings)
+- [Market Basket Analysis](#market-basket-analysis)
 - [Attribution](#attribution)
 
 ## Introduction
@@ -88,5 +89,11 @@ Switch to Analysis mode and go to the `Entity Associations` sheet to explore the
 
 ![Entity Associations](images/apriori-02.png)
 
+## Market Basket Analysis
+
+For an example on Market Basket Analysis refer to the [second sample app](Sample-App-Market-Basket.qvf) on Association Rules. This app applies Association Rules to a real dataset of over 500,000 transactions from an online retailer. 
+
 ## Attribution
-The data used in the sample app was obtained from the [Lord of the Rings Data](https://www.kaggle.com/mokosan/lord-of-the-rings-character-data#LordOfTheRingsBook.json) on Kaggle.com.
+The data used in the Lord of the Rings sample app was obtained from the [Lord of the Rings Data](https://www.kaggle.com/mokosan/lord-of-the-rings-character-data#LordOfTheRingsBook.json) on Kaggle.com.
+
+The data used in the Market Basket Analysis sample app was obtained from the [Online Retail dataset](http://archive.ics.uci.edu/ml/datasets/online+retail) on the UCI Machine Learning Repository.
