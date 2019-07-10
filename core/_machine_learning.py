@@ -191,6 +191,9 @@ class Preprocessor(TransformerMixin):
             
             self.__init__(features)
         
+        # Set up an empty data frame for data to be scaled
+        scale_df = pd.DataFrame()
+        
         if self.ohe:
             # Get a subset of the data that requires one hot encoding
             ohe_df = X[self.ohe_meta.index.tolist()]
@@ -305,6 +308,7 @@ class Preprocessor(TransformerMixin):
         """        
         
         X_transform = None
+        scale_df = pd.DataFrame()
         
         if self.ohe:
             # Get a subset of the data that requires one hot encoding
@@ -561,7 +565,7 @@ class Preprocessor(TransformerMixin):
                     f.write("Fit tfidf_df shape:{0}\nSample Data:\n{1}\n\n".format(kwargs['tfidf_df'].shape, kwargs['tfidf_df'].head()))
             
             try:
-                if len(self.scale_df) > 0:
+                if len(kwargs['scale_df']) > 0:
                     sys.stdout.write("Fit scale_df shape:{0}\nSample Data:\n{1}\n\n".format(kwargs['scale_df'].shape, kwargs['scale_df'].head()))
                     
                     with open(self.log,'a', encoding='utf-8') as f:
@@ -595,7 +599,7 @@ class Preprocessor(TransformerMixin):
                     f.write("Transform tfidf_df shape:{0}\nSample Data:\n{1}\n\n".format(kwargs['tfidf_df'].shape, kwargs['tfidf_df'].head()))
             
             try:
-                if len(self.scale_df) > 0:
+                if len(kwargs['scale_df']) > 0:
                     sys.stdout.write("Transform scale_df shape:{0}\nSample Data:\n{1}\n\n".format(kwargs['scale_df'].shape, kwargs['scale_df'].head()))
                     
                     with open(self.log,'a', encoding='utf-8') as f:

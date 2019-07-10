@@ -252,7 +252,7 @@ class ProphetForQlik:
         if self.name is not None and len(self.add_seasonality_kwargs) > 0:
             self.model.add_seasonality(**self.add_seasonality_kwargs)
         
-        self.model.fit(self.input_df)
+        self.model.fit(self.input_df, **self.fit_kwargs)
              
         # Create a data frame for future values
         self.future_df = self.model.make_future_dataframe(**self.make_kwargs)
@@ -320,6 +320,11 @@ class ProphetForQlik:
         self.mode = None
         self.seasonality_prior_scale = None
         self.holidays_prior_scale = None
+        self.mcmc_samples = None
+        self.seed = None
+        self.n_changepoints = None
+        self.changepoint_range = None
+        self.uncertainty_samples = None
         self.is_seasonality_request = False
         self.weekly_start = 6 # Defaulting to a Monday start for the week as used in Qlik
         self.yearly_start = 0
@@ -447,6 +452,34 @@ class ProphetForQlik:
             # Reducing this parameter dampens holiday effects. Default is 10, which provides very little regularization.
             if 'holidays_prior_scale' in self.kwargs:
                 self.holidays_prior_scale = utils.atof(self.kwargs['holidays_prior_scale'])
+
+            # Set the number of MCMC samples. 
+            # If greater than 0, Prophet will do full Bayesian inference with the specified number of MCMC samples. 
+            # If 0, Prophet will do MAP estimation. Default is 0.
+            if 'mcmc_samples' in self.kwargs:
+                self.mcmc_samples = utils.atoi(self.kwargs['mcmc_samples'])
+            
+            # Random seed that can be used to control stochasticity. 
+            # Used for setting the numpy random seed used in predict and also for pystan when using mcmc_samples>0.
+            if 'random_seed' in self.kwargs:
+                self.seed = utils.atoi(self.kwargs['random_seed'])
+
+                # Set the random seed for numpy
+                np.random.seed(self.seed)
+
+            # Number of potential changepoints to include. Default value is 25.
+            # Potential changepoints are selected uniformly from the first `changepoint_range` proportion of the history.
+            if 'n_changepoints' in self.kwargs:
+                self.n_changepoints = utils.atoi(self.kwargs['n_changepoints'])
+
+            # Proportion of history in which trend changepoints will be estimated. 
+            # Defaults to 0.8 for the first 80%.
+            if 'changepoint_range' in self.kwargs:
+                self.changepoint_range = utils.atof(self.kwargs['changepoint_range'])
+
+            # Number of simulated draws used to estimate uncertainty intervals.
+            if 'uncertainty_samples' in self.kwargs:
+                self.uncertainty_samples = utils.atoi(self.kwargs['uncertainty_samples'])
             
             # Set the weekly start for 'weekly' seasonality requests 
             # Default week start is 0 which represents Sunday. Add offset as required.
@@ -468,16 +501,18 @@ class ProphetForQlik:
             if 'upper_window' in self.kwargs:
                 self.upper_window = utils.atoi(self.kwargs['upper_window'])
         
-        # Create dictionary of arguments for the Prophet(), make_future_dataframe() and add_seasonality() functions
+        # Create dictionary of arguments for the Prophet(), make_future_dataframe(), add_seasonality() and fit() functions
         self.prophet_kwargs = {}
         self.make_kwargs = {}
         self.add_seasonality_kwargs = {}
+        self.fit_kwargs = {}
         
         # Populate the parameters in the corresponding dictionary:
         
         # Set up a list of possible key word arguments for the Prophet() function
         prophet_params = ['seasonality_mode', 'growth', 'changepoint_prior_scale', 'interval_width',\
-                          'seasonality_prior_scale', 'holidays_prior_scale']
+                          'seasonality_prior_scale', 'holidays_prior_scale', 'mcmc_samples', 'n_changepoints',\
+                          'changepoint_range', 'uncertainty_samples']
         
         # Create dictionary of key word arguments for the Prophet() function
         self.prophet_kwargs = self._populate_dict(prophet_params)
@@ -493,6 +528,14 @@ class ProphetForQlik:
         
         # Create dictionary of key word arguments for the add_seasonality() function
         self.add_seasonality_kwargs = self._populate_dict(seasonality_params)
+
+        # Pass the random seed to the fit method if MCMC is being used
+        if self.mcmc_samples is not None and self.mcmc_samples > 0:
+            # Set up a list of possible key word arguments for the fit() function
+            fit_params = ['seed']
+            # Create dictionary of key word arguments for the fit() function
+            self.fit_kwargs = self._populate_dict(fit_params)
+
             
     def _populate_dict(self, params):
         """
@@ -636,6 +679,7 @@ class ProphetForQlik:
             sys.stdout.write("Instance creation parameters: {0}\n\n".format(self.prophet_kwargs))
             sys.stdout.write("Make future data frame parameters: {0}\n\n".format(self.make_kwargs))
             sys.stdout.write("Add seasonality parameters: {0}\n\n".format(self.add_seasonality_kwargs))
+            sys.stdout.write("Fit parameters: {0}\n\n".format(self.fit_kwargs))
             sys.stdout.write("REQUEST DATA FRAME: {0} rows x cols\n\n".format(self.request_df.shape))
             sys.stdout.write("{0} \n\n".format(self.request_df.to_string()))
             if len(self.NaT_df) > 0:
@@ -653,6 +697,7 @@ class ProphetForQlik:
                 f.write("Instance creation parameters: {0}\n\n".format(self.prophet_kwargs))
                 f.write("Make future data frame parameters: {0}\n\n".format(self.make_kwargs))
                 f.write("Add seasonality parameters: {0}\n\n".format(self.add_seasonality_kwargs))
+                f.write("Fit parameters: {0}\n\n".format(self.fit_kwargs))
                 f.write("REQUEST DATA FRAME: {0} rows x cols\n\n".format(self.request_df.shape))
                 f.write("{0} \n\n".format(self.request_df.to_string()))
                 if len(self.NaT_df) > 0:
