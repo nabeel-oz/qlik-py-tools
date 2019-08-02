@@ -145,6 +145,10 @@ def get_kwargs(str_kwargs):
     Take in a string of key word arguments and return as a dictionary of key, value pairs
     The string should be in the form: 'arg1=value1,arg2=value2'
     """
+
+    # If the argument string is empty return an empty dict
+    if len(str_kwargs) == 0:
+        return dict()
     
     # Remove any extra spaces and trailing commas
     args = str_kwargs.strip()
@@ -154,9 +158,6 @@ def get_kwargs(str_kwargs):
     # The parameter and values are transformed into key value pairs
     args = args.translate(str.maketrans('', '', string.whitespace)).split(",")
     kwargs = dict([arg.split("=") for arg in args])
-
-    # Make sure the key words are in lower case
-    # kwargs = {k.lower(): v for k, v in kwargs.items()} # Commented as certain parameter names are case sensitive
     
     return kwargs
 
@@ -241,6 +242,45 @@ def get_kwargs_by_type(dict_kwargs):
             raise Exception(err)
     
     return result_dict
+
+def get_args_by_type(str_args):
+    """
+    Take in a string of positional arguments and types and convert them to a list of values of the correct type.
+    The string should be in the form: 'value1|type1,value2|type2'.
+    e.g. '8|int, 0.5|float' would return [8, 0.5]
+    """
+    
+    # Dictionary used to convert argument values to the correct type
+    types = {"boolean":ast.literal_eval, "bool":ast.literal_eval, "integer":atoi, "int":atoi,\
+             "float":atof, "string":str, "str":str}
+    
+    result_list = []
+    
+    # If the argument string is empty return an empty list
+    if len(str_args) == 0:
+        return list()
+    
+    for arg in str_args.split(","):
+        # Split the value and type
+        split = arg.strip().split("|")
+        
+        try:
+            if len(split) == 2:      
+                # Handle conversion from string to boolean
+                if split[1] in ("boolean", "bool"):
+                    split[0] = split[0].capitalize()
+                
+                # Convert the value based on the correct type
+                result_list.append(types[split[1]](split[0]))
+            else:
+                err = "Incorrect syntax for argument: '{}'. Expected 'value1|type1, value2|type2, ...'".format(str_args)
+                raise Exception(err)    
+        
+        except IndexError:
+            err = "List index out of range. This is most likely due to incorrect syntax of arguments."
+            raise Exception(err)
+        
+    return result_list
 
 def convert_types(n_samples, features_df):
     """

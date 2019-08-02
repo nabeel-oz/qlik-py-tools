@@ -8,6 +8,8 @@ import pathlib
 import warnings
 import numpy as np
 import pandas as pd
+from tempfile import mkdtemp
+from shutil import rmtree
 from collections import OrderedDict
 
 # Suppress warnings
@@ -52,7 +54,7 @@ from skater.model import InMemoryModel
 from skater.core.explanations import Interpretation
 
 import _utils as utils
-from _machine_learning import Preprocessor, PersistentModel
+from _machine_learning import Preprocessor, PersistentModel, KerasClassifierForQlik, KerasRegressorForQlik
 import ServerSideExtension_pb2 as SSE
 
 # Add Generated folder to module path
@@ -125,7 +127,8 @@ class SKLearnForQlik:
                             "Lasso":Lasso, "LassoCV":LassoCV, "LassoLars":LassoLars, "LassoLarsCV":LassoLarsCV, "LassoLarsIC":LassoLarsIC,\
                             "MultiTaskLasso":MultiTaskLasso, "MultiTaskElasticNet":MultiTaskElasticNet, "MultiTaskLassoCV":MultiTaskLassoCV,\
                             "MultiTaskElasticNetCV":MultiTaskElasticNetCV, "OrthogonalMatchingPursuit":OrthogonalMatchingPursuit,\
-                            "OrthogonalMatchingPursuitCV":OrthogonalMatchingPursuitCV}
+                            "OrthogonalMatchingPursuitCV":OrthogonalMatchingPursuitCV, "KerasRegressor":KerasRegressorForQlik,\
+                            "KerasClassifier":KerasClassifierForQlik}
         
         self.decomposers = {"PCA":PCA, "KernelPCA":KernelPCA, "IncrementalPCA":IncrementalPCA, "TruncatedSVD":TruncatedSVD,\
                             "FactorAnalysis":FactorAnalysis, "FastICA":FastICA, "NMF":NMF, "SparsePCA":SparsePCA,\
@@ -138,7 +141,7 @@ class SKLearnForQlik:
                             "PassiveAggressiveClassifier", "Perceptron", "RidgeClassifier", "RidgeClassifierCV",\
                             "SGDClassifier", "BernoulliNB", "GaussianNB", "MultinomialNB", "KNeighborsClassifier",\
                             "RadiusNeighborsClassifier", "MLPClassifier", "LinearSVC", "NuSVC", "SVC",\
-                            "DecisionTreeClassifier", "ExtraTreeClassifier"] 
+                            "DecisionTreeClassifier", "ExtraTreeClassifier", "KerasClassifier"] 
         
         self.regressors = ["DummyRegressor", "AdaBoostRegressor", "BaggingRegressor", "ExtraTreesRegressor",\
                            "GradientBoostingRegressor", "RandomForestRegressor", "GaussianProcessRegressor",\
@@ -148,7 +151,7 @@ class SKLearnForQlik:
                            "ExtraTreeRegressor", "ARDRegression", "BayesianRidge", "ElasticNet", "ElasticNetCV",\
                            "HuberRegressor", "Lars", "LarsCV", "Lasso", "LassoCV", "LassoLars", "LassoLarsCV",\
                            "LassoLarsIC", "MultiTaskLasso", "MultiTaskElasticNet", "MultiTaskLassoCV", "MultiTaskElasticNetCV",\
-                           "OrthogonalMatchingPursuit", "OrthogonalMatchingPursuitCV"]
+                           "OrthogonalMatchingPursuit", "OrthogonalMatchingPursuitCV", "KerasRegressor"]
     
         self.clusterers = ["AffinityPropagation", "AgglomerativeClustering", "Birch", "DBSCAN", "FeatureAgglomeration", "KMeans",\
                            "MiniBatchKMeans", "MeanShift", "SpectralClustering"]
@@ -252,6 +255,143 @@ class SKLearnForQlik:
         # Finally send the response
         return self.response
     
+    def set_param_grid(self):
+        """
+        Set a parameter grid that will be used to optimize hyperparameters for the estimator.
+        The parameters are used in the fit method to do a grid search.
+        """
+
+        # Interpret the request data based on the expected row and column structure
+        row_template = ['strData', 'strData', 'strData']
+        col_headers = ['model_name', 'estimator_args', 'grid_search_args']
+        
+        # Create a Pandas Data Frame for the request data
+        self.request_df = utils.request_df(self.request, row_template, col_headers)
+       
+        # Initialize the persistent model
+        self.model = PersistentModel()
+        
+        # Get the model name from the request dataframe
+        self.model.name = self.request_df.loc[0, 'model_name']
+        
+        # Get the estimator's hyperparameter grid from the request dataframe
+        param_grid = self.request_df.loc[:, 'estimator_args']
+
+        # Get the grid search arguments from the request dataframe
+        grid_search_args = self.request_df.loc[0, 'grid_search_args']
+
+        # Get the model from cache or disk
+        self._get_model()
+        
+        # Debug information is printed to the terminal and logs if the paramater debug = true
+        if self.model.debug:
+            self._print_log(3)
+
+        self._set_grid_params(param_grid, grid_search_args)
+        
+        # Persist the model to disk
+        self.model = self.model.save(self.model.name, self.path, self.model.compress)
+        
+        # Update the cache to keep this model in memory
+        self._update_cache()
+              
+        # Prepare the output
+        message = [[self.model.name, 'Hyperparameter grid successfully saved to disk',\
+                    time.strftime('%X %x %Z', time.localtime(self.model.state_timestamp))]]
+        self.response = pd.DataFrame(message, columns=['model_name', 'result', 'time_stamp'])
+        
+        # Send the reponse table description to Qlik
+        self._send_table_description("setup")
+        
+        # Debug information is printed to the terminal and logs if the paramater debug = true
+        if self.model.debug:
+            self._print_log(4)
+        
+        # Finally send the response
+        return self.response
+    
+    def keras_setup(self):
+        """
+        Setup the architecture for a Keras model.
+        This function should be called after a model has been initialized with the setup (and optionally set_param_grid) methods.
+
+        The architecture should define the layers and compilation parameters for a Keras sequential model.
+        Contrary to the Keras convention, the input_dim for the first layer need not be defined
+        The input dimensions will be inferenced after preprocessing the training data.
+
+        The request should contain: model name, sort order, layer_type, args, kwargs
+        With a row for each layer, with a final row for compilation keyword arguments.
+        
+        Arguments should take the form of a comma separated string with the type of the value specified.
+        Use the pipe | character to specify type: 'arg1=value1|str, arg2=value2|int, arg3=value3|bool'
+
+        Sample input expected from the request:
+        'DNN', 1, 'Dense', '12|int', 'activation=relu|str'
+        'DNN', 2, 'Dropout', '8|int', ''
+        'DNN', 3, 'Dense', '1|int', 'activation=sigmoid|str'
+        'DNN', 4, 'Compilation', '', 'loss=binary_crossentropy|str, optimizer=adam|str, metrics=accuracy|str'
+
+        If you want to specify parameters for the optimizer, you can add that as the second last row of the architecture:
+        ...
+        'DNN', 4, 'SGD', '', 'lr=0.01|float, clipvalue=0.5|float'
+        'DNN', 5, 'Compilation', '', 'loss=binary_crossentropy|str, metrics=accuracy|str'       
+        """
+
+        # Interpret the request data based on the expected row and column structure
+        row_template = ['strData', 'numData', 'strData', 'strData', 'strData']
+        col_headers = ['model_name', 'sort_order', 'layer_type', 'args', 'kwargs']
+                
+        # Create a Pandas Data Frame for the request data
+        self.request_df = utils.request_df(self.request, row_template, col_headers)
+               
+        # Create a model that can be persisted to disk
+        self.model = PersistentModel()
+        
+        # Get the model name from the request dataframe
+        self.model.name = self.request_df.loc[0, 'model_name']
+        
+        # Get the model from cache or disk
+        self._get_model()
+        
+        # Debug information is printed to the terminal and logs if the paramater debug = true
+        if self.model.debug:
+            self._print_log(3)
+
+        # Sort the layers, drop unnecessart columns and save the model architecture to a new data frame
+        architecture = self.request_df.sort_values(by=['sort_order']).reset_index(drop=True).drop(labels=['model_name', 'sort_order'], axis = 1)
+
+        # Convert args to a list and kwargs to a dictionary
+        architecture['args'] = architecture['args'].apply(utils.get_args_by_type)
+        architecture['kwargs'] = architecture['kwargs'].apply(utils.get_kwargs).apply(utils.get_kwargs_by_type) 
+
+        # Add the architecture to the estimator keyword arguments
+        self.model.estimator_kwargs['architecture'] = architecture
+
+        # Debug information is printed to the terminal and logs if the paramater debug = true
+        if self.model.debug:
+            self._print_log(10)
+
+        # Persist the model to disk
+        self.model = self.model.save(self.model.name, self.path, self.model.compress)
+        
+        # Update the cache to keep this model in memory
+        self._update_cache()
+              
+        # Prepare the output
+        message = [[self.model.name, 'Keras model architecture saved to disk',\
+                    time.strftime('%X %x %Z', time.localtime(self.model.state_timestamp))]]
+        self.response = pd.DataFrame(message, columns=['model_name', 'result', 'time_stamp'])
+        
+        # Send the reponse table description to Qlik
+        self._send_table_description("setup")
+        
+        # Debug information is printed to the terminal and logs if the paramater debug = true
+        if self.model.debug:
+            self._print_log(4)
+        
+        # Finally send the response
+        return self.response
+
     def set_features(self):
         """
         Add feature definitions for the model
@@ -325,61 +465,6 @@ class SKLearnForQlik:
         
         # Finally send the response
         return self.response
-        
-    def set_param_grid(self):
-        """
-        Set a parameter grid that will be used to optimize hyperparameters for the estimator.
-        The parameters are used in the fit method to do a grid search.
-        """
-
-        # Interpret the request data based on the expected row and column structure
-        row_template = ['strData', 'strData', 'strData']
-        col_headers = ['model_name', 'estimator_args', 'grid_search_args']
-        
-        # Create a Pandas Data Frame for the request data
-        self.request_df = utils.request_df(self.request, row_template, col_headers)
-       
-        # Initialize the persistent model
-        self.model = PersistentModel()
-        
-        # Get the model name from the request dataframe
-        self.model.name = self.request_df.loc[0, 'model_name']
-        
-        # Get the estimator's hyperparameter grid from the request dataframe
-        param_grid = self.request_df.loc[:, 'estimator_args']
-
-        # Get the grid search arguments from the request dataframe
-        grid_search_args = self.request_df.loc[0, 'grid_search_args']
-
-        # Get the model from cache or disk
-        self._get_model()
-        
-        # Debug information is printed to the terminal and logs if the paramater debug = true
-        if self.model.debug:
-            self._print_log(3)
-
-        self._set_grid_params(param_grid, grid_search_args)
-        
-        # Persist the model to disk
-        self.model = self.model.save(self.model.name, self.path, self.model.compress)
-        
-        # Update the cache to keep this model in memory
-        self._update_cache()
-              
-        # Prepare the output
-        message = [[self.model.name, 'Hyperparameter grid successfully saved to disk',\
-                    time.strftime('%X %x %Z', time.localtime(self.model.state_timestamp))]]
-        self.response = pd.DataFrame(message, columns=['model_name', 'result', 'time_stamp'])
-        
-        # Send the reponse table description to Qlik
-        self._send_table_description("setup")
-        
-        # Debug information is printed to the terminal and logs if the paramater debug = true
-        if self.model.debug:
-            self._print_log(4)
-        
-        # Finally send the response
-        return self.response
     
     def fit(self):
         """
@@ -426,8 +511,12 @@ class SKLearnForQlik:
         prep = Preprocessor(self.model.features_df, scale_hashed=self.model.scale_hashed, scale_vectors=self.model.scale_vectors,\
         missing=self.model.missing, scaler=self.model.scaler, logfile=self.logfile, **self.model.scaler_kwargs)
         
+        # Create a chache for the pipeline's transformers
+        # https://scikit-learn.org/stable/modules/compose.html#caching-transformers-avoid-repeated-computation
+        cachedir = mkdtemp()
+
         # Construct a sklearn pipeline
-        self.model.pipe = Pipeline([('preprocessor', prep)])
+        self.model.pipe = Pipeline([('preprocessor', prep)], memory=cachedir)
 
         if self.model.dim_reduction:
             # Construct the dimensionality reduction object
@@ -442,7 +531,7 @@ class SKLearnForQlik:
         # Try assuming the pipeline involves a grid search
         try:
             # Construct an estimator
-            estimator = self.algorithms[self.model.estimator]()
+            estimator = self.algorithms[self.model.estimator](**self.model.estimator_kwargs)
 
             # Prepare the grid search using the previously set parameter grid
             grid_search = GridSearchCV(estimator=estimator, param_grid=self.model.param_grid, **self.model.grid_search_args)
@@ -501,6 +590,9 @@ class SKLearnForQlik:
             # Calculate model agnostic feature importances
             self._calc_importances(X = X, y = y)
 
+        # Clear the cache directory setup for the pipeline's transformers
+        rmtree(cachedir)
+        
         # Persist the model to disk
         self.model = self.model.save(self.model.name, self.path, self.model.compress)
         
@@ -589,8 +681,12 @@ class SKLearnForQlik:
         prep = Preprocessor(self.model.features_df, scale_hashed=self.model.scale_hashed, scale_vectors=self.model.scale_vectors,\
         missing=self.model.missing, scaler=self.model.scaler, logfile=self.logfile, **self.model.scaler_kwargs)
         
+        # Create a chache for the pipeline's transformers
+        # https://scikit-learn.org/stable/modules/compose.html#caching-transformers-avoid-repeated-computation
+        cachedir = mkdtemp()
+
         # Construct a sklearn pipeline
-        self.model.pipe = Pipeline([('preprocessor', prep)])
+        self.model.pipe = Pipeline([('preprocessor', prep)], memory=cachedir)
 
         if self.model.dim_reduction:
             # Construct the dimensionality reduction object
@@ -623,6 +719,9 @@ class SKLearnForQlik:
             # Prepare the response
             self.response = pd.DataFrame(self.y, columns=["result"], index=self.X.index)
                 
+        # Clear the cache directory setup for the pipeline's transformers
+        rmtree(cachedir)
+        
         # Update the cache to keep this model in memory
         self._update_cache()
         
@@ -990,7 +1089,7 @@ class SKLearnForQlik:
         
         # Finally send the response
         return self.response
-    
+
     def _set_params(self, estimator_args, scaler_args, execution_args, metric_args=None, dim_reduction_args=None):
         """
         Set input parameters based on the request.
@@ -1017,6 +1116,7 @@ class SKLearnForQlik:
         self.model.scale_vectors = True
         self.model.scaler = "StandardScaler"
         self.model.scaler_kwargs = {}
+        self.model.estimator_kwargs = {}
         self.model.missing = "zeros"
         self.model.calc_feature_importances = False
         
@@ -1608,6 +1708,9 @@ class SKLearnForQlik:
         :step: Print the corresponding step in the log
         """
         
+        # Set mode to append to log file
+        mode = 'a'
+
         if self.logfile is None:
             # Increment log counter for the class. Each instance of the class generates a new log.
             self.__class__.log_no += 1
@@ -1618,108 +1721,70 @@ class SKLearnForQlik:
         
         if step == 1:
             # Output log header
-            sys.stdout.write("\nSKLearnForQlik Log: {0} \n\n".format(time.ctime(time.time())))
-            
-            with open(self.logfile,'w', encoding='utf-8') as f:
-                f.write("SKLearnForQlik Log: {0} \n\n".format(time.ctime(time.time())))
+            output = "\nSKLearnForQlik Log: {0} \n\n".format(time.ctime(time.time()))
+            # Set mode to write new log file
+            mode = 'w'
                 
         elif step == 2:
             # Output the parameters
-            sys.stdout.write("Model Name: {0}\n\n".format(self.model.name))
-            sys.stdout.write("Execution arguments: {0}\n\n".format(self.exec_params))
+            output = "Model Name: {0}\n\n".format(self.model.name)
+            output += "Execution arguments: {0}\n\n".format(self.exec_params)
             
             try:
-                sys.stdout.write("Scaler: {0}, missing: {1}, scale_hashed: {2}, scale_vectors: {3}\n".format(\
-                self.model.scaler, self.model.missing,self.model.scale_hashed, self.model.scale_vectors))
-                sys.stdout.write("Scaler kwargs: {0}\n\n".format(self.model.scaler_kwargs))
+                output += "Scaler: {0}, missing: {1}, scale_hashed: {2}, scale_vectors: {3}\n".format(\
+                self.model.scaler, self.model.missing,self.model.scale_hashed, self.model.scale_vectors)
+                output += "Scaler kwargs: {0}\n\n".format(self.model.scaler_kwargs)
             except AttributeError:
-                sys.stdout.write("scale_hashed: {0}, scale_vectors: {1}\n".format(self.model.scale_hashed, self.model.scale_vectors))
+                output += "scale_hashed: {0}, scale_vectors: {1}\n".format(self.model.scale_hashed, self.model.scale_vectors)
 
             try:
                 if self.model.dim_reduction:
-                    sys.stdout.write("Reduction: {0}\nReduction kwargs: {1}\n\n".format(self.model.reduction, self.model.dim_reduction_args))
+                    output += "Reduction: {0}\nReduction kwargs: {1}\n\n".format(self.model.reduction, self.model.dim_reduction_args)
             except AttributeError:
                 pass
             
-            sys.stdout.write("Estimator: {0}\nEstimator kwargs: {1}\n\n".format(self.model.estimator,\
-                                                                                self.model.estimator_kwargs))
-            
-            with open(self.logfile,'a', encoding='utf-8') as f:
-                f.write("Model Name: {0}\n\n".format(self.model.name))
-                f.write("Execution arguments: {0}\n\n".format(self.exec_params))
-                
-                try:
-                    f.write("Scaler: {0}, missing: {1}, scale_hashed: {2}, scale_vectors: {3}\n".format(self.model.scaler,\
-                    self.model.missing, self.model.scale_hashed, self.model.scale_vectors))
-                    f.write("Scaler kwargs: {0}\n\n".format(self.model.scaler_kwargs))
-                except AttributeError:
-                    f.write("scale_hashed: {0}, scale_vectors: {1}\n".format(self.model.scale_hashed, self.model.scale_vectors))
-
-                try:
-                    if self.model.dim_reduction:
-                        f.write("Reduction: {0}\nReduction kwargs: {1}\n\n".format(self.model.reduction, self.model.dim_reduction_args))
-                except AttributeError:
-                    pass
-
-                f.write("Estimator: {0}\nEstimator kwargs: {1}\n\n".format(self.model.estimator,self.model.estimator_kwargs))
+            output += "Estimator: {0}\nEstimator kwargs: {1}\n\n".format(self.model.estimator, self.model.estimator_kwargs)
                 
         elif step == 3:                    
             # Output the request dataframe
-            sys.stdout.write("REQUEST: {0} rows x cols\nSample Data:\n\n".format(self.request_df.shape))
-            sys.stdout.write("{0}\n...\n{1}\n\n".format(self.request_df.head().to_string(), self.request_df.tail().to_string()))
-            
-            with open(self.logfile,'a', encoding='utf-8') as f:
-                f.write("REQUEST: {0} rows x cols\nSample Data:\n\n".format(self.request_df.shape))
-                f.write("{0}\n...\n{1}\n\n".format(self.request_df.head().to_string(), self.request_df.tail().to_string()))
+            output = "REQUEST: {0} rows x cols\nSample Data:\n\n".format(self.request_df.shape)
+            output += "{0}\n...\n{1}\n\n".format(self.request_df.head().to_string(), self.request_df.tail().to_string())
         
         elif step == 4:
             # Output the response dataframe/series
-            sys.stdout.write("RESPONSE: {0} rows x cols\nSample Data:\n\n".format(self.response.shape))
-            sys.stdout.write("{0}\n...\n{1}\n\n".format(self.response.head().to_string(), self.response.tail().to_string()))
-            
-            with open(self.logfile,'a', encoding='utf-8') as f:
-                f.write("RESPONSE: {0} rows x cols\nSample Data:\n\n".format(self.response.shape))
-                f.write("{0}\n...\n{1}\n\n".format(self.response.head().to_string(), self.response.tail().to_string()))
+            output = "RESPONSE: {0} rows x cols\nSample Data:\n\n".format(self.response.shape)
+            output += "{0}\n...\n{1}\n\n".format(self.response.head().to_string(), self.response.tail().to_string())
                  
         elif step == 5:
             # Print the table description if the call was made from the load script
-            sys.stdout.write("\nTABLE DESCRIPTION SENT TO QLIK:\n\n{0} \n\n".format(self.table))
-            
-            # Write the table description to the log file
-            with open(self.logfile,'a', encoding='utf-8') as f:
-                f.write("\nTABLE DESCRIPTION SENT TO QLIK:\n\n{0} \n\n".format(self.table))
+            output = "\nTABLE DESCRIPTION SENT TO QLIK:\n\n{0} \n\n".format(self.table)
         
         elif step == 6:
             # Message when model is loaded from cache
-            sys.stdout.write("\nModel {0} loaded from cache.\n\n".format(self.model.name))
-            
-            with open(self.logfile,'a', encoding='utf-8') as f:
-                f.write("\nModel {0} loaded from cache.\n\n".format(self.model.name))
+            output = "\nModel {0} loaded from cache.\n\n".format(self.model.name)
             
         elif step == 7:
             # Message when model is loaded from disk
-            sys.stdout.write("\nModel {0} loaded from disk.\n\n".format(self.model.name))
-            
-            with open(self.logfile,'a', encoding='utf-8') as f:
-                f.write("\nModel {0} loaded from disk.\n\n".format(self.model.name))
+            output = "\nModel {0} loaded from disk.\n\n".format(self.model.name)
             
         elif step == 8:
             # Message when cache is updated
-            sys.stdout.write("\nCache updated. Models in cache:\n{0}\n\n".format\
-                             ([k for k,v in self.__class__.model_cache.items()]))
-            
-            with open(self.logfile,'a', encoding='utf-8') as f:
-                f.write("\nCache updated. Models in cache:\n{0}\n\n".format([k for k,v in self.__class__.model_cache.items()]))
+            output = "\nCache updated. Models in cache:\n{0}\n\n".format([k for k,v in self.__class__.model_cache.items()])
         
         elif step == 9:
             # Output when a parameter grid is set up
-            sys.stdout.write("Model Name: {0}, Estimator: {1}\n\nGrid Search Arguments: {2}\n\nParameter Grid: {3}\n\n".\
-            format(self.model.name, self.model.estimator, self.model.grid_search_args, self.model.param_grid))
+            output = "Model Name: {0}, Estimator: {1}\n\nGrid Search Arguments: {2}\n\nParameter Grid: {3}\n\n".\
+            format(self.model.name, self.model.estimator, self.model.grid_search_args, self.model.param_grid)
+        
+        elif step == 10:
+            # self.model.estimator_kwargs['architecture']
+            output = "\nKeras architecture added to Model {0}:\n\n{1}\n\n".format(self.model.name,\
+            self.model.estimator_kwargs['architecture'].to_string())
             
-            with open(self.logfile,'a', encoding='utf-8') as f:
-                f.write("Model Name: {0}, Estimator: {1}\n\nGrid Search Arguments: {2}\n\nParameter Grid: {3}\n\n".\
-                format(self.model.name, self.model.estimator, self.model.grid_search_args, self.model.param_grid))
-    
+        sys.stdout.write(output)
+        with open(self.logfile, mode, encoding='utf-8') as f:
+            f.write(output)
+
     def _print_exception(self, s, e):
         """
         Output exception message to stdout and also to the log file if debugging is required.

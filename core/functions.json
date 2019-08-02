@@ -365,6 +365,19 @@
         "b_item": 0,
         "c_other_args": 0
       }
+    },
+    {
+      "Id": 34,
+      "Name": "Keras_Layers",
+      "Type": 0,
+      "ReturnType": 0,
+      "Params": {
+        "a_model_name": 0,
+        "b_sort_order": 1,
+        "c_layer_type": 0,
+        "d_args": 0,
+        "e_kwargs": 0
+      }
     }
   ]
 }

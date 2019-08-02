@@ -106,7 +106,8 @@ class ExtensionService(SSE.ConnectorServicer):
             30: '_spacy',
             31: '_spacy',
             32: '_spacy',
-            33: '_misc'
+            33: '_misc',
+            34: '_sklearn'
         }
 
     """
@@ -456,7 +457,7 @@ class ExtensionService(SSE.ConnectorServicer):
         
         # Call the function based on the mapping in functions.json
         # The if conditions are grouped based on similar output structure
-        if function in (9, 10, 21, 24):    
+        if function in (9, 10, 21, 24, 34):    
             if function == 9:
                 # Set up the model and save to disk
                 response = model.setup()
@@ -469,6 +470,9 @@ class ExtensionService(SSE.ConnectorServicer):
             elif function == 24:
                 # Set a parameter grid for hyperparameter optimization
                 response = model.set_param_grid()
+            elif function == 34:
+                # Setup the architecture for a Keras model
+                response = model.keras_setup()
             
             dtypes = ["str", "str", "str"]
         

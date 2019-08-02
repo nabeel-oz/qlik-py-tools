@@ -4,6 +4,7 @@ import joblib
 import numpy as np
 import pandas as pd
 import warnings
+import keras
 
 # Suppress warnings 
 if not sys.warnoptions:
@@ -16,6 +17,9 @@ from sklearn.pipeline import Pipeline
 from sklearn.feature_extraction import FeatureHasher
 from sklearn.feature_extraction.text import CountVectorizer
 from sklearn.feature_extraction.text import TfidfVectorizer
+
+from keras.wrappers.scikit_learn import KerasClassifier
+from keras.wrappers.scikit_learn import KerasRegressor
 
 import _utils as utils
 
@@ -176,7 +180,6 @@ class Preprocessor(TransformerMixin):
         if self.log is not None:
             self._print_log(1)
     
-
     def fit(self, X, y=None, features=None, retrain=False):
         """
         Fit to the training dataset, storing information that will be needed for the transform dataset.
@@ -298,8 +301,7 @@ class Preprocessor(TransformerMixin):
             self._print_log(2, ohe_df=ohe_df, scale_df=scale_df, hash_df=hash_df, cv_df=cv_df, tfidf_df=tfidf_df, text_df=text_df)
 
         return self
-    
-    
+      
     def transform(self, X, y=None):
         """
         Transform X with the encoding and scaling requirements set by fit().
@@ -489,7 +491,6 @@ class Preprocessor(TransformerMixin):
         
         return X_transform
     
-    
     def fit_transform(self, X, y=None, features=None, retrain=False):
         """
         Apply fit() then transform()
@@ -499,7 +500,6 @@ class Preprocessor(TransformerMixin):
             features = self.features
         
         return self.fit(X, y, features, retrain).transform(X, y)
-    
     
     def _print_log(self, step, **kwargs):
         """
@@ -703,4 +703,196 @@ class Preprocessor(TransformerMixin):
         df = Preprocessor.fillna(df, missing=missing)
         
         return s.fit(df)       
+
+class KerasClassifierForQlik(KerasClassifier):
+    """
+    A subclass of the KerasClassifier Scikit-Learn wrapper.
+    This class takes in a dataframe defining the model architecture instead of the super class build_fn parameter.
+    This class is designed to be used in a sklearn pipeline, positioned after input data has been preprocessed.
+    """
+      
+    def __init__(self, **sk_params):
+        """
+        Initialize the KerasClassifierForQlik.
+        The build_fn function to build the Keras model is provided by the __call__ method of this class.
+        """
+
+        # List of optimizers that can be specified in the architecture
+        self.optimizers = ['Adadelta', 'Adagrad', 'Adam', 'Adamax', 'Nadam', 'RMSprop', 'SGD']
+
+        # Ensure that a model architecture is inclued in the sk_params
+        if sk_params is None or len(sk_params) == 0 or 'architecture' not in sk_params:
+            err = "No Keras architecture found. A Keras model cannot be built without defining the architecture."
+            raise Exception(err)
+        # Call the super class' init method
+        else:
+            super().__init__(**sk_params)
+
+    
+    def __call__(self, architecture=None):
+        """
+        Initialize a KerasModel object based on the architecture dataframe.
         
+        The architecture dataframe should define the layers and compilation parameters for a Keras sequential model.
+        Each layer has to be defined across three columns: layer, args, kwargs.
+        The final row of the dataframe should define the compilation parameters.
+        For example:
+          layer        args    kwargs
+        0 Dense        [12]    {'input_dim': 8, activation': 'relu'}
+        1 Dropout      [0.25]  {}
+        2 Dense        [8]     {'activation': 'relu'}
+        3 Dense        [1]     {'activation': 'sigmoid'}
+        4 Compilation  []      {'loss': 'binary_crossentropy', 'optimizer': 'adam', 'metrics': ['accuracy']}
+
+        If you want to specify parameters for the optimizer, you can add that as the second last row of the architecture:
+        ...
+        4 SGD          []      {'lr': 0.01, 'clipvalue': 0.5}
+        5 Compilation  []      {'loss': 'binary_crossentropy'}
+                
+        For further information on the columns refer to the project documentation: 
+        https://github.com/nabeel-oz/qlik-py-tools
+        """
+        
+        # The model definition should contain at least one layer and the compilation parameters
+        if architecture is None or len(architecture) < 2:
+            err = "Invalid Keras architecture. Expected at least one layer and compilation parameters."
+            raise Exception(err)
+        # The last row of the model definition should contain compilation parameters
+        elif not architecture.iloc[-1,0].capitalize() == 'Compile':
+            err = "Invalid Keras architecture. The last row of the model definition should provide compilation parameters."
+            raise Exception(err)
+        
+        self.model = keras.models.Sequential()
+
+        for i in architecture.index:
+            # Name items in the row for easy access
+            name, args, kwargs = architecture.iloc[i,0], architecture.iloc[i,1], architecture.iloc[i,2]
+
+            # The last row of the DataFrame should provide compilation keyword arguments
+            if i == max(architecture.index):
+                # Check if an optimizer with custom parameters has been defined
+                try:
+                    kwargs['optimizer'] = self.opt
+                except AttributeError:
+                    pass
+                
+                # Compile the model
+                self.model.compile(**kwargs)
+            # Watch out for a row providing optimizer parameters
+            elif name in self.optimizers:
+                self.opt = getattr(keras.optimizers, name)(**kwargs) 
+            # All other rows of the DataFrame define the model architecture
+            else:
+                # Create a keras layer of the required type with the provided positional and keyword arguments
+                layer = getattr(keras.layers, name)(*args, **kwargs)
+                # Add the layer to the model
+                self.model.add(layer)
+        
+        return self.model
+    
+    def fit(self, x, y, sample_weight=None, **kwargs):
+        """
+        Update the model architecture with the input dimensions.
+        Then call the super class' fit method.
+        """
+
+        # Update the input nodes for the first layer based on the shape of input data
+        self.sk_params['architecture'].iloc[0, 2]['input_dim'] = x.shape[1]
+
+        return super().fit(x, y, sample_weight, **kwargs)
+
+class KerasRegressorForQlik(KerasRegressor):
+    """
+    A subclass of the KerasRegressor Scikit-Learn wrapper.
+    This class takes in a dataframe defining the model architecture instead of the super class build_fn parameter.
+    This class is designed to be used in a sklearn pipeline, positioned after input data has been preprocessed.
+    """
+
+    def __init__(self, **sk_params):
+        """
+        Initialize the KerasRegressorForQlik.
+        The build_fn function to build the Keras model is provided by the __call__ method of this class.
+        """
+
+        # List of optimizers that can be specified in the architecture
+        self.optimizers = ['Adadelta', 'Adagrad', 'Adam', 'Adamax', 'Nadam', 'RMSprop', 'SGD']
+
+        # Ensure that a model architecture is inclued in the sk_params
+        if sk_params is None or len(sk_params) == 0 or 'architecture' not in sk_params:
+            err = "No Keras architecture found. A Keras model cannot be built without defining the architecture."
+            raise Exception(err)
+        # Call the super class' init method
+        else:
+            super().__init__(**sk_params)
+
+    def __call__(self, architecture=None):
+        """
+        Initialize a KerasModel object based on the architecture dataframe.
+        
+        The architecture dataframe should define the layers and compilation parameters for a Keras sequential model.
+        Each layer has to be defined across three columns: layer, args, kwargs.
+        The final row of the dataframe should define the compilation parameters.
+        For example:
+          layer        args    kwargs
+        0 Dense        [12]    {'input_dim': 8, activation': 'relu'}
+        1 Dropout      [0.25]  {}
+        2 Dense        [8]     {'activation': 'relu'}
+        3 Dense        [1]     {'activation': 'linear'}
+        4 Compilation  []      {'loss': 'mean_squared_error', 'optimizer': 'adam'}
+
+        If you want to specify parameters for the optimizer, you can add that as the second last row of the architecture:
+        ...
+        4 SGD          []      {'lr': 0.01, 'clipvalue': 0.5}
+        5 Compilation  []      {'loss': 'mean_squared_error'}
+                
+        For further information on the columns refer to the project documentation: 
+        https://github.com/nabeel-oz/qlik-py-tools
+        """
+        
+        # The model definition should contain at least one layer and the compilation parameters
+        if architecture is None or len(architecture) < 2:
+            err = "Invalid Keras architecture. Expected at least one layer and compilation parameters."
+            raise Exception(err)
+        # The last row of the model definition should contain compilation parameters
+        elif not architecture.iloc[-1,0].capitalize() == 'Compile':
+            err = "Invalid Keras architecture. The last row of the model definition should provide compilation parameters."
+            raise Exception(err)
+        
+        self.model = keras.models.Sequential()
+
+        for i in architecture.index:
+            # Name items in the row for easy access
+            name, args, kwargs = architecture.iloc[i,0], architecture.iloc[i,1], architecture.iloc[i,2]
+
+            # The last row of the DataFrame should provide compilation keyword arguments
+            if i == max(architecture.index):
+                # Check if an optimizer with custom parameters has been defined
+                try:
+                    kwargs['optimizer'] = self.opt
+                except AttributeError:
+                    pass
+                
+                # Compile the model
+                self.model.compile(**kwargs)
+            # Watch out for a row providing optimizer parameters
+            elif name in self.optimizers:
+                self.opt = getattr(keras.optimizers, name)(**kwargs) 
+            # All other rows of the DataFrame define the model architecture
+            else:
+                # Create a keras layer of the required type with the provided positional and keyword arguments
+                layer = getattr(keras.layers, name)(*args, **kwargs)
+                # Add the layer to the model
+                self.model.add(layer)
+        
+        return self.model
+    
+    def fit(self, x, y, **kwargs):
+        """
+        Update the model architecture with the input dimensions.
+        Then call the super class' fit method.
+        """
+
+        # Update the input nodes for the first layer based on the shape of input data
+        self.sk_params['architecture'].iloc[0, 2]['input_dim'] = x.shape[1]
+
+        return super().fit(x, y, **kwargs)
