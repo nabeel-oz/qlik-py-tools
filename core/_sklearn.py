@@ -547,7 +547,7 @@ class SKLearnForQlik:
             self.model.pipe.fit(self.X_train, self.y_train.values.ravel())
 
             # Get the best parameters and the cross validation results
-            grid_search = self.model.pipe.steps[self.model.estimation_step][1]
+            grid_search = self.model.pipe['grid_search']
             self.model.best_params = grid_search.best_params_
             self.model.cv_results = grid_search.cv_results_
 
@@ -565,9 +565,6 @@ class SKLearnForQlik:
             self.model.pipe.steps.append(('estimator', estimator))  
 
             if self.model.validation == "k-fold":
-                # Prepare key word arguments for the estimator step in the pipeline
-                # fit_params = {'estimator__' + k: v for k, v in self.model.estimator_kwargs.items()}
-
                 # Perform K-fold cross validation
                 self._cross_validate()
 
@@ -782,7 +779,7 @@ class SKLearnForQlik:
             metric_args = {}
                
         if self.model.estimator_type == "classifier":
-            labels = self.model.pipe.steps[self.model.estimation_step][1].classes_
+            labels = self.model.pipe['estimator'].classes_
             
             # Check if the average parameter is specified
             if len(metric_args) > 0  and "average" in metric_args:
@@ -945,7 +942,7 @@ class SKLearnForQlik:
                 s = ""
                 i = 0
                 for b in a:
-                    s = s + ", {0}: {1:.3f}".format(self.model.pipe.steps[self.model.estimation_step][1].classes_[i], b)
+                    s = s + ", {0}: {1:.3f}".format(self.model.pipe['estimator'].classes_[i], b)
                     i = i + 1
                 probabilities.append(s[2:])
             
@@ -1082,6 +1079,36 @@ class SKLearnForQlik:
         else:
             err = "Metrics are not available. Make sure the machine learning pipeline includes K-fold cross validation or hold-out testing."
             raise Exception(err)
+        
+        # Debug information is printed to the terminal and logs if the paramater debug = true
+        if self.model.debug:
+            self._print_log(4)
+        
+        # Finally send the response
+        return self.response
+    
+    def get_keras_history(self):
+        """
+        Return history previously saved while fitting a Keras model.
+        The history is avaialble as a DataFrame from the estimator.
+        It provides metrics such as loss for each epoch during each run of the fit method.
+        Columns will be ['iteration', 'epoch', 'loss'] and any other metrics calculated during training.
+        """
+        
+        # Get the model from cache or disk based on the model_name in request
+        self._get_model_by_name()
+        
+        if self.model.estimator not in ['KerasClassifier', 'KerasRegressor']:
+            err = "Loss history is only available for Keras models"
+            raise Exception(err)
+
+        # Prepare the response using the histories data frame from the Keras model
+        self.response = self.model.pipe['estimator'].histories
+
+        # Add the model name to the response
+        self.response.insert(0, 'model_name', self.model.name)
+        
+        self._send_table_description("keras_history")
         
         # Debug information is printed to the terminal and logs if the paramater debug = true
         if self.model.debug:
@@ -1643,10 +1670,14 @@ class SKLearnForQlik:
         elif variant == "reduce":
             self.table.fields.add(name="model_name")
             self.table.fields.add(name="key")
-            
             # Add a variable number of columns depending on the response
             for i in range(self.response.shape[1]-2):
                 self.table.fields.add(name="dim_{0}".format(i+1), dataType=1)
+        elif variant == "keras_history":
+            self.table.fields.add(name="model_name")
+            # Add columns from the Keras model's history
+            for i in range(1, self.response.shape[1]):
+                self.table.fields.add(name=self.response.columns[i], dataType=1)
         
         # Debug information is printed to the terminal and logs if the paramater debug = true
         if self.model.debug:

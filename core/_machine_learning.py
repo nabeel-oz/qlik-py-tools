@@ -720,18 +720,26 @@ class KerasClassifierForQlik(KerasClassifier):
         # List of optimizers that can be specified in the architecture
         self.optimizers = ['Adadelta', 'Adagrad', 'Adam', 'Adamax', 'Nadam', 'RMSprop', 'SGD']
 
+        # DataFrame to contain history of every training cycle
+        # This DataFrame will provide metrics such as loss for each run of the fit method
+        # Columns will be ['iteration', 'epoch', 'loss'] and any other metrics being calculated during training
+        self.histories = pd.DataFrame()
+
         # Ensure that a model architecture is inclued in the sk_params
+        # scikit-learn estimators should generally be able to instantiate without any parameters, but this is only possible in
+        # this case with fixed model architectures. 
         if sk_params is None or len(sk_params) == 0 or 'architecture' not in sk_params:
             err = "No Keras architecture found. A Keras model cannot be built without defining the architecture."
             raise Exception(err)
         # Call the super class' init method
         else:
             super().__init__(**sk_params)
-
     
     def __call__(self, architecture=None):
         """
         Initialize a KerasModel object based on the architecture dataframe.
+
+        The architecture parameter should be passed during init in the sk_params keyword arguments.
         
         The architecture dataframe should define the layers and compilation parameters for a Keras sequential model.
         Each layer has to be defined across three columns: layer, args, kwargs.
@@ -759,7 +767,7 @@ class KerasClassifierForQlik(KerasClassifier):
             raise Exception(err)
         # The last row of the model definition should contain compilation parameters
         elif not architecture.iloc[-1,0].capitalize() == 'Compile':
-            err = "Invalid Keras architecture. The last row of the model definition should provide compilation parameters."
+            err = "Invalid Keras architecture. The last row of the model definition should provide 'Compile' parameters."
             raise Exception(err)
         
         self.model = keras.models.Sequential()
@@ -799,7 +807,20 @@ class KerasClassifierForQlik(KerasClassifier):
         # Update the input nodes for the first layer based on the shape of input data
         self.sk_params['architecture'].iloc[0, 2]['input_dim'] = x.shape[1]
 
-        return super().fit(x, y, sample_weight, **kwargs)
+        # Fit the model to the data and store information on the training
+        history = super().fit(x, y, sample_weight, **kwargs)
+
+        # Set up a data frame with the epochs and a counter to track multiple histories
+        history_df = pd.DataFrame({'iteration': len(self.histories), 'epoch': history.epoch})
+        
+        # Add a column per metric for each epoch e.g. loss, acc
+        for key in history.history:
+            history_df[key] = pd.Series(history.history[key])
+
+        # Concatenate results from the training to the history data frame
+        self.histories = pd.concat([self.histories, history_df], sort=True).sort_values(by=['iteration', 'epoch']).reset_index(drop=True)
+
+        return history
 
 class KerasRegressorForQlik(KerasRegressor):
     """
@@ -817,7 +838,14 @@ class KerasRegressorForQlik(KerasRegressor):
         # List of optimizers that can be specified in the architecture
         self.optimizers = ['Adadelta', 'Adagrad', 'Adam', 'Adamax', 'Nadam', 'RMSprop', 'SGD']
 
+        # DataFrame to contain history of every training cycle
+        # This DataFrame will provide metrics such as loss for each run of the fit method
+        # Columns will be ['iteration', 'epoch', 'loss'] and any other metrics being calculated during training
+        self.histories = pd.DataFrame()
+
         # Ensure that a model architecture is inclued in the sk_params
+        # scikit-learn estimators should generally be able to instantiate without any parameters, but this is only possible in
+        # this case with fixed model architectures. 
         if sk_params is None or len(sk_params) == 0 or 'architecture' not in sk_params:
             err = "No Keras architecture found. A Keras model cannot be built without defining the architecture."
             raise Exception(err)
@@ -829,6 +857,8 @@ class KerasRegressorForQlik(KerasRegressor):
         """
         Initialize a KerasModel object based on the architecture dataframe.
         
+        The architecture parameter should be passed during init in the sk_params keyword arguments.
+
         The architecture dataframe should define the layers and compilation parameters for a Keras sequential model.
         Each layer has to be defined across three columns: layer, args, kwargs.
         The final row of the dataframe should define the compilation parameters.
@@ -855,7 +885,7 @@ class KerasRegressorForQlik(KerasRegressor):
             raise Exception(err)
         # The last row of the model definition should contain compilation parameters
         elif not architecture.iloc[-1,0].capitalize() == 'Compile':
-            err = "Invalid Keras architecture. The last row of the model definition should provide compilation parameters."
+            err = "Invalid Keras architecture. The last row of the model definition should provide 'Compile' parameters."
             raise Exception(err)
         
         self.model = keras.models.Sequential()
@@ -895,4 +925,17 @@ class KerasRegressorForQlik(KerasRegressor):
         # Update the input nodes for the first layer based on the shape of input data
         self.sk_params['architecture'].iloc[0, 2]['input_dim'] = x.shape[1]
 
-        return super().fit(x, y, **kwargs)
+        # Fit the model to the data and store information on the training
+        history = super().fit(x, y, **kwargs)
+
+        # Set up a data frame with the epochs and a counter to track multiple histories
+        history_df = pd.DataFrame({'iteration': len(self.histories), 'epoch': history.epoch})
+        
+        # Add a column per metric for each epoch e.g. loss
+        for key in history.history:
+            history_df[key] = pd.Series(history.history[key])
+
+        # Concatenate results from the training to the history data frame
+        self.histories = pd.concat([self.histories, history_df], sort=True).sort_values(by=['iteration', 'epoch']).reset_index(drop=True)
+
+        return history

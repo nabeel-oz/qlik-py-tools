@@ -107,7 +107,8 @@ class ExtensionService(SSE.ConnectorServicer):
             31: '_spacy',
             32: '_spacy',
             33: '_misc',
-            34: '_sklearn'
+            34: '_sklearn',
+            35: '_sklearn'
         }
 
     """
@@ -566,6 +567,14 @@ class ExtensionService(SSE.ConnectorServicer):
             # Explain the feature importances for the model
             response = model.explain_importances()
             dtypes = ["str", "str", "num"]
+        
+        elif function == 35:
+            # Provide metrics from the training history of a Keras model
+            response = model.get_keras_history()
+            dtypes = ["str"]
+
+            for i in range(1, response.shape[1]):
+                dtypes.append("num")
         
         # Get the response as SSE.Rows
         response_rows = utils.get_response_rows(response.values.tolist(), dtypes) 
