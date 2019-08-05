@@ -513,10 +513,10 @@ class SKLearnForQlik:
         
         # Create a chache for the pipeline's transformers
         # https://scikit-learn.org/stable/modules/compose.html#caching-transformers-avoid-repeated-computation
-        cachedir = mkdtemp()
+        # cachedir = mkdtemp()
 
         # Construct a sklearn pipeline
-        self.model.pipe = Pipeline([('preprocessor', prep)], memory=cachedir)
+        self.model.pipe = Pipeline([('preprocessor', prep)]) #, memory=cachedir)
 
         if self.model.dim_reduction:
             # Construct the dimensionality reduction object
@@ -547,7 +547,7 @@ class SKLearnForQlik:
             self.model.pipe.fit(self.X_train, self.y_train.values.ravel())
 
             # Get the best parameters and the cross validation results
-            grid_search = self.model.pipe['grid_search']
+            grid_search = self.model.pipe.named_steps['grid_search']
             self.model.best_params = grid_search.best_params_
             self.model.cv_results = grid_search.cv_results_
 
@@ -588,7 +588,7 @@ class SKLearnForQlik:
             self._calc_importances(X = X, y = y)
 
         # Clear the cache directory setup for the pipeline's transformers
-        rmtree(cachedir)
+        # rmtree(cachedir)
         
         # Persist the model to disk
         self.model = self.model.save(self.model.name, self.path, self.model.compress)
@@ -680,10 +680,10 @@ class SKLearnForQlik:
         
         # Create a chache for the pipeline's transformers
         # https://scikit-learn.org/stable/modules/compose.html#caching-transformers-avoid-repeated-computation
-        cachedir = mkdtemp()
+        # cachedir = mkdtemp()
 
         # Construct a sklearn pipeline
-        self.model.pipe = Pipeline([('preprocessor', prep)], memory=cachedir)
+        self.model.pipe = Pipeline([('preprocessor', prep)]) #, memory=cachedir)
 
         if self.model.dim_reduction:
             # Construct the dimensionality reduction object
@@ -717,7 +717,7 @@ class SKLearnForQlik:
             self.response = pd.DataFrame(self.y, columns=["result"], index=self.X.index)
                 
         # Clear the cache directory setup for the pipeline's transformers
-        rmtree(cachedir)
+        # rmtree(cachedir)
         
         # Update the cache to keep this model in memory
         self._update_cache()
@@ -779,7 +779,7 @@ class SKLearnForQlik:
             metric_args = {}
                
         if self.model.estimator_type == "classifier":
-            labels = self.model.pipe['estimator'].classes_
+            labels = self.model.pipe.named_steps['estimator'].classes_
             
             # Check if the average parameter is specified
             if len(metric_args) > 0  and "average" in metric_args:
@@ -942,7 +942,7 @@ class SKLearnForQlik:
                 s = ""
                 i = 0
                 for b in a:
-                    s = s + ", {0}: {1:.3f}".format(self.model.pipe['estimator'].classes_[i], b)
+                    s = s + ", {0}: {1:.3f}".format(self.model.pipe.named_steps['estimator'].classes_[i], b)
                     i = i + 1
                 probabilities.append(s[2:])
             
@@ -1103,7 +1103,7 @@ class SKLearnForQlik:
             raise Exception(err)
 
         # Prepare the response using the histories data frame from the Keras model
-        self.response = self.model.pipe['estimator'].histories
+        self.response = self.model.pipe.named_steps['estimator'].histories
 
         # Add the model name to the response
         self.response.insert(0, 'model_name', self.model.name)

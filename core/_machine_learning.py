@@ -1,10 +1,10 @@
+import os
 import sys
 import time
 import joblib
 import numpy as np
 import pandas as pd
 import warnings
-import keras
 
 # Suppress warnings 
 if not sys.warnoptions:
@@ -18,8 +18,15 @@ from sklearn.feature_extraction import FeatureHasher
 from sklearn.feature_extraction.text import CountVectorizer
 from sklearn.feature_extraction.text import TfidfVectorizer
 
+# Workaround for Keras issue #1406
+# "Using X backend." always printed to stdout #1406 
+# https://github.com/keras-team/keras/issues/1406
+stderr = sys.stderr
+sys.stderr = open(os.devnull, 'w')
+import keras
 from keras.wrappers.scikit_learn import KerasClassifier
 from keras.wrappers.scikit_learn import KerasRegressor
+sys.stderr = stderr
 
 import _utils as utils
 
