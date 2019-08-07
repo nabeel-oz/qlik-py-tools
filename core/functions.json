@@ -385,11 +385,7 @@
       "Type": 0,
       "ReturnType": 0,
       "Params": {
-        "a_model_name": 0,
-        "b_sort_order": 1,
-        "c_layer_type": 0,
-        "d_args": 0,
-        "e_kwargs": 0
+        "a_model_name": 0
       }
     }
   ]

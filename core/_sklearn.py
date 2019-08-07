@@ -53,6 +53,14 @@ from sklearn.cluster import AffinityPropagation, AgglomerativeClustering, Birch,
 from skater.model import InMemoryModel
 from skater.core.explanations import Interpretation
 
+# Workaround for Keras issue #1406
+# "Using X backend." always printed to stdout #1406 
+# https://github.com/keras-team/keras/issues/1406
+stderr = sys.stderr
+sys.stderr = open(os.devnull, 'w')
+import keras
+sys.stderr = stderr
+
 import _utils as utils
 from _machine_learning import Preprocessor, PersistentModel, KerasClassifierForQlik, KerasRegressorForQlik
 import ServerSideExtension_pb2 as SSE
@@ -319,7 +327,7 @@ class SKLearnForQlik:
         Contrary to the Keras convention, the input_dim for the first layer need not be defined
         The input dimensions will be inferenced after preprocessing the training data.
 
-        The request should contain: model name, sort order, layer_type, args, kwargs
+        The request should contain: model name, sort order, layer type, args, kwargs
         With a row for each layer, with a final row for compilation keyword arguments.
         
         Arguments should take the form of a comma separated string with the type of the value specified.
@@ -327,7 +335,7 @@ class SKLearnForQlik:
 
         Sample input expected from the request:
         'DNN', 1, 'Dense', '12|int', 'activation=relu|str'
-        'DNN', 2, 'Dropout', '8|int', ''
+        'DNN', 2, 'Dropout', '0.25|float', ''
         'DNN', 3, 'Dense', '1|int', 'activation=sigmoid|str'
         'DNN', 4, 'Compilation', '', 'loss=binary_crossentropy|str, optimizer=adam|str, metrics=accuracy|str'
 
@@ -364,8 +372,8 @@ class SKLearnForQlik:
         architecture['args'] = architecture['args'].apply(utils.get_args_by_type)
         architecture['kwargs'] = architecture['kwargs'].apply(utils.get_kwargs).apply(utils.get_kwargs_by_type) 
 
-        # Add the architecture to the estimator keyword arguments
-        self.model.estimator_kwargs['architecture'] = architecture
+        # Add the architecture to the model
+        self.model.architecture = architecture
 
         # Debug information is printed to the terminal and logs if the paramater debug = true
         if self.model.debug:
@@ -510,23 +518,36 @@ class SKLearnForQlik:
         # Construct the preprocessor
         prep = Preprocessor(self.model.features_df, scale_hashed=self.model.scale_hashed, scale_vectors=self.model.scale_vectors,\
         missing=self.model.missing, scaler=self.model.scaler, logfile=self.logfile, **self.model.scaler_kwargs)
+
+        # Fit the preprocessor and transform the training data
+        # This is done outside the pipeline for training data to avoid repeating transformations in cross validation
+        self.X_train_transform = prep.fit_transform(self.X_train)
         
-        # Create a chache for the pipeline's transformers
-        # https://scikit-learn.org/stable/modules/compose.html#caching-transformers-avoid-repeated-computation
-        # cachedir = mkdtemp()
+        # If this is a Keras estimator, update the input dimensions for the first layer in the architecture
+        try:
+            # Update the input nodes for the first layer based on the shape of input data
+            # UPDATE CODE FOR HIGHER DIMENSIONAL INPUT SHAPE TO CATER FOR TIME STEPS AND SUB SEQUENCES
+            self.model.architecture.iloc[0, 2]['input_dim'] = self.X_train_transform.shape[1]
+            # Add the Keras build function to the estimator keyword arguments
+            self.model.estimator_kwargs['build_fn'] = lambda: self.keras_build_fn()
+        except AttributeError:
+            pass
 
         # Construct a sklearn pipeline
-        self.model.pipe = Pipeline([('preprocessor', prep)]) #, memory=cachedir)
+        # self.model.pipe = Pipeline([('preprocessor', prep)])
+
+        # Setup a list to store steps for the sklearn pipeline
+        pipe_steps = []
 
         if self.model.dim_reduction:
             # Construct the dimensionality reduction object
             reduction = self.decomposers[self.model.reduction](**self.model.dim_reduction_args)
             
-            # Include dimensionality reduction in the sklearn pipeline
-            self.model.pipe.steps.insert(1, ('reduction', reduction))
-            self.model.estimation_step = 2
+            # Include dimensionality reduction in the pipeline steps
+            pipe_steps.append(('reduction', reduction))
+            self.model.estimation_step = 1
         else:
-            self.model.estimation_step = 1      
+            self.model.estimation_step = 0      
         
         # Try assuming the pipeline involves a grid search
         try:
@@ -536,15 +557,18 @@ class SKLearnForQlik:
             # Prepare the grid search using the previously set parameter grid
             grid_search = GridSearchCV(estimator=estimator, param_grid=self.model.param_grid, **self.model.grid_search_args)
             
-            # Add grid search to the sklearn pipeline
-            self.model.pipe.steps.append(('grid_search', grid_search))
+            # Add grid search to the pipeline steps
+            pipe_steps.append(('grid_search', grid_search))
+
+            # Construct the sklearn pipeline using the list of steps
+            self.model.pipe = Pipeline(pipe_steps)
 
             if self.model.validation == "k-fold":
                 # Perform K-fold cross validation
                 self._cross_validate()
 
             # Fit the training data to the pipeline
-            self.model.pipe.fit(self.X_train, self.y_train.values.ravel())
+            self.model.pipe.fit(self.X_train_transform, self.y_train.values.ravel())
 
             # Get the best parameters and the cross validation results
             grid_search = self.model.pipe.named_steps['grid_search']
@@ -561,15 +585,21 @@ class SKLearnForQlik:
             # Construct an estimator
             estimator = self.algorithms[self.model.estimator](**self.model.estimator_kwargs)
 
-            # Add the estimator to the sklearn pipeline
-            self.model.pipe.steps.append(('estimator', estimator))  
+            # Add the estimator to the pipeline steps
+            pipe_steps.append(('estimator', estimator))
+
+            # Construct the sklearn pipeline using the list of steps
+            self.model.pipe = Pipeline(pipe_steps)
 
             if self.model.validation == "k-fold":
                 # Perform K-fold cross validation
                 self._cross_validate()
 
             # Fit the training data to the pipeline
-            self.model.pipe.fit(self.X_train, self.y_train.values.ravel())
+            self.model.pipe.fit(self.X_train_transform, self.y_train.values.ravel())
+        
+        # Add the previously fit preprocessor to the start of the pipeline to handle new data
+            self.model.pipe.steps.insert(0, ('preprocessor', prep))
         
         if self.model.validation == "hold-out":       
             # Evaluate the model using the test data            
@@ -586,9 +616,6 @@ class SKLearnForQlik:
             
             # Calculate model agnostic feature importances
             self._calc_importances(X = X, y = y)
-
-        # Clear the cache directory setup for the pipeline's transformers
-        # rmtree(cachedir)
         
         # Persist the model to disk
         self.model = self.model.save(self.model.name, self.path, self.model.compress)
@@ -1117,6 +1144,70 @@ class SKLearnForQlik:
         # Finally send the response
         return self.response
 
+    def keras_build_fn(self):
+        """
+        Create and compile a Keras Sequential model based on the model's architecture dataframe.
+        
+        The architecture dataframe should define the layers and compilation parameters for a Keras sequential model.
+        Each layer has to be defined across three columns: layer, args, kwargs.
+        The final row of the dataframe should define the compilation parameters.
+        For example:
+          layer        args    kwargs
+        0 Dense        [12]    {'input_dim': 8, activation': 'relu'}
+        1 Dropout      [0.25]  {}
+        2 Dense        [8]     {'activation': 'relu'}
+        3 Dense        [1]     {'activation': 'sigmoid'}
+        4 Compilation  []      {'loss': 'binary_crossentropy', 'optimizer': 'adam', 'metrics': ['accuracy']}
+
+        If you want to specify parameters for the optimizer, you can add that as the second last row of the architecture:
+        ...
+        4 SGD          []      {'lr': 0.01, 'clipvalue': 0.5}
+        5 Compilation  []      {'loss': 'binary_crossentropy'}
+                
+        For further information on the columns refer to the project documentation: 
+        https://github.com/nabeel-oz/qlik-py-tools
+        """
+
+        # List of optimizers that can be specified in the architecture
+        optimizers = ['Adadelta', 'Adagrad', 'Adam', 'Adamax', 'Nadam', 'RMSprop', 'SGD']
+        
+        # The model definition should contain at least one layer and the compilation parameters
+        if len(self.model.architecture) < 2:
+            err = "Invalid Keras architecture. Expected at least one layer and compilation parameters."
+            raise Exception(err)
+        # The last row of the model definition should contain compilation parameters
+        elif not self.model.architecture.iloc[-1,0].capitalize() == 'Compile':
+            err = "Invalid Keras architecture. The last row of the model definition should provide 'Compile' parameters."
+            raise Exception(err)
+        
+        neural_net = keras.models.Sequential()
+
+        for i in self.model.architecture.index:
+            # Name items in the row for easy access
+            name, args, kwargs = self.model.architecture.iloc[i,0], self.model.architecture.iloc[i,1], self.model.architecture.iloc[i,2]
+
+            # The last row of the DataFrame should provide compilation keyword arguments
+            if i == max(self.model.architecture.index):
+                # Check if an optimizer with custom parameters has been defined
+                try:
+                    kwargs['optimizer'] = opt
+                except AttributeError:
+                    pass
+                
+                # Compile the model
+                neural_net.compile(**kwargs)
+            # Watch out for a row providing optimizer parameters
+            elif name in optimizers:
+                opt = getattr(keras.optimizers, name)(**kwargs) 
+            # All other rows of the DataFrame define the model architecture
+            else:
+                # Create a keras layer of the required type with the provided positional and keyword arguments
+                layer = getattr(keras.layers, name)(*args, **kwargs)
+                # Add the layer to the model
+                neural_net.add(layer)
+        
+        return neural_net
+
     def _set_params(self, estimator_args, scaler_args, execution_args, metric_args=None, dim_reduction_args=None):
         """
         Set input parameters based on the request.
@@ -1453,12 +1544,12 @@ class SKLearnForQlik:
             scoring = ['r2', 'neg_mean_squared_error', 'neg_mean_absolute_error', 'neg_median_absolute_error', 'explained_variance']
         
         # Perform cross validation using the training data and the model pipeline
-        scores = cross_validate(self.model.pipe, self.X_train, y_train, scoring=scoring, cv=self.model.cv, fit_params=fit_params, return_train_score=False)
+        scores = cross_validate(self.model.pipe, self.X_train_transform, y_train, scoring=scoring, cv=self.model.cv, fit_params=fit_params, return_train_score=False)
 
         # Prepare the metrics data frame according to the output format
         if self.model.estimator_type == "classifier":           
             # Get cross validation predictions for the confusion matrix
-            y_pred = cross_val_predict(self.model.pipe, self.X_train, y_train, cv=self.model.cv, fit_params=fit_params)
+            y_pred = cross_val_predict(self.model.pipe, self.X_train_transform, y_train, cv=self.model.cv, fit_params=fit_params)
 
             # Prepare the confusion matrix and add it to the model
             self._prep_confusion_matrix(y_train, y_pred, labels)
@@ -1810,7 +1901,7 @@ class SKLearnForQlik:
         elif step == 10:
             # self.model.estimator_kwargs['architecture']
             output = "\nKeras architecture added to Model {0}:\n\n{1}\n\n".format(self.model.name,\
-            self.model.estimator_kwargs['architecture'].to_string())
+            self.model.architecture.to_string())
             
         sys.stdout.write(output)
         with open(self.logfile, mode, encoding='utf-8') as f:

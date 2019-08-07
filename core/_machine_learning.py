@@ -1,6 +1,7 @@
 import os
 import sys
 import time
+import copy
 import joblib
 import numpy as np
 import pandas as pd
@@ -23,7 +24,6 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 # https://github.com/keras-team/keras/issues/1406
 stderr = sys.stderr
 sys.stderr = open(os.devnull, 'w')
-import keras
 from keras.wrappers.scikit_learn import KerasClassifier
 from keras.wrappers.scikit_learn import KerasRegressor
 sys.stderr = stderr
@@ -714,105 +714,32 @@ class Preprocessor(TransformerMixin):
 class KerasClassifierForQlik(KerasClassifier):
     """
     A subclass of the KerasClassifier Scikit-Learn wrapper.
-    This class takes in a dataframe defining the model architecture instead of the super class build_fn parameter.
-    This class is designed to be used in a sklearn pipeline, positioned after input data has been preprocessed.
+    This class takes in the build_fn as part of sk_params rather than a separate argument.
+    It also stores a histories dataframe to provide metrics for each time the model is fit.
     """
       
     def __init__(self, **sk_params):
         """
         Initialize the KerasClassifierForQlik.
-        The build_fn function to build the Keras model is provided by the __call__ method of this class.
+        The build_fn function to build the Keras model should be included in sk_params.
         """
 
-        # List of optimizers that can be specified in the architecture
-        self.optimizers = ['Adadelta', 'Adagrad', 'Adam', 'Adamax', 'Nadam', 'RMSprop', 'SGD']
-
+        # Deep copy sk_params so that popping build_fn does not affect subsequent instances of the estimator
+        self.sk_params = copy.deepcopy(sk_params)
+        self.build_fn = self.sk_params.pop('build_fn')
+        
         # DataFrame to contain history of every training cycle
         # This DataFrame will provide metrics such as loss for each run of the fit method
         # Columns will be ['iteration', 'epoch', 'loss'] and any other metrics being calculated during training
         self.histories = pd.DataFrame()
 
-        # Ensure that a model architecture is inclued in the sk_params
-        # scikit-learn estimators should generally be able to instantiate without any parameters, but this is only possible in
-        # this case with fixed model architectures. 
-        if sk_params is None or len(sk_params) == 0 or 'architecture' not in sk_params:
-            err = "No Keras architecture found. A Keras model cannot be built without defining the architecture."
-            raise Exception(err)
-        # Call the super class' init method
-        else:
-            super().__init__(**sk_params)
-    
-    def __call__(self, architecture=None):
-        """
-        Initialize a KerasModel object based on the architecture dataframe.
-
-        The architecture parameter should be passed during init in the sk_params keyword arguments.
-        
-        The architecture dataframe should define the layers and compilation parameters for a Keras sequential model.
-        Each layer has to be defined across three columns: layer, args, kwargs.
-        The final row of the dataframe should define the compilation parameters.
-        For example:
-          layer        args    kwargs
-        0 Dense        [12]    {'input_dim': 8, activation': 'relu'}
-        1 Dropout      [0.25]  {}
-        2 Dense        [8]     {'activation': 'relu'}
-        3 Dense        [1]     {'activation': 'sigmoid'}
-        4 Compilation  []      {'loss': 'binary_crossentropy', 'optimizer': 'adam', 'metrics': ['accuracy']}
-
-        If you want to specify parameters for the optimizer, you can add that as the second last row of the architecture:
-        ...
-        4 SGD          []      {'lr': 0.01, 'clipvalue': 0.5}
-        5 Compilation  []      {'loss': 'binary_crossentropy'}
-                
-        For further information on the columns refer to the project documentation: 
-        https://github.com/nabeel-oz/qlik-py-tools
-        """
-        
-        # The model definition should contain at least one layer and the compilation parameters
-        if architecture is None or len(architecture) < 2:
-            err = "Invalid Keras architecture. Expected at least one layer and compilation parameters."
-            raise Exception(err)
-        # The last row of the model definition should contain compilation parameters
-        elif not architecture.iloc[-1,0].capitalize() == 'Compile':
-            err = "Invalid Keras architecture. The last row of the model definition should provide 'Compile' parameters."
-            raise Exception(err)
-        
-        self.model = keras.models.Sequential()
-
-        for i in architecture.index:
-            # Name items in the row for easy access
-            name, args, kwargs = architecture.iloc[i,0], architecture.iloc[i,1], architecture.iloc[i,2]
-
-            # The last row of the DataFrame should provide compilation keyword arguments
-            if i == max(architecture.index):
-                # Check if an optimizer with custom parameters has been defined
-                try:
-                    kwargs['optimizer'] = self.opt
-                except AttributeError:
-                    pass
-                
-                # Compile the model
-                self.model.compile(**kwargs)
-            # Watch out for a row providing optimizer parameters
-            elif name in self.optimizers:
-                self.opt = getattr(keras.optimizers, name)(**kwargs) 
-            # All other rows of the DataFrame define the model architecture
-            else:
-                # Create a keras layer of the required type with the provided positional and keyword arguments
-                layer = getattr(keras.layers, name)(*args, **kwargs)
-                # Add the layer to the model
-                self.model.add(layer)
-        
-        return self.model
-    
+        # Check the parameters using the super class method
+        self.check_params(self.sk_params)
+       
     def fit(self, x, y, sample_weight=None, **kwargs):
         """
-        Update the model architecture with the input dimensions.
-        Then call the super class' fit method.
+        Call the super class' fit method and store metrics from the history.
         """
-
-        # Update the input nodes for the first layer based on the shape of input data
-        self.sk_params['architecture'].iloc[0, 2]['input_dim'] = x.shape[1]
 
         # Fit the model to the data and store information on the training
         history = super().fit(x, y, sample_weight, **kwargs)
@@ -832,105 +759,32 @@ class KerasClassifierForQlik(KerasClassifier):
 class KerasRegressorForQlik(KerasRegressor):
     """
     A subclass of the KerasRegressor Scikit-Learn wrapper.
-    This class takes in a dataframe defining the model architecture instead of the super class build_fn parameter.
-    This class is designed to be used in a sklearn pipeline, positioned after input data has been preprocessed.
+    This class takes in the build_fn as part of sk_params rather than a separate argument.
+    It also stores a histories dataframe to provide metrics for each time the model is fit.
     """
-
+      
     def __init__(self, **sk_params):
         """
         Initialize the KerasRegressorForQlik.
-        The build_fn function to build the Keras model is provided by the __call__ method of this class.
+        The build_fn function to build the Keras model should be included in sk_params.
         """
 
-        # List of optimizers that can be specified in the architecture
-        self.optimizers = ['Adadelta', 'Adagrad', 'Adam', 'Adamax', 'Nadam', 'RMSprop', 'SGD']
-
+        # Deep copy sk_params so that popping build_fn does not affect subsequent instances of the estimator
+        self.sk_params = copy.deepcopy(sk_params)
+        self.build_fn = self.sk_params.pop('build_fn')
+        
         # DataFrame to contain history of every training cycle
         # This DataFrame will provide metrics such as loss for each run of the fit method
         # Columns will be ['iteration', 'epoch', 'loss'] and any other metrics being calculated during training
         self.histories = pd.DataFrame()
 
-        # Ensure that a model architecture is inclued in the sk_params
-        # scikit-learn estimators should generally be able to instantiate without any parameters, but this is only possible in
-        # this case with fixed model architectures. 
-        if sk_params is None or len(sk_params) == 0 or 'architecture' not in sk_params:
-            err = "No Keras architecture found. A Keras model cannot be built without defining the architecture."
-            raise Exception(err)
-        # Call the super class' init method
-        else:
-            super().__init__(**sk_params)
-
-    def __call__(self, architecture=None):
-        """
-        Initialize a KerasModel object based on the architecture dataframe.
+        # Check the parameters using the super class method
+        self.check_params(self.sk_params)
         
-        The architecture parameter should be passed during init in the sk_params keyword arguments.
-
-        The architecture dataframe should define the layers and compilation parameters for a Keras sequential model.
-        Each layer has to be defined across three columns: layer, args, kwargs.
-        The final row of the dataframe should define the compilation parameters.
-        For example:
-          layer        args    kwargs
-        0 Dense        [12]    {'input_dim': 8, activation': 'relu'}
-        1 Dropout      [0.25]  {}
-        2 Dense        [8]     {'activation': 'relu'}
-        3 Dense        [1]     {'activation': 'linear'}
-        4 Compilation  []      {'loss': 'mean_squared_error', 'optimizer': 'adam'}
-
-        If you want to specify parameters for the optimizer, you can add that as the second last row of the architecture:
-        ...
-        4 SGD          []      {'lr': 0.01, 'clipvalue': 0.5}
-        5 Compilation  []      {'loss': 'mean_squared_error'}
-                
-        For further information on the columns refer to the project documentation: 
-        https://github.com/nabeel-oz/qlik-py-tools
-        """
-        
-        # The model definition should contain at least one layer and the compilation parameters
-        if architecture is None or len(architecture) < 2:
-            err = "Invalid Keras architecture. Expected at least one layer and compilation parameters."
-            raise Exception(err)
-        # The last row of the model definition should contain compilation parameters
-        elif not architecture.iloc[-1,0].capitalize() == 'Compile':
-            err = "Invalid Keras architecture. The last row of the model definition should provide 'Compile' parameters."
-            raise Exception(err)
-        
-        self.model = keras.models.Sequential()
-
-        for i in architecture.index:
-            # Name items in the row for easy access
-            name, args, kwargs = architecture.iloc[i,0], architecture.iloc[i,1], architecture.iloc[i,2]
-
-            # The last row of the DataFrame should provide compilation keyword arguments
-            if i == max(architecture.index):
-                # Check if an optimizer with custom parameters has been defined
-                try:
-                    kwargs['optimizer'] = self.opt
-                except AttributeError:
-                    pass
-                
-                # Compile the model
-                self.model.compile(**kwargs)
-            # Watch out for a row providing optimizer parameters
-            elif name in self.optimizers:
-                self.opt = getattr(keras.optimizers, name)(**kwargs) 
-            # All other rows of the DataFrame define the model architecture
-            else:
-                # Create a keras layer of the required type with the provided positional and keyword arguments
-                layer = getattr(keras.layers, name)(*args, **kwargs)
-                # Add the layer to the model
-                self.model.add(layer)
-        
-        return self.model
-    
     def fit(self, x, y, **kwargs):
         """
-        Update the model architecture with the input dimensions.
-        Then call the super class' fit method.
+        Call the super class' fit method and store metrics from the history.
         """
-
-        # Update the input nodes for the first layer based on the shape of input data
-        self.sk_params['architecture'].iloc[0, 2]['input_dim'] = x.shape[1]
 
         # Fit the model to the data and store information on the training
         history = super().fit(x, y, **kwargs)
