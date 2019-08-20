@@ -193,7 +193,7 @@ class Preprocessor(TransformerMixin):
         Return the Preprocessor object.
         Optionally re-initizialise the object by passing retrain=True, and resending the features dataframe
         """
-        
+
         # Reinitialize this Preprocessor instance if required
         if retrain:
             if features is None:
@@ -203,6 +203,12 @@ class Preprocessor(TransformerMixin):
         
         # Set up an empty data frame for data to be scaled
         scale_df = pd.DataFrame()
+
+        ohe_df = None
+        hash_df = None
+        cv_df = None
+        tfidf_df = None
+        text_df = None
         
         if self.ohe:
             # Get a subset of the data that requires one hot encoding
@@ -317,7 +323,12 @@ class Preprocessor(TransformerMixin):
         """        
         
         X_transform = None
-        scale_df = pd.DataFrame()
+        scale_df = pd.DataFrame() # Initialize as empty Data Frame for convenience of concat operations below
+        ohe_df = None
+        hash_df = None
+        cv_df = None
+        tfidf_df = None
+        text_df = None
         
         if self.ohe:
             # Get a subset of the data that requires one hot encoding

@@ -337,7 +337,7 @@ class SKLearnForQlik:
         'DNN', 1, 'Dense', '12|int', 'activation=relu|str'
         'DNN', 2, 'Dropout', '0.25|float', ''
         'DNN', 3, 'Dense', '1|int', 'activation=sigmoid|str'
-        'DNN', 4, 'Compilation', '', 'loss=binary_crossentropy|str, optimizer=adam|str, metrics=accuracy|str'
+        'DNN', 4, 'Compilation', '', 'loss=binary_crossentropy|str, optimizer=adam|str, metrics=accuracy|list|str'
 
         If you want to specify parameters for the optimizer, you can add that as the second last row of the architecture:
         ...
@@ -528,6 +528,11 @@ class SKLearnForQlik:
             # Update the input nodes for the first layer based on the shape of input data
             # UPDATE CODE FOR HIGHER DIMENSIONAL INPUT SHAPE TO CATER FOR TIME STEPS AND SUB SEQUENCES
             self.model.architecture.iloc[0, 2]['input_dim'] = self.X_train_transform.shape[1]
+
+            # Debug information is printed to the terminal and logs if the paramater debug = true
+            if self.model.debug:
+                self._print_log(10)
+
             # Add the Keras build function to the estimator keyword arguments
             self.model.estimator_kwargs['build_fn'] = lambda: self.keras_build_fn()
         except AttributeError:
@@ -1176,7 +1181,7 @@ class SKLearnForQlik:
             err = "Invalid Keras architecture. Expected at least one layer and compilation parameters."
             raise Exception(err)
         # The last row of the model definition should contain compilation parameters
-        elif not self.model.architecture.iloc[-1,0].capitalize() == 'Compile':
+        elif not self.model.architecture.iloc[-1,0].capitalize() in ['Compile', 'Compilation']:
             err = "Invalid Keras architecture. The last row of the model definition should provide 'Compile' parameters."
             raise Exception(err)
         
@@ -1191,7 +1196,7 @@ class SKLearnForQlik:
                 # Check if an optimizer with custom parameters has been defined
                 try:
                     kwargs['optimizer'] = opt
-                except AttributeError:
+                except UnboundLocalError:
                     pass
                 
                 # Compile the model
