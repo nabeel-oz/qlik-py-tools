@@ -725,33 +725,46 @@ class Preprocessor(TransformerMixin):
 class KerasClassifierForQlik(KerasClassifier):
     """
     A subclass of the KerasClassifier Scikit-Learn wrapper.
-    This class takes in the build_fn as part of sk_params rather than a separate argument.
+    This class takes in a compiled Keras model as part of sk_params and uses the __call__ method as the default build_fn.
     It also stores a histories dataframe to provide metrics for each time the model is fit.
     """
       
     def __init__(self, **sk_params):
         """
         Initialize the KerasClassifierForQlik.
-        The build_fn function to build the Keras model should be included in sk_params.
+        The compiled Keras model should be included in sk_params under the 'neural_net' keyword argument.
         """
-
-        # Deep copy sk_params so that popping build_fn does not affect subsequent instances of the estimator
-        self.sk_params = copy.deepcopy(sk_params)
-        self.build_fn = self.sk_params.pop('build_fn')
         
+        # Deep copy sk_params so that popping build_fn does not affect subsequent instances of the estimator
+        self.sk_params = sk_params
+        
+        # Set build_fn to the function supplied in sk_params
+        self.build_fn = self.sk_params.pop('build_fn')
+
         # DataFrame to contain history of every training cycle
         # This DataFrame will provide metrics such as loss for each run of the fit method
         # Columns will be ['iteration', 'epoch', 'loss'] and any other metrics being calculated during training
         self.histories = pd.DataFrame()
-
+        
         # Check the parameters using the super class method
-        self.check_params(self.sk_params)
-       
+        self.check_params(self.sk_params)  
+
+    def get_params(self, **params):
+        """Gets parameters for this estimator.
+        # Arguments
+            **params: ignored (exists for API compatibility).
+        # Returns
+            Dictionary of parameter names mapped to their values.
+        """
+        res = self.sk_params
+        res.update({'build_fn': self.build_fn})
+        return res
+
     def fit(self, x, y, sample_weight=None, **kwargs):
         """
         Call the super class' fit method and store metrics from the history.
         """
-
+        
         # Fit the model to the data and store information on the training
         history = super().fit(x, y, sample_weight, **kwargs)
 
@@ -770,18 +783,20 @@ class KerasClassifierForQlik(KerasClassifier):
 class KerasRegressorForQlik(KerasRegressor):
     """
     A subclass of the KerasRegressor Scikit-Learn wrapper.
-    This class takes in the build_fn as part of sk_params rather than a separate argument.
+    This class takes in a compiled Keras model as part of sk_params and uses the __call__ method as the default build_fn.
     It also stores a histories dataframe to provide metrics for each time the model is fit.
     """
       
     def __init__(self, **sk_params):
         """
         Initialize the KerasRegressorForQlik.
-        The build_fn function to build the Keras model should be included in sk_params.
+        The compiled Keras model should be included in sk_params under the 'neural_net' keyword argument.
         """
 
         # Deep copy sk_params so that popping build_fn does not affect subsequent instances of the estimator
-        self.sk_params = copy.deepcopy(sk_params)
+        self.sk_params = sk_params
+        
+        # Set build_fn to the function supplied in sk_params
         self.build_fn = self.sk_params.pop('build_fn')
         
         # DataFrame to contain history of every training cycle
@@ -791,7 +806,17 @@ class KerasRegressorForQlik(KerasRegressor):
 
         # Check the parameters using the super class method
         self.check_params(self.sk_params)
-        
+
+    def get_params(self, **params):
+        """
+        Gets parameters for this estimator.
+        Overrides super class method for compatibility with sklearn cross_validate.
+        """
+
+        res = self.sk_params
+        res.update({'build_fn': self.build_fn})
+        return res
+
     def fit(self, x, y, **kwargs):
         """
         Call the super class' fit method and store metrics from the history.

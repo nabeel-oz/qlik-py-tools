@@ -533,8 +533,10 @@ class SKLearnForQlik:
             if self.model.debug:
                 self._print_log(10)
 
-            # Add the Keras build function to the estimator keyword arguments
-            self.model.estimator_kwargs['build_fn'] = lambda: self.keras_build_fn()
+            # Add the Keras build function and architecture to the estimator keyword arguments
+            self.model.estimator_kwargs['build_fn'] = self._keras_build_fn
+            self.model.estimator_kwargs['architecture'] = self.model.architecture
+            
         except AttributeError:
             pass
 
@@ -1149,7 +1151,8 @@ class SKLearnForQlik:
         # Finally send the response
         return self.response
 
-    def keras_build_fn(self):
+    @staticmethod
+    def _keras_build_fn(architecture=None):
         """
         Create and compile a Keras Sequential model based on the model's architecture dataframe.
         
@@ -1172,27 +1175,27 @@ class SKLearnForQlik:
         For further information on the columns refer to the project documentation: 
         https://github.com/nabeel-oz/qlik-py-tools
         """
-
+        
         # List of optimizers that can be specified in the architecture
         optimizers = ['Adadelta', 'Adagrad', 'Adam', 'Adamax', 'Nadam', 'RMSprop', 'SGD']
         
         # The model definition should contain at least one layer and the compilation parameters
-        if len(self.model.architecture) < 2:
+        if architecture is None or len(architecture) < 2:
             err = "Invalid Keras architecture. Expected at least one layer and compilation parameters."
             raise Exception(err)
         # The last row of the model definition should contain compilation parameters
-        elif not self.model.architecture.iloc[-1,0].capitalize() in ['Compile', 'Compilation']:
+        elif not architecture.iloc[-1,0].capitalize() in ['Compile', 'Compilation']:
             err = "Invalid Keras architecture. The last row of the model definition should provide 'Compile' parameters."
             raise Exception(err)
         
         neural_net = keras.models.Sequential()
 
-        for i in self.model.architecture.index:
+        for i in architecture.index:
             # Name items in the row for easy access
-            name, args, kwargs = self.model.architecture.iloc[i,0], self.model.architecture.iloc[i,1], self.model.architecture.iloc[i,2]
+            name, args, kwargs = architecture.iloc[i,0], architecture.iloc[i,1], architecture.iloc[i,2]
 
             # The last row of the DataFrame should provide compilation keyword arguments
-            if i == max(self.model.architecture.index):
+            if i == max(architecture.index):
                 # Check if an optimizer with custom parameters has been defined
                 try:
                     kwargs['optimizer'] = opt
@@ -1210,7 +1213,7 @@ class SKLearnForQlik:
                 layer = getattr(keras.layers, name)(*args, **kwargs)
                 # Add the layer to the model
                 neural_net.add(layer)
-        
+            
         return neural_net
 
     def _set_params(self, estimator_args, scaler_args, execution_args, metric_args=None, dim_reduction_args=None):
