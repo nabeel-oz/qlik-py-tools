@@ -59,6 +59,7 @@ from skater.core.explanations import Interpretation
 stderr = sys.stderr
 sys.stderr = open(os.devnull, 'w')
 import keras
+from keras import backend as kerasbackend
 sys.stderr = stderr
 
 import _utils as utils
@@ -623,7 +624,7 @@ class SKLearnForQlik:
             
             # Calculate model agnostic feature importances
             self._calc_importances(X = X, y = y)
-        
+
         # Persist the model to disk
         self.model = self.model.save(self.model.name, self.path, self.model.compress)
         
@@ -959,7 +960,7 @@ class SKLearnForQlik:
         
         # Convert the data types based on feature definitions 
         self.X = utils.convert_types(self.X, self.model.features_df)
-        
+
         if variant in ('predict_proba', 'predict_log_proba'):
             # If probabilities need to be returned
             if variant == 'predict_proba':
@@ -985,7 +986,7 @@ class SKLearnForQlik:
         else:
             # Predict y for X using the previously fit pipeline
             self.y = self.model.pipe.predict(self.X)
-        
+
         # Prepare the response
         self.response = pd.DataFrame(self.y, columns=["result"], index=self.X.index)
         
@@ -1131,14 +1132,14 @@ class SKLearnForQlik:
         
         # Get the model from cache or disk based on the model_name in request
         self._get_model_by_name()
-        
+
         if self.model.estimator not in ['KerasClassifier', 'KerasRegressor']:
             err = "Loss history is only available for Keras models"
             raise Exception(err)
 
         # Prepare the response using the histories data frame from the Keras model
         self.response = self.model.pipe.named_steps['estimator'].histories
-
+        
         # Add the model name to the response
         self.response.insert(0, 'model_name', self.model.name)
         
@@ -1793,6 +1794,11 @@ class SKLearnForQlik:
         Return the model.
         """
         
+        # Avoid tensorflow error for keras models
+        # https://github.com/tensorflow/tensorflow/issues/14356
+        # https://stackoverflow.com/questions/40785224/tensorflow-cannot-interpret-feed-dict-key-as-tensor
+        kerasbackend.clear_session()
+
         if use_cache and self.model.name in self.__class__.model_cache:
             # Load the model from cache
             self.model = self.__class__.model_cache[self.model.name]
