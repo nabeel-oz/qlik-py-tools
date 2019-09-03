@@ -2,6 +2,7 @@ import argparse
 import json
 import logging
 import logging.config
+import re
 import os
 import sys
 import time
@@ -711,12 +712,52 @@ class ExtensionService(SSE.ConnectorServicer):
         header.ParseFromString(metadata['qlik-functionrequestheader-bin'])
 
         return header.functionId
+
+    def _get_call_info(self, context):
+        """
+        Retreive useful information for the function call.
+        :param context: context
+        :return: string containing header info
+        """
+
+        # Get metadata for the call from the context
+        metadata = dict(context.invocation_metadata())
+        
+        # Get the function ID
+        func_header = SSE.FunctionRequestHeader()
+        func_header.ParseFromString(metadata['qlik-functionrequestheader-bin'])
+        func_id = func_header.functionId
+
+        # Get the common request header
+        common_header = SSE.CommonRequestHeader()
+        common_header.ParseFromString(metadata['qlik-commonrequestheader-bin'])
+
+        # Get capabilities
+        if not hasattr(self, 'capabilities'):
+            self.capabilities = self.GetCapabilities(None, context, log=False)
+
+        # Get the name of the capability called in the function
+        capability = [function.name for function in self.capabilities.functions if function.functionId == func_id][0]
+                
+        # Get the user ID using a regular expression
+        match = re.match(r"UserDirectory=(?P<UserDirectory>\w*)\W+UserId=(?P<UserId>\w*)", common_header.userId, re.IGNORECASE)
+        if match:
+            userId = match.group('UserDirectory') + '/' + match.group('UserId')
+        else:
+            userId = common_header.userId
+        
+        # Get the app ID
+        appId = common_header.appId
+        # Get the call's origin
+        peer = context.peer()
+
+        return "{0} - Capability '{1}' called by user {2} from app {3}".format(peer, capability, userId, appId)
     
     """
     Implementation of rpc functions.
     """
 
-    def GetCapabilities(self, request, context):
+    def GetCapabilities(self, request, context, log=True):
         """
         Get capabilities.
         Note that either request or context is used in the implementation of this method, but still added as
@@ -726,12 +767,13 @@ class ExtensionService(SSE.ConnectorServicer):
         :param context: the context, not used in this method.
         :return: the capabilities.
         """
-        logging.info('GetCapabilities')
+        if log:
+            logging.info('GetCapabilities')
 
         # Create an instance of the Capabilities grpc message
         # Enable(or disable) script evaluation
         # Set values for pluginIdentifier and pluginVersion
-        capabilities = SSE.Capabilities(allowScript=False,
+        self.capabilities = SSE.Capabilities(allowScript=False,
                                         pluginIdentifier='Qlik Python Tools',
                                         pluginVersion='v2.3.0')
 
@@ -739,7 +781,7 @@ class ExtensionService(SSE.ConnectorServicer):
         with open(self.function_definitions) as json_file:
             # Iterate over each function definition and add data to the Capabilities grpc message
             for definition in json.load(json_file)['Functions']:
-                function = capabilities.functions.add()
+                function = self.capabilities.functions.add()
                 function.name = definition['Name']
                 function.functionId = definition['Id']
                 function.functionType = definition['Type']
@@ -749,10 +791,11 @@ class ExtensionService(SSE.ConnectorServicer):
                 for param_name, param_type in sorted(definition['Params'].items()):
                     function.params.add(name=param_name, dataType=param_type)
 
-                logging.info('Adding to capabilities: {}({})'.format(function.name,
-                                                                     [p.name for p in function.params]))
+                if log:
+                    logging.info('Adding to capabilities: {}({})'.format(function.name,
+                                                                        [p.name for p in function.params]))
 
-        return capabilities
+        return self.capabilities
 
     def ExecuteFunction(self, request_iterator, context):
         """
@@ -763,8 +806,9 @@ class ExtensionService(SSE.ConnectorServicer):
         """
         # Retrieve function id
         func_id = self._get_function_id(context)
-        logging.info('ExecuteFunction (functionId: {})'.format(func_id))
-
+        logging.info(self._get_call_info(context))
+        logging.info('ExecuteFunction (functionId: {}, {})'.format(func_id, self.functions[func_id]))
+        
         return getattr(self, self.functions[func_id])(request_iterator, context)
 
     """

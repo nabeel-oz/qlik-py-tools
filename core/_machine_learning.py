@@ -722,6 +722,61 @@ class Preprocessor(TransformerMixin):
         
         return s.fit(df)       
 
+class Reshaper(TransformerMixin):
+    """
+    A class that reshapes the feature matrix based on the input_shape.
+    This class is built for Keras estimators where recurrent and convolutional layers can required 3D or 4D inputs.
+    It is meant to be used after preprocessing and before fitting the estimator.
+    """
+
+    def __init__(self, input_shape=None, logfile=None, **kwargs):
+        """
+        Initialize the Reshaper using the target input_shape.
+        Optional arguments are a logfile to output debug info.
+        """
+
+        self.input_shape = input_shape
+        self.log = logfile
+    
+    def fit(self, X, y=None):
+        """
+        Return this Reshaper object.
+        Method for compatibility with scikit-learn API.
+        """
+
+        return self
+    
+    def transform(self, X, y=None):
+        """
+        Apply the new shape to the data provided in X.
+        X is expected to be a 2D DataFrame of samples and features.
+        """
+        
+        if not self.input_shape:
+            return X
+
+        # Do the transformation
+        X_transform = X
+
+        return X_transform
+    
+    def _print_log(self, step):
+        """
+        Print debug info to the log
+        """
+        
+        # Set mode to append to log file
+        mode = 'a'
+
+        if step == 1:
+            # Output sample data after reshaping
+            output = ""
+
+        sys.stdout.write(output)
+        with open(self.logfile, mode, encoding='utf-8') as f:
+            f.write(output)
+
+
 class KerasClassifierForQlik(KerasClassifier):
     """
     A subclass of the KerasClassifier Scikit-Learn wrapper.

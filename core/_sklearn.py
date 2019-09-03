@@ -324,9 +324,11 @@ class SKLearnForQlik:
         Setup the architecture for a Keras model.
         This function should be called after a model has been initialized with the setup (and optionally set_param_grid) methods.
 
-        The architecture should define the layers and compilation parameters for a Keras sequential model.
-        Contrary to the Keras convention, the input_dim for the first layer need not be defined
-        The input dimensions will be inferenced after preprocessing the training data.
+        The architecture should define the layers, optimization and compilation parameters for a Keras sequential model.
+
+        Since this SSE handles preprocessing the number of features will be inferenced from the training data.
+        However, when using 3D or 4D data the input_shape needs to be specified in the first layer. 
+        Note that this SSE does not support the keras input_dim argument. Please always use input_shape.
 
         The request should contain: model name, sort order, layer type, args, kwargs
         With a row for each layer, with a final row for compilation keyword arguments.
@@ -343,7 +345,18 @@ class SKLearnForQlik:
         If you want to specify parameters for the optimizer, you can add that as the second last row of the architecture:
         ...
         'DNN', 4, 'SGD', '', 'lr=0.01|float, clipvalue=0.5|float'
-        'DNN', 5, 'Compilation', '', 'loss=binary_crossentropy|str, metrics=accuracy|str'       
+        'DNN', 5, 'Compilation', '', 'loss=binary_crossentropy|str, metrics=accuracy|str'     
+
+        Layer wrappers can be used by including them in the layer type followed by a space:
+        'DNN', 1, 'TimeDistributed Dense' ...
+        ...
+        For the Bidirectional wrapper the merge_mode parameter can be specified in the kwargs.  
+
+        When using recurrent or convolutional layers you will need to pass a valid input_shape to reshape the data.
+        Additionally, the feature definitions should include an 'identifier' variable that will be used for reshaping.
+        E.g. The identifier is a date field and you want to use a LSTM with 10 time steps on a dataset with 20 features.
+        'RNN', 1, 'LSTM', '64|int', 'input_shape=10,20|tuple|int, activation=relu|str'
+
         """
 
         # Interpret the request data based on the expected row and column structure
@@ -526,9 +539,15 @@ class SKLearnForQlik:
         
         # If this is a Keras estimator, update the input dimensions for the first layer in the architecture
         try:
-            # Update the input nodes for the first layer based on the shape of input data
-            # UPDATE CODE FOR HIGHER DIMENSIONAL INPUT SHAPE TO CATER FOR TIME STEPS AND SUB SEQUENCES
-            self.model.architecture.iloc[0, 2]['input_dim'] = self.X_train_transform.shape[1]
+            # Get the first layer's kwargs
+            first_layer_kwargs = self.model.architecture.iloc[0, 2]
+
+            # Setup input_shape if it has not been specified in the architecture
+            if 'input_shape' not in first_layer_kwargs:
+                first_layer_kwargs['input_shape'] = self.X_train_transform.shape[1]
+            # Else update the input shape based on the number of features after preprocessing
+            else:
+                first_layer_kwargs['input_shape'][-1] = self.X_train_transform.shape[1]
 
             # Debug information is printed to the terminal and logs if the paramater debug = true
             if self.model.debug:
@@ -537,12 +556,10 @@ class SKLearnForQlik:
             # Add the Keras build function and architecture to the estimator keyword arguments
             self.model.estimator_kwargs['build_fn'] = self._keras_build_fn
             self.model.estimator_kwargs['architecture'] = self.model.architecture
-            
+        
+        # Expected error when this is not a Keras estimator and does not have the architecture attribute
         except AttributeError:
             pass
-
-        # Construct a sklearn pipeline
-        # self.model.pipe = Pipeline([('preprocessor', prep)])
 
         # Setup a list to store steps for the sklearn pipeline
         pipe_steps = []
@@ -1159,10 +1176,12 @@ class SKLearnForQlik:
         
         The architecture dataframe should define the layers and compilation parameters for a Keras sequential model.
         Each layer has to be defined across three columns: layer, args, kwargs.
+        The first layer should define the input_shape. This SSE does not support the alternative input_dim argument.
         The final row of the dataframe should define the compilation parameters.
+
         For example:
           layer        args    kwargs
-        0 Dense        [12]    {'input_dim': 8, activation': 'relu'}
+        0 Dense        [12]    {'input_shape': (8,), activation': 'relu'}
         1 Dropout      [0.25]  {}
         2 Dense        [8]     {'activation': 'relu'}
         3 Dense        [1]     {'activation': 'sigmoid'}
@@ -1172,7 +1191,17 @@ class SKLearnForQlik:
         ...
         4 SGD          []      {'lr': 0.01, 'clipvalue': 0.5}
         5 Compilation  []      {'loss': 'binary_crossentropy'}
-                
+
+        Layer wrappers can be used by including them in the layer name followed by a space:
+        0 TimeDistributed Dense ...
+        ...
+        For the Bidirectional wrapper the merge_mode parameter can be specified in the kwargs.
+
+        When using recurrent or convolutional layers you will need to pass a valid input_shape to reshape the data.
+        Additionally, the feature definitions should include an 'identifier' variable that will be used for reshaping.
+        E.g. The identifier is a date field and you want to use a LSTM with 10 time steps on a dataset with 20 features.
+        0 LSTM         [64]    {'input_shape': (10,20), 'activation': 'relu''
+        
         For further information on the columns refer to the project documentation: 
         https://github.com/nabeel-oz/qlik-py-tools
         """
@@ -1210,10 +1239,30 @@ class SKLearnForQlik:
                 opt = getattr(keras.optimizers, name)(**kwargs) 
             # All other rows of the DataFrame define the model architecture
             else:
+                # Check if the name includes a layer wrapper e.g. TimeDistributed Dense
+                names = name.split(' ')
+                if len(names) == 2:
+                    wrapper = names[0]
+                    name = names[1]
+                    
+                    # Get wrapper kwargs
+                    wrapper_kwargs = dict()
+                    if 'merge_mode' in kwargs:
+                        wrapper_kwargs['merge_mode'] = kwargs.pop('merge_mode')
+                else:
+                    wrapper = None
+
                 # Create a keras layer of the required type with the provided positional and keyword arguments
                 layer = getattr(keras.layers, name)(*args, **kwargs)
-                # Add the layer to the model
-                neural_net.add(layer)
+
+                if wrapper:
+                    # Create the layer wrapper
+                    wrapper = getattr(keras.layers, wrapper)(layer, **wrapper_kwargs)
+                    # Add the layer wrapper to the model
+                    neural_net.add(wrapper)    
+                else:
+                    # Add the layer to the model
+                    neural_net.add(layer)
             
         return neural_net
 
@@ -1489,6 +1538,9 @@ class SKLearnForQlik:
         
         # Convert the data types based on feature definitions 
         samples_df = utils.convert_types(samples_df, self.model.features_df)
+
+        # Ensure the data is sorted by the identifier
+        samples_df = samples_df.sort_values(by=["identifier"], ascending=True)
         
         if target:
             # Get the target feature

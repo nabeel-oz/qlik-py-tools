@@ -104,7 +104,7 @@
 	{
       "Id": 9,
       "Name": "sklearn_Setup",
-      "Type": 0,
+      "Type": 2,
       "ReturnType": 0,
       "Params": {
         "a_model_name": 0,
@@ -116,7 +116,7 @@
 	{
       "Id": 10,
       "Name": "sklearn_Set_Features",
-      "Type": 0,
+      "Type": 2,
       "ReturnType": 0,
       "Params": {
         "a_model_name": 0,
@@ -130,7 +130,7 @@
 	{
       "Id": 11,
       "Name": "sklearn_Get_Features",
-      "Type": 0,
+      "Type": 2,
       "ReturnType": 0,
       "Params": {
         "a_model_name": 0
@@ -139,7 +139,7 @@
 	{
       "Id": 12,
       "Name": "sklearn_Fit",
-      "Type": 0,
+      "Type": 2,
       "ReturnType": 0,
       "Params": {
         "a_model_name": 0,
@@ -149,7 +149,7 @@
 	{
       "Id": 13,
       "Name": "sklearn_Partial_Fit",
-      "Type": 0,
+      "Type": 2,
       "ReturnType": 0,
       "Params": {
         "a_model_name": 0,
@@ -201,7 +201,7 @@
 	{
       "Id": 18,
       "Name": "sklearn_Get_Metrics",
-      "Type": 0,
+      "Type": 2,
       "ReturnType": 0,
       "Params": {
         "a_model_name": 0
@@ -210,7 +210,7 @@
 	{
       "Id": 19,
       "Name": "sklearn_List_Models",
-      "Type": 0,
+      "Type": 2,
       "ReturnType": 0,
       "Params": {
         "a_search_pattern": 0
@@ -219,7 +219,7 @@
 	{
       "Id": 20,
       "Name": "sklearn_Get_Features_Expression",
-      "Type": 0,
+      "Type": 2,
       "ReturnType": 0,
       "Params": {
         "a_model_name": 0
@@ -228,7 +228,7 @@
 	{
       "Id": 21,
       "Name": "sklearn_Setup_Adv",
-      "Type": 0,
+      "Type": 2,
       "ReturnType": 0,
       "Params": {
         "a_model_name": 0,
@@ -242,7 +242,7 @@
 	{
       "Id": 22,
       "Name": "sklearn_Calculate_Metrics",
-      "Type": 0,
+      "Type": 2,
       "ReturnType": 0,
       "Params": {
         "a_model_name": 0,
@@ -252,7 +252,7 @@
 	{
       "Id": 23,
       "Name": "sklearn_Get_Confusion_Matrix",
-      "Type": 0,
+      "Type": 2,
       "ReturnType": 0,
       "Params": {
         "a_model_name": 0
@@ -261,7 +261,7 @@
   {
       "Id": 24,
       "Name": "sklearn_Set_Param_Grid",
-      "Type": 0,
+      "Type": 2,
       "ReturnType": 0,
       "Params": {
         "a_model_name": 0,
@@ -272,7 +272,7 @@
   {
       "Id": 25,
       "Name": "sklearn_Get_Best_Params",
-      "Type": 0,
+      "Type": 2,
       "ReturnType": 0,
       "Params": {
         "a_model_name": 0
@@ -313,7 +313,7 @@
   {
       "Id": 29,
       "Name": "sklearn_Explain_Importances",
-      "Type": 0,
+      "Type": 2,
       "ReturnType": 0,
       "Params": {
         "a_model_name": 0
@@ -322,7 +322,7 @@
   {
       "Id": 30,
       "Name": "spaCy_Get_Entities",
-      "Type": 0,
+      "Type": 2,
       "ReturnType": 0,
       "Params": {
         "a_key": 0,
@@ -333,7 +333,7 @@
   {
       "Id": 31,
       "Name": "spaCy_Get_Entities_From_Model",
-      "Type": 0,
+      "Type": 2,
       "ReturnType": 0,
       "Params": {
         "a_key": 0,
@@ -345,7 +345,7 @@
   {
       "Id": 32,
       "Name": "spaCy_Retrain",
-      "Type": 0,
+      "Type": 2,
       "ReturnType": 0,
       "Params": {
         "a_text": 0,
@@ -358,7 +358,7 @@
     {
       "Id": 33,
       "Name": "Association_Rules",
-      "Type": 0,
+      "Type": 2,
       "ReturnType": 0,
       "Params": {
         "a_group": 0,
@@ -369,7 +369,7 @@
     {
       "Id": 34,
       "Name": "Keras_Set_Layers",
-      "Type": 0,
+      "Type": 2,
       "ReturnType": 0,
       "Params": {
         "a_model_name": 0,
@@ -382,7 +382,7 @@
     {
       "Id": 35,
       "Name": "Keras_Get_History",
-      "Type": 0,
+      "Type": 2,
       "ReturnType": 0,
       "Params": {
         "a_model_name": 0
