@@ -169,7 +169,7 @@
 	{
       "Id": 15,
       "Name": "sklearn_Bulk_Predict",
-      "Type": 0,
+      "Type": 2,
       "ReturnType": 0,
       "Params": {
         "a_model_name": 0,
@@ -190,7 +190,7 @@
 	{
       "Id": 17,
       "Name": "sklearn_Bulk_Predict_Proba",
-      "Type": 0,
+      "Type": 2,
       "ReturnType": 0,
       "Params": {
         "a_model_name": 0,

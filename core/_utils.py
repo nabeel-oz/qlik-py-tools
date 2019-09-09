@@ -282,11 +282,12 @@ def get_args_by_type(str_args):
         
     return result_list
 
-def convert_types(n_samples, features_df):
+def convert_types(n_samples, features_df, sort=True):
     """
     Convert data in n_samples to the correct data type based on the feature definitions.
-    Both parameters must be supplied as dataframes. The columns in n_samples must be equal to rows in features_df.
-    The features_df dataframe must have a "name" and a "data_type" column.
+    Optionally sort the data by the feature with "variable_type" set to "identifier". 
+    Both n_samples and features_df must be supplied as dataframes. The columns in n_samples must be equal to rows in features_df.
+    The features_df dataframe must have "name", "data_type" and "variable_type" columns.
     Accepted data_types are int, float, str, bool.
     """
     
@@ -307,7 +308,14 @@ def convert_types(n_samples, features_df):
         
         # Convert this column to the correct type
         n_samples.loc[:, col] = n_samples.loc[:, col].apply(types[dtypes[col]])     
-        
+
+    # Get the unique identifier from the feature definitions
+    identifier = features_df.loc[features_df["variable_type"] == "identifier"]
+
+    # Ensure the data is sorted by the identifier if available
+    if sort and len(identifier) == 1:
+        n_samples = n_samples.sort_values(by=[identifier.index[0]], ascending=True)
+
     return n_samples
 
 def atoi(a):
@@ -363,3 +371,40 @@ def dict_to_sse_arg(d):
             s = s + str(k) + "=" + str(v) + "|" + types[type(v)] + ", "
     
     return s[:-2]
+
+def add_lags(df, lag=1, extrapolate=1, dropna=True):
+    """
+    Take in a 2D DataFrame (n_samples by n_features) and create a new DataFrame with lag observations added to it.
+    E.g. If lags=2, the previous two observations will be concatenated as inputs to each sample.
+    The extrapolate argument can be used to add current (=1) and future observations (>1).
+    Samples without enough lags can be retained or dropped using the dropna argument.
+    The input DataFrame is assumed to be pre-sorted.
+    """
+    
+    n_features = df.shape[1]
+    
+    cols, names = list(), list()
+    
+    # input sequence (t-n, ... t-1)
+    for i in range(lag, 0, -1):
+        cols.append(df.shift(i))
+        names += ["{0}(t-{1})".format(df.columns[j],i) for j in range(n_features)]
+    
+    # forecast sequence (t, t+1, ... t+n)
+    for i in range(0, extrapolate):
+        cols.append(df.shift(-i))
+        if i == 0:
+            names += ["{0}(t)".format(df.columns[j]) for j in range(n_features)]
+        else:
+            names += ["{0}(t+{1})".format(df.columns[j], i) for j in range(n_features)]
+    
+    # Concatenate the shifted DataFrames
+    agg = pd.concat(cols, axis=1)
+    # Add the concatenated column names
+    agg.columns = names
+    
+    # drop rows with NaN values
+    if dropna:
+        agg.dropna(inplace=True)
+    
+    return agg

@@ -446,9 +446,23 @@ class SpaCyForQlik:
         # Save model to output directory:
         
         output_dir = pathlib.Path(self.path + self.model + '/')
+        lock_file = pathlib.Path(self.path + self.model + '.lock')
+        
+        # Create the output directory if required
         if not output_dir.exists():
             output_dir.mkdir(parents=True, exist_ok=False)
-        nlp.to_disk(output_dir)
+        # If the model is locked wait a few seconds
+        elif lock_file.exists():
+            time.sleep(2)
+            # If the model is still locked raise an exception
+            if lock_file.exists():
+                raise TimeoutError("The specified model is locked. If you believe this to be wrong please delete file {0}".format(lock_file))
+
+        try:
+            nlp.to_disk(output_dir)
+        finally:
+            # Delete the lock file
+            lock_file.unlink()
 
         # Debug information is printed to the terminal and logs if the paramater debug = true
         if self.debug:

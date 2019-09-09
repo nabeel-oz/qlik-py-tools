@@ -63,7 +63,7 @@ from keras import backend as kerasbackend
 sys.stderr = stderr
 
 import _utils as utils
-from _machine_learning import Preprocessor, PersistentModel, KerasClassifierForQlik, KerasRegressorForQlik
+from _machine_learning import Preprocessor, PersistentModel, Reshaper, KerasClassifierForQlik, KerasRegressorForQlik
 import ServerSideExtension_pb2 as SSE
 
 # Add Generated folder to module path
@@ -442,7 +442,12 @@ class SKLearnForQlik:
         # Add the feature definitions to the model
         self.model.features_df = self.request_df
         self.model.features_df.set_index("name", drop=False, inplace=True)
-               
+
+        # Ensure there is at most one feature with variable_type identifier
+        if len(self.model.features_df.loc[self.model.features_df["variable_type"] == "identifier"]) > 1:
+            err = "Invalid feature definitions. Detected more than one feature with variable_type set to identifier. You can only pass one unique identifier."
+            raise Exception(err)
+
         # Persist the model to disk
         self.model = self.model.save(self.model.name, self.path, self.model.compress)
         
@@ -533,36 +538,8 @@ class SKLearnForQlik:
         prep = Preprocessor(self.model.features_df, scale_hashed=self.model.scale_hashed, scale_vectors=self.model.scale_vectors,\
         missing=self.model.missing, scaler=self.model.scaler, logfile=self.logfile, **self.model.scaler_kwargs)
 
-        # Fit the preprocessor and transform the training data
-        # This is done outside the pipeline for training data to avoid repeating transformations in cross validation
-        self.X_train_transform = prep.fit_transform(self.X_train)
-        
-        # If this is a Keras estimator, update the input dimensions for the first layer in the architecture
-        try:
-            # Get the first layer's kwargs
-            first_layer_kwargs = self.model.architecture.iloc[0, 2]
-
-            # Setup input_shape if it has not been specified in the architecture
-            if 'input_shape' not in first_layer_kwargs:
-                first_layer_kwargs['input_shape'] = self.X_train_transform.shape[1]
-            # Else update the input shape based on the number of features after preprocessing
-            else:
-                first_layer_kwargs['input_shape'][-1] = self.X_train_transform.shape[1]
-
-            # Debug information is printed to the terminal and logs if the paramater debug = true
-            if self.model.debug:
-                self._print_log(10)
-
-            # Add the Keras build function and architecture to the estimator keyword arguments
-            self.model.estimator_kwargs['build_fn'] = self._keras_build_fn
-            self.model.estimator_kwargs['architecture'] = self.model.architecture
-        
-        # Expected error when this is not a Keras estimator and does not have the architecture attribute
-        except AttributeError:
-            pass
-
         # Setup a list to store steps for the sklearn pipeline
-        pipe_steps = []
+        pipe_steps = [('preprocessor', prep)]
 
         if self.model.dim_reduction:
             # Construct the dimensionality reduction object
@@ -573,6 +550,21 @@ class SKLearnForQlik:
             self.model.estimation_step = 1
         else:
             self.model.estimation_step = 0      
+
+        # If this is a Keras estimator, update the input shape and reshape the data if required
+        if self.model.estimator in ['KerasRegressor', 'KerasClassifier']:
+            # Add the Keras build function and architecture to the estimator keyword arguments
+            self.model.estimator_kwargs['build_fn'] = self._keras_build_fn
+            self.model.estimator_kwargs['architecture'] = self.model.architecture
+
+            # Debug information is printed to the terminal and logs if the paramater debug = true
+            if self.model.debug:
+                self._print_log(10)
+            
+            # Add a pipeline step to update the input shape and reshape the data if required
+            # This transform will also add lag observations if specified through the lags parameter
+            reshape = Reshaper(first_layer_kwargs=self.model.architecture.iloc[0, 2], lags=self.model.lags, logfile=self.logfile)
+            pipe_steps.append(('reshape', reshape))
         
         # Try assuming the pipeline involves a grid search
         try:
@@ -593,7 +585,7 @@ class SKLearnForQlik:
                 self._cross_validate()
 
             # Fit the training data to the pipeline
-            self.model.pipe.fit(self.X_train_transform, self.y_train.values.ravel())
+            self.model.pipe.fit(self.X_train, self.y_train.values.ravel())
 
             # Get the best parameters and the cross validation results
             grid_search = self.model.pipe.named_steps['grid_search']
@@ -621,10 +613,7 @@ class SKLearnForQlik:
                 self._cross_validate()
 
             # Fit the training data to the pipeline
-            self.model.pipe.fit(self.X_train_transform, self.y_train.values.ravel())
-        
-        # Add the previously fit preprocessor to the start of the pipeline to handle new data
-            self.model.pipe.steps.insert(0, ('preprocessor', prep))
+            self.model.pipe.fit(self.X_train, self.y_train.values.ravel())
         
         if self.model.validation == "hold-out":       
             # Evaluate the model using the test data            
@@ -1295,6 +1284,7 @@ class SKLearnForQlik:
         self.model.estimator_kwargs = {}
         self.model.missing = "zeros"
         self.model.calc_feature_importances = False
+        self.model.lags= None
         
         # Default metric parameters:
         if metric_args is None:
@@ -1322,6 +1312,13 @@ class SKLearnForQlik:
             # If cv > 0 then the model is validated used K = cv folds and the test_size parameter is ignored.
             if 'cv' in execution_args:
                 self.model.cv = utils.atoi(execution_args['cv'])
+            
+            # Add lag observations to the feature matrix. Only applicable for Keras models.
+            # An identifier field must be included in the feature definitions to correctly sort the data for this capability.
+            # For e.g. if lags=2, features from the previous two samples will be concatenated as input features for the current sample.
+            # This is useful for framing timeseries and sequence prediction problems into 3D or 4D data required for deep learning.
+            if 'lags' in execution_args:
+                self.model.lags = utils.atoi(execution_args['lags'])
             
             # Seed used by the random number generator when generating the training testing split
             if 'random_state' in execution_args:
@@ -1536,11 +1533,8 @@ class SKLearnForQlik:
                                      columns=self.model.features_df.loc[:,"name"].tolist(),\
                                      index=self.request_df.index)
         
-        # Convert the data types based on feature definitions 
+        # Convert the data types based on feature definitions and sort by the unique identifier (if defined in the definitions)
         samples_df = utils.convert_types(samples_df, self.model.features_df)
-
-        # Ensure the data is sorted by the identifier
-        samples_df = samples_df.sort_values(by=["identifier"], ascending=True)
         
         if target:
             # Get the target feature

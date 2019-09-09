@@ -54,6 +54,9 @@ class PersistentModel:
         
         # Create string for path and file name
         f = path + name + '.joblib'
+
+        # Create a path for the lock file
+        f_lock = f + '.lock'
                 
         # Create the directory if required
         try:
@@ -65,14 +68,28 @@ class PersistentModel:
         if Path(f).exists() and not self.overwrite:
             raise FileExistsError("The specified model name already exists: {0}.".format(name + '.joblib')\
                                   +"\nPass overwrite=True if it is ok to overwrite.")
+        # Check if the file is currently locked
+        elif Path(f_lock).exists():
+            # Wait a few seconds and check again
+            time.sleep(2)
+            # If the file is still locked raise an exception
+            if Path(f_lock).exists():
+                raise TimeoutError("The specified model is locked. If you believe this to be wrong please delete file {0}".format(f_lock))
         else:
             # Update properties
             self.name = name
             self.state = 'saved'
             self.state_timestamp = time.time()
             
-            # Store this instance to file
-            joblib.dump(self, filename=Path(f), compress=compress)
+            # Create the lock file
+            joblib.dump(f_lock, filename=Path(f_lock), compress=compress)
+
+            try:
+                # Store this instance to file
+                joblib.dump(self, filename=Path(f), compress=compress)
+            finally:
+                # Delete the lock file
+                Path(f_lock).unlink()
                 
         return self
     
@@ -729,20 +746,41 @@ class Reshaper(TransformerMixin):
     It is meant to be used after preprocessing and before fitting the estimator.
     """
 
-    def __init__(self, input_shape=None, logfile=None, **kwargs):
+    def __init__(self, first_layer_kwargs=None, lags=None, logfile=None, **kwargs):
         """
-        Initialize the Reshaper using the target input_shape.
+        Initialize the Reshaper with the Keras model first layer's kwargs.
+        Additionally take in the number of lag observations to be used in reshaping the data.
+        first_layer_kwargs is updated during fit and transform, so it must be a reference to the kwargs used to build the Keras model.
         Optional arguments are a logfile to output debug info.
         """
 
-        self.input_shape = input_shape
-        self.log = logfile
+        self.first_layer_kwargs = first_layer_kwargs
+        self.lags = lags
+        self.logfile = logfile
     
     def fit(self, X, y=None):
         """
+        Update the input shape based on the number of features in X.
         Return this Reshaper object.
-        Method for compatibility with scikit-learn API.
         """
+
+        # If it has not been specified, it is simply the number of features in X
+        if 'input_shape' not in self.first_layer_kwargs:
+            self.first_layer_kwargs['input_shape'] = tuple([X.shape[1]])
+        # Else update the input shape based on the number of features after preprocessing
+        else:
+            # Transform to a list to make the input_shape mutable
+            self.first_layer_kwargs['input_shape'] = list(self.first_layer_kwargs['input_shape'])
+            # Update the number of features based on X
+            self.first_layer_kwargs['input_shape'][-1] = X.shape[1]
+            # Transform back to a tuple as required by Keras
+            self.first_layer_kwargs['input_shape'] = tuple(self.first_layer_kwargs['input_shape'])
+        
+        self.input_shape = self.first_layer_kwargs['input_shape']
+
+        # Debug information is printed to the terminal and logs if required
+        if self.logfile:
+            self._print_log(1)
 
         return self
     
@@ -750,17 +788,45 @@ class Reshaper(TransformerMixin):
         """
         Apply the new shape to the data provided in X.
         X is expected to be a 2D DataFrame of samples and features.
+        If self.lags is an integer, previous samples will be used as lag observations and added as input for each sample.
+        The lags parameter is expected when using a 3D or 4D input shape.
         """
         
-        if not self.input_shape:
+        # If X is n_samples by n_features and no lags need to be added, we have nothing to do here
+        if (len(self.input_shape) == 1) and not self.lags:
             return X
+        
+        # Get the lag observations and add to X
+        if self.lags:
+            # Add the lag observations
+            X_transform = utils.add_lags(X, lag=self.lags, extrapolate=1, dropna=True)
 
-        # Do the transformation
-        X_transform = X
+            # Debug information is printed to the terminal and logs if required
+            if self.logfile:
+                self._print_log(2, data=X_transform)
+
+        # Only 2D, 3D and 4D data is valid.
+        # i.e The input_shape can be a tuple of (subsequences, timesteps, features), with subsequences and timesteps as optional.
+        if len(self.input_shape) > 3:
+                err = "Unsupported input_shape: {}".format(self.input_shape)
+                raise Exception(err)
+       
+        # Reshape for 3D/4D data
+        elif len(self.input_shape) > 1:
+            # Reshape input data using numpy
+            X_transform = X_transform.values.reshape(self.input_shape)
+
+            # Debug information is printed to the terminal and logs if required
+            if self.logfile:
+                self._print_log(3, data=X_transform)
+
+        # Update the original input_shape with the final number of features if necessary
+        if self.input_shape[-1] != X_transform.shape[-1]:
+            self.fit(X_transform, y)
 
         return X_transform
     
-    def _print_log(self, step):
+    def _print_log(self, step, data=None):
         """
         Print debug info to the log
         """
@@ -769,8 +835,14 @@ class Reshaper(TransformerMixin):
         mode = 'a'
 
         if step == 1:
+            # Output the updated input shape
+            output = "Input shape of the data: {0}\n\n".format(self.first_layer_kwargs['input_shape'])
+        elif step == 2:
+            # Output sample data after adding lag observations
+            output = "Lag observations added ({0} per sample).\nSample Data:\n{1}\n\n".format(self.lags, data.head())
+        elif step == 3:
             # Output sample data after reshaping
-            output = ""
+            output = "Input data reshaped to {0}.\nSample Data:\n{1}\n\n".format(data.shape, data[:5])
 
         sys.stdout.write(output)
         with open(self.logfile, mode, encoding='utf-8') as f:
