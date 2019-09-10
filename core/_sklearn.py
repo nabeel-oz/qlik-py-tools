@@ -23,6 +23,7 @@ from sklearn.model_selection import train_test_split
 from sklearn.model_selection import cross_validate
 from sklearn.model_selection import cross_val_predict
 from sklearn.model_selection import GridSearchCV
+from sklearn.model_selection import TimeSeriesSplit
 
 from sklearn.decomposition import PCA, KernelPCA, IncrementalPCA, TruncatedSVD, FactorAnalysis, FastICA, NMF, SparsePCA,\
                                 DictionaryLearning, LatentDirichletAllocation, MiniBatchDictionaryLearning, MiniBatchSparsePCA
@@ -508,7 +509,11 @@ class SKLearnForQlik:
 
         # Check which validation strategy is to be used, if any
         # For an explanation of cross validation in scikit-learn see: http://scikit-learn.org/stable/modules/cross_validation.html#multimetric-cross-validation
-        if self.model.cv > 0:
+        if self.model.time_series_split > 0:
+            self.model.validation = "timeseries"
+            # Set up cross validation to be performed using TimeSeriesSplit
+            self.model.cv = TimeSeriesSplit(n_splits=self.model.time_series_split, max_train_size=self.model.max_train_size)
+        elif self.model.cv > 0:
             self.model.validation = "k-fold"
         elif self.model.test_size > 0:
             self.model.validation = "hold-out"
@@ -580,7 +585,7 @@ class SKLearnForQlik:
             # Construct the sklearn pipeline using the list of steps
             self.model.pipe = Pipeline(pipe_steps)
 
-            if self.model.validation == "k-fold":
+            if self.model.validation in ["k-fold", "timeseries"]:
                 # Perform K-fold cross validation
                 self._cross_validate()
 
@@ -964,8 +969,8 @@ class SKLearnForQlik:
             err = "The number of input columns do not match feature definitions. Ensure you are using the | delimiter and that the target is not included in your input to the prediction function."
             raise AssertionError(err) from ae
         
-        # Convert the data types based on feature definitions 
-        self.X = utils.convert_types(self.X, self.model.features_df)
+        # Convert the data types based on feature definitions and sort by the unique identifier (if defined in the definitions)
+        self.X = utils.convert_types(self.X, self.model.features_df, sort=True)
 
         if variant in ('predict_proba', 'predict_log_proba'):
             # If probabilities need to be returned
@@ -1274,6 +1279,8 @@ class SKLearnForQlik:
         self.model.debug = False
         self.model.test_size = 0.33
         self.model.cv = 0
+        self.model.time_series_split = 0
+        self.model.max_train_size = None
         self.model.random_state = 42
         self.model.compress = 3
         self.model.retain_data = False
@@ -1313,6 +1320,18 @@ class SKLearnForQlik:
             if 'cv' in execution_args:
                 self.model.cv = utils.atoi(execution_args['cv'])
             
+            # Enable timeseries backtesting using TimeSeriesSplit. https://scikit-learn.org/stable/modules/generated/sklearn.model_selection.TimeSeriesSplit.html
+            # This will select the a validation strategy appropriate for time series and sequential data.
+            # The feature definitions must include an 'identifier' field which can be used to sort the series into the correct order.
+            # The integer supplied in this parameter will split the data into the given number of subsets for training and testing.
+            if 'time_series_split' in execution_args:
+                self.model.time_series_split = utils.atoi(execution_args['time_series_split'])
+
+            # This parameter can be used together with time_series_split.
+            # It specifies the maximum samples to be used for training in each split, which allows for rolling/ walk forward validation.
+            if 'max_train_size' in execution_args:
+                self.model.max_train_size = utils.atoi(execution_args['max_train_size'])
+
             # Add lag observations to the feature matrix. Only applicable for Keras models.
             # An identifier field must be included in the feature definitions to correctly sort the data for this capability.
             # For e.g. if lags=2, features from the previous two samples will be concatenated as input features for the current sample.
@@ -1534,7 +1553,7 @@ class SKLearnForQlik:
                                      index=self.request_df.index)
         
         # Convert the data types based on feature definitions and sort by the unique identifier (if defined in the definitions)
-        samples_df = utils.convert_types(samples_df, self.model.features_df)
+        samples_df = utils.convert_types(samples_df, self.model.features_df, sort=True)
         
         if target:
             # Get the target feature
@@ -1599,12 +1618,12 @@ class SKLearnForQlik:
             scoring = ['r2', 'neg_mean_squared_error', 'neg_mean_absolute_error', 'neg_median_absolute_error', 'explained_variance']
         
         # Perform cross validation using the training data and the model pipeline
-        scores = cross_validate(self.model.pipe, self.X_train_transform, y_train, scoring=scoring, cv=self.model.cv, fit_params=fit_params, return_train_score=False)
+        scores = cross_validate(self.model.pipe, self.X_train, y_train, scoring=scoring, cv=self.model.cv, fit_params=fit_params, return_train_score=False)
 
         # Prepare the metrics data frame according to the output format
         if self.model.estimator_type == "classifier":           
             # Get cross validation predictions for the confusion matrix
-            y_pred = cross_val_predict(self.model.pipe, self.X_train_transform, y_train, cv=self.model.cv, fit_params=fit_params)
+            y_pred = cross_val_predict(self.model.pipe, self.X_train, y_train, cv=self.model.cv, fit_params=fit_params)
 
             # Prepare the confusion matrix and add it to the model
             self._prep_confusion_matrix(y_train, y_pred, labels)

@@ -4,6 +4,7 @@ import sys
 import time
 import string
 import pathlib
+import joblib
 import random
 import warnings
 import numpy as np
@@ -459,6 +460,10 @@ class SpaCyForQlik:
                 raise TimeoutError("The specified model is locked. If you believe this to be wrong please delete file {0}".format(lock_file))
 
         try:
+            # Create the lock file
+            joblib.dump(self.path + self.model, filename=lock_file)
+
+            # Store the spaCy model to disk
             nlp.to_disk(output_dir)
         finally:
             # Delete the lock file
