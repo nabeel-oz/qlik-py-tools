@@ -613,7 +613,7 @@ class SKLearnForQlik:
             # Construct the sklearn pipeline using the list of steps
             self.model.pipe = Pipeline(pipe_steps)
 
-            if self.model.validation == "k-fold":
+            if self.model.validation in ["k-fold", "timeseries"]:
                 # Perform K-fold cross validation
                 self._cross_validate()
 

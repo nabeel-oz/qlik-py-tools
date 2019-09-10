@@ -805,13 +805,15 @@ class Reshaper(TransformerMixin):
             if self.logfile:
                 self._print_log(2, data=X_transform)
 
-        # Only 2D, 3D and 4D data is valid.
-        # i.e The input_shape can be a tuple of (subsequences, timesteps, features), with subsequences and timesteps as optional.
-        if len(self.input_shape) > 3:
+        # 2D, 3D and 4D data is valid. 
+        # As per the Keras convention, samples should not be specified in the input shape.
+        # e.g. The input_shape can be a tuple of (subsequences, timesteps, features), with subsequences and timesteps as optional.
+        # A 5D shape may be valid for e.g. a ConvLSTM with (timesteps, rows, columns, features) 
+        if len(self.input_shape) > 4:
                 err = "Unsupported input_shape: {}".format(self.input_shape)
                 raise Exception(err)
        
-        # Reshape for 3D/4D data
+        # Reshape the data
         elif len(self.input_shape) > 1:
             # Reshape input data using numpy
             X_transform = X_transform.values.reshape(self.input_shape)
@@ -821,6 +823,7 @@ class Reshaper(TransformerMixin):
                 self._print_log(3, data=X_transform)
 
         # Update the original input_shape with the final number of features if necessary
+        # This is expected if no lag observations were added during transform, yet the data was reshaped
         if self.input_shape[-1] != X_transform.shape[-1]:
             self.fit(X_transform, y)
 
