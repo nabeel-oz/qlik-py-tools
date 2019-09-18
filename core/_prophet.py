@@ -333,25 +333,24 @@ class ProphetForQlik:
         
         # Set optional parameters
         
-        # Check if there is a fourth column in the request
-        try:
-            # If there is a fourth column, it is assumed to contain the key word arguments
-            args = self.request[0].rows[0].duals[3].strData
-            
-            # The third column should then provide the holiday name or null for each row
+        # Check the number of columns in the request to determine whether we have holidays and/or added regressors
+        cols = len(self.request[0].rows[0])
+        self.has_holidays = False
+        self.has_regressors = False
+
+        # If we receive five columns, we expect both holidays and additional regressors
+        if cols == 5:
+            self.has_regressors = True
+        # For a request with four columns, we only expect holidays
+        if cols >= 4:
             self.has_holidays = True
-            
-        except IndexError:
-            # If there is no fourth column, the request does not include holidays
-            self.has_holidays = False
-        
-        # If the fourth column did not exist, we try again with the third column
-        if not self.has_holidays:
-            try:
-                args = self.request[0].rows[0].duals[2].strData
-            except IndexError:
-                args = None
-        
+
+        # If there are three or more columns, the last column should contain the key word arguments        
+        if cols < 3:
+            args = None
+        else:
+            args = self.request[0].rows[0].duals[cols-1].strData
+                
         # If the key word arguments were included in the request, get the parameters and values
         if args is not None:
             
@@ -535,7 +534,6 @@ class ProphetForQlik:
             fit_params = ['seed']
             # Create dictionary of key word arguments for the fit() function
             self.fit_kwargs = self._populate_dict(fit_params)
-
             
     def _populate_dict(self, params):
         """

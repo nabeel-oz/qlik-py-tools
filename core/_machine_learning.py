@@ -45,11 +45,12 @@ class PersistentModel:
         self.state_timestamp = None
         self.overwrite = False
         
-    def save(self, name, path, compress=3):
+    def save(self, name, path, compress=3, locked_timeout=2):
         """
         Save the model to disk at the specified path.
         If the model already exists and self.overwrite=False, throw an exception.
         If self.overwrite=True, replace any existing file.
+        If the model is found to be locked, wait 'locked_timeout' seconds and try again before quitting.
         """
         
         # Create string for path and file name
@@ -71,10 +72,10 @@ class PersistentModel:
         # Check if the file is currently locked
         elif Path(f_lock).exists():
             # Wait a few seconds and check again
-            time.sleep(2)
+            time.sleep(locked_timeout)
             # If the file is still locked raise an exception
             if Path(f_lock).exists():
-                raise TimeoutError("The specified model is locked. If you believe this to be wrong please delete file {0}".format(f_lock))
+                raise TimeoutError("The specified model is locked. If you believe this to be wrong, please delete file {0}".format(f_lock))
         else:
             # Update properties
             self.name = name
@@ -746,16 +747,18 @@ class Reshaper(TransformerMixin):
     It is meant to be used after preprocessing and before fitting the estimator.
     """
 
-    def __init__(self, first_layer_kwargs=None, lags=None, logfile=None, **kwargs):
+    def __init__(self, first_layer_kwargs=None, lags=None, lag_target=False, logfile=None, **kwargs):
         """
         Initialize the Reshaper with the Keras model first layer's kwargs.
         Additionally take in the number of lag observations to be used in reshaping the data.
+        If lag_target is True, an additional feature will be created for each sample i.e. the previous value of y 
         first_layer_kwargs is updated during fit and transform, so it must be a reference to the kwargs used to build the Keras model.
         Optional arguments are a logfile to output debug info.
         """
 
         self.first_layer_kwargs = first_layer_kwargs
         self.lags = lags
+        self.lag_target = lag_target
         self.logfile = logfile
     
     def fit(self, X, y=None):
@@ -776,7 +779,10 @@ class Reshaper(TransformerMixin):
             # Transform back to a tuple as required by Keras
             self.first_layer_kwargs['input_shape'] = tuple(self.first_layer_kwargs['input_shape'])
         
-        self.input_shape = self.first_layer_kwargs['input_shape']
+        # Create the input_shape property as a list
+        self.input_shape = list(self.first_layer_kwargs['input_shape'])
+        # Add the number of samples to the input_shape
+        self.input_shape.insert(0, X.shape[0])
 
         # Debug information is printed to the terminal and logs if required
         if self.logfile:
@@ -789,32 +795,44 @@ class Reshaper(TransformerMixin):
         Apply the new shape to the data provided in X.
         X is expected to be a 2D DataFrame of samples and features.
         If self.lags is an integer, previous samples will be used as lag observations and added as input for each sample.
+        If self.lag_target is True, an additional feature will be created for each sample i.e. the previous value of y 
         The lags parameter is expected when using a 3D or 4D input shape.
         """
         
         # If X is n_samples by n_features and no lags need to be added, we have nothing to do here
-        if (len(self.input_shape) == 1) and not self.lags:
+        if (len(self.input_shape) == 2) and not self.lags:
             return X
         
         # Get the lag observations and add to X
         if self.lags:
+            X_transform = X.copy()
+
+            # Add targets to the lag observations if required
+            # This will create an additional feature for each sample i.e. the previous value of y 
+            if y is not None and self.lag_target:
+                X_transform = X.copy()
+                X_transform["previous_y"] = y
+                X_transform["previous_y"] = X_transform["previous_y"].shift(1)
+
+                # Update the number of features in the input shape
+                self.input_shape[-1] = X_transform.shape[1]
+            
             # Add the lag observations
-            X_transform = utils.add_lags(X, lag=self.lags, extrapolate=1, dropna=True)
+            X_transform = utils.add_lags(X_transform, lag=self.lags, extrapolate=1, dropna=True, suffix="t")
 
             # Debug information is printed to the terminal and logs if required
             if self.logfile:
                 self._print_log(2, data=X_transform)
 
         # 2D, 3D and 4D data is valid. 
-        # As per the Keras convention, samples should not be specified in the input shape.
-        # e.g. The input_shape can be a tuple of (subsequences, timesteps, features), with subsequences and timesteps as optional.
-        # A 5D shape may be valid for e.g. a ConvLSTM with (timesteps, rows, columns, features) 
-        if len(self.input_shape) > 4:
+        # e.g. The input_shape can be a tuple of (samples, subsequences, timesteps, features), with subsequences and timesteps as optional.
+        # A 5D shape may be valid for e.g. a ConvLSTM with (samples, timesteps, rows, columns, features) 
+        if len(self.input_shape) > 5:
                 err = "Unsupported input_shape: {}".format(self.input_shape)
                 raise Exception(err)
        
         # Reshape the data
-        elif len(self.input_shape) > 1:
+        elif len(self.input_shape) > 2:
             # Reshape input data using numpy
             X_transform = X_transform.values.reshape(self.input_shape)
 
@@ -822,10 +840,8 @@ class Reshaper(TransformerMixin):
             if self.logfile:
                 self._print_log(3, data=X_transform)
 
-        # Update the original input_shape with the final number of features if necessary
-        # This is expected if no lag observations were added during transform, yet the data was reshaped
-        if self.input_shape[-1] != X_transform.shape[-1]:
-            self.fit(X_transform, y)
+        # Update the original input_shape in the Keras architecture to match X_transform
+        self.first_layer_kwargs['input_shape'] = tuple(self.input_shape[1:])
 
         return X_transform
     

@@ -372,7 +372,7 @@ def dict_to_sse_arg(d):
     
     return s[:-2]
 
-def add_lags(df, lag=1, extrapolate=1, dropna=True):
+def add_lags(df, lag=1, extrapolate=1, dropna=True, suffix="t"):
     """
     Take in a 2D DataFrame (n_samples by n_features) and create a new DataFrame with lag observations added to it.
     E.g. If lags=2, the previous two observations will be concatenated as inputs to each sample.
@@ -388,15 +388,15 @@ def add_lags(df, lag=1, extrapolate=1, dropna=True):
     # input sequence (t-n, ... t-1)
     for i in range(lag, 0, -1):
         cols.append(df.shift(i))
-        names += ["{0}(t-{1})".format(df.columns[j],i) for j in range(n_features)]
+        names += ["{0}({1}-{2})".format(df.columns[j], suffix, i) for j in range(n_features)]
     
     # forecast sequence (t, t+1, ... t+n)
     for i in range(0, extrapolate):
         cols.append(df.shift(-i))
         if i == 0:
-            names += ["{0}(t)".format(df.columns[j]) for j in range(n_features)]
+            names += ["{0}({1})".format(df.columns[j], suffix) for j in range(n_features)]
         else:
-            names += ["{0}(t+{1})".format(df.columns[j], i) for j in range(n_features)]
+            names += ["{0}({1}+{2})".format(df.columns[j], suffix, i) for j in range(n_features)]
     
     # Concatenate the shifted DataFrames
     agg = pd.concat(cols, axis=1)

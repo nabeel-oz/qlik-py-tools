@@ -390,6 +390,9 @@ class SKLearnForQlik:
         # Add the architecture to the model
         self.model.architecture = architecture
 
+        # Add the first layer's kwargs as a property for easy reference
+        self.model.first_layer_kwargs = self.model.architecture.iloc[0, 2]
+
         # Debug information is printed to the terminal and logs if the paramater debug = true
         if self.model.debug:
             self._print_log(10)
@@ -500,7 +503,7 @@ class SKLearnForQlik:
         """
         
         # Open an existing model and get the training & test dataset and targets
-        train_test_df, target_df = self._get_model_and_data()
+        train_test_df, target_df = self._get_model_and_data(set_feature_def = True)
         
         # Check that the estimator is an supervised ML algorithm
         if self.model.estimator_type not in ["classifier", "regressor"]:
@@ -566,9 +569,15 @@ class SKLearnForQlik:
             if self.model.debug:
                 self._print_log(10)
             
+            # Check than an identifier has been provided for sorting data if this is a sequence prediction problem
+            if self.model.lags or len(self.model.first_layer_kwargs["input_shape"]) > 1:
+                assert len(self.model.original_features_df[self.model.original_features_df['variable_type'].isin(["identifier"])]) == 1, \
+                    "An identifier is mandatory when using lags or with sequence prediction problems. Define this field in your feature definitions."
+
             # Add a pipeline step to update the input shape and reshape the data if required
             # This transform will also add lag observations if specified through the lags parameter
-            reshape = Reshaper(first_layer_kwargs=self.model.architecture.iloc[0, 2], lags=self.model.lags, logfile=self.logfile)
+            # If lag_target is True, an additional feature will be created for each sample using the previous value of y 
+            reshape = Reshaper(first_layer_kwargs=self.model.first_layer_kwargs, lags=self.model.lags, lag_target=self.model.lag_target, logfile=self.logfile)
             pipe_steps.append(('reshape', reshape))
         
         # Try assuming the pipeline involves a grid search
@@ -969,8 +978,8 @@ class SKLearnForQlik:
             err = "The number of input columns do not match feature definitions. Ensure you are using the | delimiter and that the target is not included in your input to the prediction function."
             raise AssertionError(err) from ae
         
-        # Convert the data types based on feature definitions and sort by the unique identifier (if defined in the definitions)
-        self.X = utils.convert_types(self.X, self.model.features_df, sort=True)
+        # Convert the data types based on feature definitions 
+        self.X = utils.convert_types(self.X, self.model.features_df, sort=False)
 
         if variant in ('predict_proba', 'predict_log_proba'):
             # If probabilities need to be returned
@@ -1021,6 +1030,102 @@ class SKLearnForQlik:
                 self._print_log(4)
             
             return self.response.loc[:,'result']
+    
+    def keras_sequence_predict(self, load_script=False, variant="predict"):
+        """
+        Make Predictions using a trained Keras model. 
+        This function is built for sequence and time series predictions. For traditional ML simply use the predict function.
+        For sequence prediction we expect reshaping of data for e.g. based on n lag periods. 
+        A previous prediction then needs to be fed as input to the next prediction. 
+        
+        The input data will be reshaped based on the input_shape specified in the Keras model's architecture and the lags parameter.
+        Therefore, ensure the number of features and historical data passed to get a prediction matches the model's requirements.
+        If the previous target is being included in the lag observations, i.e. the lag_target parameter was set to True,
+        include the target in n_features in the same order as the feature definitions provided during model training. 
+        The target can be empty or 0 for future periods.
+
+        The 
+
+        If variant='predict_proba', we return the predicted probabilties for each sample. Otherwise, we simply return the predictions.
+        
+        This method can be called from a chart expression or the load script in Qlik. 
+        The load_script flag needs to be set accordingly for the correct response.
+        """
+
+        # Open an existing model and get the input dataset. 
+        # Target for historical data are expected if using previous targets as a feature.
+        X, y = self._get_model_and_data(target=self.model.lag_target, ordered_data=True) 
+        
+        # Transform target to the expected shape
+        y = y.values.ravel()
+
+        # Check that the input data includes history to meet any lag calculation requirements
+        if self.model.lags:
+            # An additional lag observation is needed if previous targets are being added to the features
+            lag_requirement = self.model.lags+2 if self.model.lag_target else self.model.lags+1
+            assert len(X) >= lag_requirement, "Insufficient input data as the model requires {} lag periods".format(lag_requirement)
+                
+        # Get the input shape for the model
+        input_shape = self.model.first_layer_kwargs["input_shape"]
+        # Calculate the number of rows required for one prediction
+        rows_per_pred = np.prod(input_shape[:-1])
+
+        # Prepare the response DataFrame
+        # Initially set up with the 'model_name' and 'key' columns and the same index as request_df
+        self.response = self.request_df.drop(columns=['n_features', 'kwargs'])
+
+        # Set up a list to contain prediction probabilities if required
+        if variant == 'predict_proba':
+            get_proba =  True
+            probabilities = []
+        
+        # Get the predictions by walking forward over the data
+        for i in range(rows_per_pred, len(X)):
+            batch_X = X[i-rows_per_pred : i]
+            batch_y = y[i-rows_per_pred : i]
+
+            # Get prediction and add to y for use in the next step
+            y[i] = self.model.pipe.predict(batch_X, y = batch_y)
+
+            # If probabilities need to be returned
+            if get_proba:
+                # Get the predicted probability for each sample 
+                probabilities.append(self.model.pipe.predict_proba(batch_X, y = batch_y))
+        
+        # Transform probabilities to a readable string
+        if get_proba:
+            y = []
+            for a in probabilities:
+                s = ""
+                i = 0
+                for b in a:
+                    s = s + ", {0}: {1:.3f}".format(self.model.pipe.named_steps['estimator'].classes_[i], b)
+                    i += 1
+                y.append(s[2:])
+        
+        # Add predictions / probabilities to the response
+        self.response['result'] = y
+
+        # Reindex the response to reset to the original sort order
+        self.response = self.response.reindex(self.original_index)
+        
+        if load_script:
+            # If the function was called through the load script we return a Data Frame
+            self._send_table_description("predict")
+            
+            # Debug information is printed to the terminal and logs if the paramater debug = true
+            if self.model.debug:
+                self._print_log(4)
+            
+            return self.response
+            
+        # If the function was called through a chart expression we return a Series
+        else:
+            # Debug information is printed to the terminal and logs if the paramater debug = true
+            if self.model.debug:
+                self._print_log(4)
+            
+            return self.response.loc[:,'result']    
     
     def explain_importances(self):
         """
@@ -1292,6 +1397,7 @@ class SKLearnForQlik:
         self.model.missing = "zeros"
         self.model.calc_feature_importances = False
         self.model.lags= None
+        self.model.lag_target = False
         
         # Default metric parameters:
         if metric_args is None:
@@ -1338,6 +1444,11 @@ class SKLearnForQlik:
             # This is useful for framing timeseries and sequence prediction problems into 3D or 4D data required for deep learning.
             if 'lags' in execution_args:
                 self.model.lags = utils.atoi(execution_args['lags'])
+
+            # Include targets in the lag observations
+            # If True an additional feature will be created for each sample using the previous value of y 
+            if 'lag_target' in execution_args:
+                self.model.lag_target = 'true' == execution_args['lag_target'].lower()
             
             # Seed used by the random number generator when generating the training testing split
             if 'random_state' in execution_args:
@@ -1521,18 +1632,32 @@ class SKLearnForQlik:
         if self.model.debug:
             self._print_log(3)
     
-    def _get_model_and_data(self, target=True):
+    def _get_model_and_data(self, target=True, set_feature_def=False, ordered_data=False):
         """
         Get samples and targets based on the request and an existing model's feature definitions.
         If target=False, just return the samples.
+        If set_feature_def=True, set the feature definitions for the model.
+        If ordered_data=True, the request is expected to have a key field which will be used as an index. 
+        The index will be stored in its original and sorted form in instance variables self.original_index and self.sorted_index
         """
     
         # Interpret the request data based on the expected row and column structure
         row_template = ['strData', 'strData']
         col_headers = ['model_name', 'n_features']
+
+        # If True, the request is expected to have a key field which will be used as an index.
+        if ordered_data:
+            row_template.append('strData')
+            col_headers.insert(1, 'key')
         
         # Create a Pandas Data Frame for the request data
         self.request_df = utils.request_df(self.request, row_template, col_headers)
+
+        if ordered_data:
+            # Set the key column as the index
+            self.request_df.set_index("key", drop=True, inplace=True)
+            # Store this index so we can reset the data to its original sort order
+            self.original_index = self.request_df.index.copy()
         
         # Initialize the persistent model
         self.model = PersistentModel()
@@ -1546,30 +1671,57 @@ class SKLearnForQlik:
         # Debug information is printed to the terminal and logs if the paramater debug = true
         if self.model.debug:
             self._print_log(3)
+
+        # Get the expected features for this request
+        if set_feature_def:
+            features_df = self.model.features_df
+        else:
+            features_df = self.model.original_features_df
+            exclude = ["excluded"]
+
+            if not target:
+                exclude.append("target")
+            if not ordered_data:
+                exclude.append("identifier")
+
+            # Exclude columns that are not expected in the request data
+            exclusions = features_df['variable_type'].isin(exclude)
+            features_df = features_df.loc[~exclusions]
         
-        # Split the features provided as a string into individual columns
-        samples_df = pd.DataFrame([x[1].split("|") for x in self.request_df.values.tolist()],\
-                                     columns=self.model.features_df.loc[:,"name"].tolist(),\
-                                     index=self.request_df.index)
+        try:
+            # Split the features provided as a string into individual columns
+            samples_df = pd.DataFrame([x[1].split("|") for x in self.request_df.values.tolist()],\
+                                            columns=features_df.loc[:,"name"].tolist(),\
+                                            index=self.request_df.index)
+        except AssertionError as ae:
+            err = "The number of input columns do not match feature definitions. Ensure you are using the | delimiter and providing the correct features."
+            err += "\n\nSample rows:\n{}\n\nExpected Features:\n{}\n".format(self.request_df.head(3), features_df.loc[:,"name"].tolist())
+            raise AssertionError(err) from ae
         
         # Convert the data types based on feature definitions and sort by the unique identifier (if defined in the definitions)
-        samples_df = utils.convert_types(samples_df, self.model.features_df, sort=True)
+        samples_df = utils.convert_types(samples_df, features_df, sort=True)
+
+        if ordered_data:
+            # Store the sorted index 
+            self.sorted_index = samples_df.index.copy()
         
         if target:
             # Get the target feature
-            # NOTE: This code block will need to be reviewed for multi-label classification
             target_name = self.model.features_df.loc[self.model.features_df["variable_type"] == "target"].index[0]
 
             # Get the target data
             target_df = samples_df.loc[:,[target_name]]
-
-        # Get the features to be excluded from the model
-        exclusions = self.model.features_df['variable_type'].isin(["excluded", "target", "identifier"])
         
         # Update the feature definitions dataframe
-        self.model.features_df = self.model.features_df.loc[~exclusions]
+        if set_feature_def:
+            # Get the features to be excluded from the model
+            exclusions = features_df['variable_type'].isin(["excluded", "target", "identifier"])
+            # Store the original feature definitions
+            self.model.original_features_df = features_df.copy()
+            # Store the featuer definitions except exclusions
+            self.model.features_df = features_df.loc[~exclusions]
         
-        # Remove excluded features from the data
+        # Remove excluded features, target and identifier from the data
         samples_df = samples_df[self.model.features_df.index.tolist()]
         
         if target:

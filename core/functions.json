@@ -387,6 +387,63 @@
       "Params": {
         "a_model_name": 0
       }
+    },
+    {
+      "Id": 36,
+      "Name": "Keras_Predict_Sequence",
+      "Type": 2,
+      "ReturnType": 0,
+      "Params": {
+        "a_model_name": 0,
+        "b_key": 0,
+        "n_features": 0
+      }
+    },
+    {
+      "Id": 37,
+      "Name": "Keras_Bulk_Predict_Sequence",
+      "Type": 2,
+      "ReturnType": 0,
+      "Params": {
+        "a_model_name": 0,
+        "b_key": 0,
+        "n_features": 0
+      }
+    },
+    {
+      "Id": 38,
+      "Name": "Keras_Predict_Proba_Sequence",
+      "Type": 2,
+      "ReturnType": 0,
+      "Params": {
+        "a_model_name": 0,
+        "b_key": 0,
+        "n_features": 0
+      }
+    },
+    {
+      "Id": 39,
+      "Name": "Keras_Bulk_Predict_Proba_Sequence",
+      "Type": 2,
+      "ReturnType": 0,
+      "Params": {
+        "a_model_name": 0,
+        "b_key": 0,
+        "n_features": 0
+      }
+    },
+    {
+      "Id": 40,
+      "Name": "Prophet_Multivariate",
+      "Type": 0,
+      "ReturnType": 1,
+      "Params": {
+        "a_date": 2,
+        "b_value": 1,
+        "c_holidays": 2,
+        "d_added_regressors": 0,
+        "e_other_args": 0
+      }
     }
   ]
 }

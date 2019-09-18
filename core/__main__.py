@@ -109,7 +109,12 @@ class ExtensionService(SSE.ConnectorServicer):
             32: '_spacy',
             33: '_misc',
             34: '_sklearn',
-            35: '_sklearn'
+            35: '_sklearn',
+            36: '_sklearn',
+            37: '_sklearn',
+            38: '_sklearn',
+            39: '_sklearn',
+            40: '_prophet'
         }
 
     """
@@ -488,7 +493,7 @@ class ExtensionService(SSE.ConnectorServicer):
             response = model.fit()
             dtypes = ["str", "str", "str", "str", "num"]
         
-        elif function in (14, 16, 19, 20, 27):
+        elif function in (14, 16, 19, 20, 27, 36):
             if function == 14:
                 # Provide predictions in a chart expression based on an existing model
                 response = model.predict(load_script=False)
@@ -504,10 +509,16 @@ class ExtensionService(SSE.ConnectorServicer):
             elif function == 27:
                 # Get labels for clustering
                 response = model.fit_transform(load_script=False)
+            elif function == 36:
+                # Get sequence predictions from Keras
+                response = model.keras_sequence_predict(load_script=False)
+            elif function == 38:
+                # Get sequence prediction probabilities from Keras
+                response = model.keras_sequence_predict(load_script=False, variant="predict_proba")
             
             dtypes = ["str"]
             
-        elif function in (15, 17, 28):
+        elif function in (15, 17, 28, 37):
             if function == 15:
                 # Provide predictions in the load script based on an existing model
                 response = model.predict(load_script=True)    
@@ -517,6 +528,12 @@ class ExtensionService(SSE.ConnectorServicer):
             elif function == 28:
                 # Provide labels for clustering
                 response = model.fit_transform(load_script=True)
+            elif function == 37:
+                # Get sequence predictions from Keras
+                response = model.keras_sequence_predict(load_script=True)
+            elif function == 39:
+                # Get sequence prediction probabilities from Keras
+                response = model.keras_sequence_predict(load_script=True, variant="predict_proba")
 
             dtypes = ["str", "str", "str"]
         
