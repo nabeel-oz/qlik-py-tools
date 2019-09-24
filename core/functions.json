@@ -442,7 +442,22 @@
         "b_value": 1,
         "c_holidays": 2,
         "d_added_regressors": 0,
-        "e_other_args": 0
+        "e_regressor_args": 0,
+        "f_other_args": 0
+      }
+    },
+    {
+      "Id": 41,
+      "Name": "Prophet_Seasonality_Multivariate",
+      "Type": 0,
+      "ReturnType": 1,
+      "Params": {
+        "a_season": 2,
+        "b_time_series": 0,
+        "c_holidays": 0,
+        "d_added_regressors": 0,
+        "e_regressor_args": 0,
+        "f_other_args": 0
       }
     }
   ]

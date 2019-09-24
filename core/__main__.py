@@ -114,7 +114,8 @@ class ExtensionService(SSE.ConnectorServicer):
             37: '_sklearn',
             38: '_sklearn',
             39: '_sklearn',
-            40: '_prophet'
+            40: '_prophet',
+            41: '_prophet_seasonality'
         }
 
     """
