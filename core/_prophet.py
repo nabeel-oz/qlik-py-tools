@@ -70,11 +70,11 @@ class ProphetForQlik:
         self.request_df.loc[:,'ds'] = pd.to_datetime(self.request_df.loc[:,'ds'], unit=self.qlik_cal_unit,
                                                      origin=self.qlik_cal_start)
         
-        # If the request contains holidays update the ds column for it as well
+        # If the request contains holidays, prepare a holidays data frame
         if self.has_holidays:
             self._prep_holidays()
         
-        # If the request contains additional regressors add them to a regressors data frame
+        # If the request contains additional regressors, add them to a regressors data frame
         if self.has_regressors:
             self._prep_regressors()
         
@@ -84,6 +84,10 @@ class ProphetForQlik:
         # Store the original indexes for re-ordering output later
         self.request_index = self.request_df.loc[:,'ds']
         
+        # Add additional regressors to the request data frame
+        if self.has_regressors:
+            self.request_df = self.request_df.merge(self.regressors_df, how='left', left_index=True, right_index=True)
+
         # Ignore the placeholder rows which will be filled with forecasted figures later
         self.input_df = self.request_df.iloc[:-self.periods].copy()
         
@@ -108,10 +112,6 @@ class ProphetForQlik:
             
             if self.floor is not None:
                 self.input_df.loc[:,'floor'] = self.floor
-
-        # Add additional regressors to the input data frame
-        if self.has_regressors:
-            self.input_df.merge(self.regressors_df.iloc[:-self.periods], left_index=True, right_index=True)
             
         if self.debug:
             self._print_log(2)
@@ -277,28 +277,40 @@ class ProphetForQlik:
         
         # Add additional regressors to the future data frame
         if self.has_regressors:
-            index_slice = self.regressors_df.shape[0] - self.periods
+            # index_slice = self.regressors_df.shape[0] - self.periods
             for regressor in self.regressors_df.columns:
-                self.future_df[regressor] = self.regressors_df.loc[index_slice:, regressor]
+                self.future_df[regressor] = self.regressors_df.loc[:, regressor]
+
+        if self.debug:
+            self._print_log(4)
 
         # Prepare the forecast
         self._forecast()
-        
-        if self.debug:
-            self._print_log(4)
-        
+                
         # If the function was called through the load script we return a Data Frame
         if self.load_script:            
-            # Create an additional series to be added to the response with input ds values as strings
-            ds = self.request_df['ds'].dt.strftime('%Y-%m-%d %r')
-            # Add the ds column to the output
-            self.response = pd.concat([ds, self.forecast.loc[:,self.result_type]], axis=1)
-
+            # If the response is the seasonality plot we return all seasonality components
+            if self.is_seasonality_request:
+                # Add an index column to the response
+                self.response = self.forecast.reset_index()
+            # Otherwise we add dates to the response
+            else:
+                # Set up the response data frame
+                self.response = self.forecast if self.result_type == 'all' else self.forecast.loc[:, ['ds', self.result_type]]
+                # Update the ds column as formatted strings
+                self.response['ds'] = self.request_df['ds'].dt.strftime('%Y-%m-%d %r')
+            
+            if self.debug:
+                self._print_log(5)
+            
             # Send meta data on the response to Qlik
             self._send_table_description()
             
             return self.response
         else:
+            if self.debug:
+                self._print_log(5)
+
             return self.forecast.loc[:,self.result_type]
     
     def _set_params(self):
@@ -351,7 +363,7 @@ class ProphetForQlik:
         # Set optional parameters
         
         # Check the number of columns in the request to determine whether we have holidays and/or added regressors
-        cols = len(self.request[0].rows[0])
+        cols = len(self.request[0].rows[0].duals)
         self.has_holidays = False
         self.has_regressors = False
 
@@ -384,10 +396,17 @@ class ProphetForQlik:
                 self.load_script = 'true' == self.kwargs['load_script'].lower()
             
             # Set the return type 
-            # Valid values are: yhat, trend, seasonal, seasonalities. 
+            # Valid values are: yhat, trend, seasonal, seasonalities, all. 
             # Add _lower or _upper to the series name to get lower or upper limits.
+            # The special case of 'all' returns all output columns from Prophet. This can only be used with 'load_script=true'.
             if 'return' in self.kwargs:
                 self.result_type = self.kwargs['return'].lower()
+
+            # Set a flag to return the seasonality plot instead
+            # Only usable through the load script as the result will have a different cardinality to the request
+            if 'is_seasonality_request' in self.kwargs:
+                self.is_seasonality_request = 'true' == self.kwargs['is_seasonality_request'].lower()
+                self.load_script = True
             
             # Set the option to take a logarithm of y values before forecast calculations
             # Valid values are: true, false
@@ -634,6 +653,12 @@ class ProphetForQlik:
         # Handle null value rows in the request dataset
         self.regressors_df = self.regressors_df.loc[self.regressors_df.ds.notnull()]               
         
+        # Check if the regressors column is empty
+        if len(self.regressors_df.regressors.unique()) == 1:
+            # Return without further processing
+            self.has_regressors = False
+            return None
+
         # Get the regressor arguments as a string
         arg_string = self.regressors_df.loc[0, 'kwargs']
         
@@ -749,11 +774,18 @@ class ProphetForQlik:
 
         # Undo the logarithmic conversion if it was applied during initialization
         if self.take_log:
-            self.forecast.loc[:,self.result_type] = np.exp(self.forecast.loc[:,self.result_type])
+            if self.result_type == 'all':
+                self.forecast.loc[:, self.forecast.columns != 'ds'] = np.exp(self.forecast.loc[:, self.forecast.columns != 'ds'])
+            else:
+                self.forecast.loc[:, self.result_type] = np.exp(self.forecast.loc[:, self.result_type])
 
         # Add back the null row if it was received in the request
         if len(self.NaT_df) > 0:
-            self.NaT_df = self.NaT_df.rename({'y': self.result_type}, axis='columns')
+            if self.result_type == 'all':
+                col = 'yhat'
+            else:
+                col = self.result_type
+            self.NaT_df = self.NaT_df.rename({'y': col}, axis='columns')
             self.forecast = self.forecast.append(self.NaT_df)
         
     def _send_table_description(self):
@@ -768,11 +800,19 @@ class ProphetForQlik:
         self.table.numberOfRows = len(self.response)
 
         # Set up fields for the table
-        self.table.fields.add(name="ds")
-        self.table.fields.add(name=self.result_type, dataType=1)
+        if self.is_seasonality_request:
+            for col in self.response.columns:
+                self.table.fields.add(name=col, dataType=1)
+        elif self.result_type == 'all':
+            for col in self.response.columns:
+                dataType = 0 if col == 'ds' else 1
+                self.table.fields.add(name=col, dataType=dataType)
+        else:
+            self.table.fields.add(name="ds", dataType=0)
+            self.table.fields.add(name=self.result_type, dataType=1)
         
         if self.debug:
-            self._print_log(5)
+            self._print_log(6)
         
         # Send table description
         table_header = (('qlik-tabledescription-bin', self.table.SerializeToString()),)
@@ -807,15 +847,15 @@ class ProphetForQlik:
             output += "Make future data frame parameters: {0}\n\n".format(self.make_kwargs)
             output += "Add seasonality parameters: {0}\n\n".format(self.add_seasonality_kwargs)
             output += "Fit parameters: {0}\n\n".format(self.fit_kwargs)
-            if self.has_regressors:
-                output += "Additional regresssor parameters: \n{0}\n\n".format(self.regressor_kwargs)
+            if self.has_regressors and len(self.regressor_kwargs):
+                output += "Additional regressor parameters: {0}\n\n".format(self.regressor_kwargs)
             output += "REQUEST DATA FRAME: {0} rows x cols\n\n".format(self.request_df.shape)
-            output += "{0} \n\n".format(self.request_df.to_string())
+            output += "{0}\n...\n{1}\n\n".format(self.request_df.head(5).to_string(), self.request_df.tail(5).to_string())
             if len(self.NaT_df) > 0:
                 output += "REQUEST NULL VALUES DATA FRAME: {0} rows x cols\n\n".format(self.NaT_df.shape)
                 output += "{0} \n\n".format(self.NaT_df.to_string())
             output += "INPUT DATA FRAME: {0} rows x cols\n\n".format(self.input_df.shape)
-            output += "{} \n\n".format(self.input_df.to_string())
+            output += "{0}\n...\n{1}\n\n".format(self.input_df.head(5).to_string(), self.input_df.tail(5).to_string())
             if self.has_holidays:
                 output += "HOLIDAYS DATA FRAME: {0} rows x cols\n\n".format(self.holidays_df.shape)
                 output += "{0} \n\n".format(self.holidays_df.to_string())
@@ -824,17 +864,26 @@ class ProphetForQlik:
             # Output in case the input contains less than 2 non-Null rows
             output = "\nForecast cannot be generated as the request contains less than two non-Null rows\n\n"
         
-        elif step == 4:         
+        elif step == 4:
+            # Output the future data frame 
+            output = "\FUTURE DATA FRAME: {0} rows x cols\n\n".format(self.future_df.shape)
+            output += "{0}\n...\n{1}\n\n".format(self.future_df.head(5).to_string(), self.future_df.tail(5).to_string())
+
+        elif step == 5:         
             # Output the forecast data frame and returned series 
             output = "\nFORECAST DATA FRAME: {0} rows x cols\n\n".format(self.forecast.shape)
             output += "RESULT COLUMNS:\n\n"
             for col in self.forecast:
                 output += "{}\n".format(col)
 
-            output += "\nSAMPLE RESULTS:\n{0} \n\n".format(self.forecast.tail(self.periods).to_string())
-            output += "FORECAST RETURNED:\n{0}\n\n".format(self.forecast.loc[:,self.result_type].to_string())
+            output += "\nSAMPLE RESULTS:\n{0} \n\n".format(self.forecast.tail(5).to_string())
+
+            result = self.response if self.load_script else self.forecast
+            cols = result.columns if self.result_type == 'all' else ['ds', self.result_type]
+            output += "FORECAST RETURNED:\n{0}\n...\n{1}\n\n".format(result.loc[:, cols].head(5).to_string(),\
+                result.loc[:, cols].tail(5).to_string())
         
-        elif step == 5:
+        elif step == 6:
             # Print the table description if the call was made from the load script
             output = "\nTABLE DESCRIPTION SENT TO QLIK:\n\n{0} \n\n".format(self.table)
         
