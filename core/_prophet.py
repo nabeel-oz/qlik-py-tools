@@ -154,9 +154,6 @@ class ProphetForQlik:
         # We ignore Null values here as these are handled separately in the response
         sort_order = sort_order.loc[sort_order.seasonality_num.notnull()]
         
-        # The correct sort order is based on the data frame's index after sorting on the seasonality field
-        sort_order = sort_order.sort_values('seasonality_num')
-        
         # Re-create the request with ds and y columns
         pairs = timeseries.split(";")
         request_df = pd.DataFrame([p.split(":") for p in pairs], columns=['ds', 'y'])
@@ -169,6 +166,9 @@ class ProphetForQlik:
             # Create a holidays data frame
             pairs = holidays.split(";")
             holiday_df = pd.DataFrame([p.split(":") for p in pairs], columns=['ds', 'holiday'])
+            
+            # Workaround for Pandas not converting the ds column to floats like it does for request_df
+            holiday_df.loc[:,'ds'] = holiday_df.loc[:,'ds'].astype('float64')
             
             # Merge the holidays with the request data frame using column ds as key
             request_df = pd.merge(request_df, holiday_df, on='ds', how='left')
@@ -227,8 +227,12 @@ class ProphetForQlik:
         if instance.result_type == 'yhat':
             instance.result_type = instance.seasonality
         
-        # Set the sort order to be used when returning the results
-        instance.sort_order = sort_order
+        if instance.seasonality == 'weekly':
+            # For weekly seasonlity the return sort order is based on the day number from 0-6, with 0 being Monday
+            instance.sort_order = sort_order.set_index(sort_order.seasonality_num)
+        else:
+            # Else the return sort order is based on the data frame's index after sorting on the seasonality field
+            instance.sort_order = sort_order.sort_values('seasonality_num')
         
         # Return the initialized ProphetForQlik instance
         return instance
@@ -357,7 +361,7 @@ class ProphetForQlik:
         self.changepoint_range = None
         self.uncertainty_samples = None
         self.is_seasonality_request = False
-        self.weekly_start = 6 # Defaulting to a Monday start for the week as used in Qlik
+        self.weekly_start = 1 # Defaulting to a Monday start for the week as used in Qlik
         self.yearly_start = 0
         self.lower_window = None
         self.upper_window = None

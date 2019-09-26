@@ -73,7 +73,7 @@ Any of these arguments can be included in the final string parameter for the Pro
 | seasonality_fourier | Fourier terms for the additional seasonality | An integer value e.g. `5` | For reference, by default Prophet uses 3 terms for weekly seasonality and 10 for yearly seasonality. Increasing the number of Fourier terms allows the seasonality to fit faster changing cycles, but can also lead to overfitting. |
 | seasonality_prior_scale | The extent to which the seasonality model will fit the data | A decimal or integer value e.g. `0.05` | If you find that the seasonalities are overfitting, you can adjust the prior scale to smooth them using this parameter. |
 | holidays_prior_scale | The magnitude of the holiday effect, if holidays are included in the function | A decimal or integer value e.g. `10` | If you find that the holidays are overfitting, you can adjust their prior scale to smooth them using this parameter. By default this parameter is `10`, which provides very little regularization. Reducing this parameter dampens holiday effects. |
-| weekly_start | Set the start of the week when calculating weekly seasonality | An integer value e.g. `6` (for Monday) | Only relevant when the using the Prophet_Seasonality function to get the weekly seasonality. See more below in the Seasonality section. `0` represents Sunday, `6` represents Monday. |
+| weekly_start | Set the start of the week when calculating weekly seasonality | An integer value e.g. `1` (for Monday) | Only relevant when the using the Prophet_Seasonality function to get the weekly seasonality. See more below in the Seasonality section. `0` represents Sunday, `1` represents Monday. |
 | yearly_start | Set the start of the year when calculating yearly seasonality | An integer value e.g. `0` (for 1st Jan) | Only relevant when the using the Prophet_Seasonality function to get the yearly seasonality. See more below in the Seasonality section. `0` represents 1st Jan, `1` represents 2nd Jan and so on. |
 | lower_window | Extend the holidays by certain no. of days prior to the date. | A negative integer value e.g. `-1` | Only relevant when passing holidays to Prophet. This can be used to analyze holiday effects before a holiday e.g. 7 days before Christmas. |
 | upper_window | Extend the holidays by certain no. of days after the date. | A positive integer value e.g. `1` | Only relevant when passing holidays to Prophet. This can be used to analyze holiday effects after a holiday e.g. 1 day after New Year. |
@@ -90,13 +90,25 @@ Prophet will by default fit weekly and yearly seasonalities, if the time series 
 
 The seasonalities are available in the forecast and can be plotted against the original time series by specifying the correct return type e.g. return=yearly. However, you might want to plot the seasonality against a more relevant scale. For this you can use the `Prophet_Seasonality` function.
 
-This has somewhat different requirements:
+For instance, to plot yearly seasonality you may want to view the seasonality for a single year. Or for weekly seasonality you may want to view it for a single week.
 
-`<Analytic connection name>.Prophet_Seasonality([Seasonality Column], 'Concatenated TimeSeries as String', 'Concatentated Holidays as String', 'arg1=value1, arg2=value2, ...')`
+This is a bit of a challenge as Prophet needs the entire timeseries, yet the SSE cannot return a response with different cardinality in the frontend. To get around this we can concatenate the entire timeseries into a string which can then be parsed by the SSE:
+
+```
+<Analytic connection name>.Prophet_Seasonality([Seasonality Column], 'Concatenated TimeSeries as String', 'Concatentated Holidays as String', 'arg1=value1, arg2=value2, ...')
+```
 
 Here's an actual example for plotting yearly seasonality by day of year rather than over multiple years. The year itself (2017 in this case) is arbitrary as the seasonality effects are the same for every year.
 
-`PyTools.Prophet_Seasonality(Max({$<FORECAST_YEAR = {'2017'}>} FORECAST_DATE), $(vAccidentsByDate), '', 'freq=D, seasonality=yearly, return=yearly')`
+```
+// Dimension:
+if(FORECAST_YEAR = '2017', FORECAST_DATE)
+```
+
+```
+// Measure:
+PyTools.Prophet_Seasonality(Max({$<FORECAST_YEAR = {'2017'}>} FORECAST_DATE), $(vAccidentsByDate), '', 'freq=D, seasonality=yearly, return=yearly')
+```
 
 The time series is provided by a variable that concatenates all the data into a string. This is a workaround as AAI integration for charts requires the number of output rows to equal the number of input rows.
 
@@ -104,11 +116,27 @@ Here we don't provide holidays so an empty string is used as the third argument.
 
 Note that the dates must be provided in their numerical representation by using the `Num()` function in Qlik.
 
-`Concat(DISTINCT TOTAL Aggr(Num(FORECAST_DATE) & ':' & Count({$<FORECAST_LINK_TYPE = {'Actual'}>} Distinct ACCIDENT_NO), FORECAST_DATE), ';')`
+```
+// Variable vAccidentsByDate:
+Concat(DISTINCT TOTAL Aggr(Num(FORECAST_DATE) & ':' & Count({$<FORECAST_LINK_TYPE = {'Actual'}>} Distinct ACCIDENT_NO), FORECAST_DATE), ';')
+```
 
-With this we can get a nice seasonality plot by day of year. Similarly we can plot other seasonalities with different scales.
+With this we can get a nice seasonality plot by day of year. 
 
 ![yearly seasonality chart](images/Seasonality-01.png)
+
+For the weekly seasonality the dimension would be the WeekDay which is a Dual value in Qlik with both a numeric and string representation. In Qlik, Sunday is 0, Monday is 1 and so on. To correctly plot the weekly seasonality we can use the following dimension and measure.
+
+```
+// Dimension:
+Weekday(FORECAST_DATE)
+```
+
+```
+// Measure:
+PyTools.Prophet_Seasonality(Max(Weekday(FORECAST_DATE)), $(vAccidentsByDate), '', 'freq=D, return=weekly, seasonality=weekly')
+```
+
 ![weekly seasonality chart](images/Seasonality-02.png)
 
 The seasonality can also be obtained through the load script. This is somewhat easier as SSE calls from the load script can return a response with a different cardinality to the input. You will need to pass the `load_script=true` and `is_seasonality_request=true` paramaters. The number of response rows returned will be based on the `seasonality` parameter, e.g. 7 with `seasonality=weekly`. 
