@@ -95,23 +95,25 @@ class ProphetForQlik:
         # Not doing this interferes with correct ordering of the output from Prophet
         self.input_df = self.input_df.reset_index(drop=True)
         
-        # If take_log = true take logarithm of relevant input values.
-        # This is usually to make the timeseries more stationary
-        if self.take_log:
-            self.input_df.loc[:,'y'] = np.log(self.input_df.loc[:,'y'])
+        # If the input data frame contains less than 2 non-Null rows, prediction is not possible
+        if len(self.input_df) - self.input_df.y.isnull().sum() >= 2:
+            # If take_log = true take logarithm of relevant input values.
+            # This is usually to make the timeseries more stationary
+            if self.take_log:
+                self.input_df.loc[:,'y'] = np.log(self.input_df.loc[:,'y'])
+                
+                if self.cap is not None:
+                    self.cap = np.log(self.cap)
+                
+                    if self.floor is not None:
+                        self.floor = np.log(self.floor)
             
+            # If a logistic growth model is applied add the cap and floor columns to the input data frame
             if self.cap is not None:
-                self.cap = np.log(self.cap)
-            
+                self.input_df.loc[:,'cap'] = self.cap
+                
                 if self.floor is not None:
-                    self.floor = np.log(self.floor)
-        
-        # If a logistic growth model is applied add the cap and floor columns to the input data frame
-        if self.cap is not None:
-            self.input_df.loc[:,'cap'] = self.cap
-            
-            if self.floor is not None:
-                self.input_df.loc[:,'floor'] = self.floor
+                    self.input_df.loc[:,'floor'] = self.floor
             
         if self.debug:
             self._print_log(2)
@@ -636,10 +638,10 @@ class ProphetForQlik:
         e.g. a single entry with three regressors could be '1.2|200|3'
         
         Arguments for the regressors can be passed in a separate string of keyword arguments.
-        The keyword and the value should be separated by colons, different keywords by commas, and arguments for different regressors by pipe.
+        The keyword and the value should be separated by equals signs, different keywords by commas, and arguments for different regressors by pipe.
         If a single set of arguments is provided (i.e. no pipe characters are found), we apply the same arguments to all regressors.
-        e.g. 'prior_scale:10, mode:additive| mode:multiplicative| mode:multiplicative' for specifying different arguments per regressor
-              or 'mode:additive' for using the same arguments for all regressors.
+        e.g. 'prior_scale=10, mode=additive| mode=multiplicative| mode=multiplicative' for specifying different arguments per regressor
+              or 'mode=additive' for using the same arguments for all regressors.
 
         Returns a data frame with the additional regressors.
         """
@@ -668,9 +670,11 @@ class ProphetForQlik:
             if len(kwargs_string) > 0:
                 kwargs = {}
                 for kv in kwargs_string.split(','):
-                    pair = kv.split(':')
+                    pair = kv.split('=')
                     if 'prior_scale' in pair[0]:
                         pair[1] = utils.atof(pair[1])
+                    if 'standardize' in pair[0] and pair[1].lower() != 'auto':
+                        pair[1] = 'true' == pair[1].lower()
                     kwargs[pair[0]] = pair[1]
                 self.regressor_kwargs.append(kwargs) 
 
@@ -692,7 +696,7 @@ class ProphetForQlik:
             self.regressor_kwargs = [{} for c in self.regressors_df.columns]
         # If there is just 1 dictionary, replicate it for each regressor
         elif len(self.regressor_kwargs) == 1:
-            kwargs = self.regressor_kwargs.copy()
+            kwargs = self.regressor_kwargs[0].copy()
             self.regressor_kwargs = [kwargs for c in self.regressors_df.columns]
         elif len(self.regressor_kwargs) != len(self.regressors_df.columns):
             err = "The number of additional regressors does not match the keyword arguments provided for the regressors."
@@ -743,7 +747,10 @@ class ProphetForQlik:
                 self.forecast = self.model.predict_seasonal_components(df_x)
             
             # Set the correct sort order for the response
-            self.forecast = self.forecast.reindex(self.sort_order.index)
+            try:
+                self.forecast = self.forecast.reindex(self.sort_order.index)
+            except AttributeError:
+                pass
         
         # For standard forecast the output rows equal the input rows
         else:
@@ -866,7 +873,7 @@ class ProphetForQlik:
         
         elif step == 4:
             # Output the future data frame 
-            output = "\FUTURE DATA FRAME: {0} rows x cols\n\n".format(self.future_df.shape)
+            output = "\nFUTURE DATA FRAME: {0} rows x cols\n\n".format(self.future_df.shape)
             output += "{0}\n...\n{1}\n\n".format(self.future_df.head(5).to_string(), self.future_df.tail(5).to_string())
 
         elif step == 5:         
