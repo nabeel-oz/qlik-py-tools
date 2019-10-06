@@ -106,6 +106,21 @@ def fillna(df, method="zeros"):
         return df
     else:
         return df.fillna(0)
+
+def get_scaler(df, missing="zeros", scaler="StandardScaler", **kwargs):
+    """
+    Fit a sklearn scaler on a Data Frame and return the scaler.
+    Valid options for the scaler are: StandardScaler, MinMaxScaler, MaxAbsScaler, RobustScaler, QuantileTransformer
+    Missing values must be dealt with before the scaling is applied. 
+    Valid options specified through the missing parameter are: zeros, mean, median, mode
+    """
+
+    s = getattr(preprocessing, scaler)
+    s = s(**kwargs)
+
+    df = fillna(df, method=missing)
+    
+    return s.fit(df)  
     
 def scale(df, missing="zeros", scaler="robust", **kwargs):
     """

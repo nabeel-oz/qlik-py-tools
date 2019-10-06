@@ -320,7 +320,7 @@ class Preprocessor(TransformerMixin):
         try:
             if len(scale_df) > 0:
                 # Get an instance of the sklearn scaler fit to X
-                self.scaler_instance = self.get_scaler(scale_df, missing=self.missing, scaler=self.scaler, **self.kwargs)
+                self.scaler_instance = utils.get_scaler(scale_df, missing=self.missing, scaler=self.scaler, **self.kwargs)
 
                 # Keep a copy of the scaling dataframe structure so we can align the transform dataset 
                 self.scale_df_structure = pd.DataFrame().reindex_like(scale_df)
@@ -360,7 +360,7 @@ class Preprocessor(TransformerMixin):
             ohe_df = ohe_df.align(self.ohe_df_structure, join='right', axis=1)[0]
 
             # Fill missing values in the OHE dataframe, that may appear after alignment, with zeros.
-            ohe_df = self.fillna(ohe_df, missing="zeros")
+            ohe_df = utils.fillna(ohe_df, method="zeros")
             
             # Add the encoded columns to the result dataset
             X_transform = ohe_df
@@ -376,7 +376,7 @@ class Preprocessor(TransformerMixin):
                 hash_df = hash_df.join(unique, on=c)
                 hash_df = hash_df.drop(c, axis=1)
                 # Fill any missing values in the hash dataframe
-                hash_df = self.fillna(hash_df, missing="zeros")
+                hash_df = utils.fillna(hash_df, method="zeros")
         
         if self.cv:
             # Get a subset of the data that requires count vectorizing
@@ -394,7 +394,7 @@ class Preprocessor(TransformerMixin):
             cv_df = cv_df.align(self.cv_df_structure, join='right', axis=1)[0]
 
             # Fill missing values in the dataframe that may appear after alignment with zeros.
-            cv_df = self.fillna(cv_df, missing="zeros")
+            cv_df = utils.fillna(cv_df, method="zeros")
 
         if self.tfidf:
             # Get a subset of the data that requires tfidf vectorizing
@@ -412,7 +412,7 @@ class Preprocessor(TransformerMixin):
             tfidf_df = tfidf_df.align(self.tfidf_df_structure, join='right', axis=1)[0]
 
             # Fill missing values in the dataframe that may appear after alignment with zeros.
-            tfidf_df = self.fillna(tfidf_df, missing="zeros")
+            tfidf_df = utils.fillna(tfidf_df, method="zeros")
         
         if self.text:
             # Get a subset of the data that requires text similarity OHE
@@ -430,7 +430,7 @@ class Preprocessor(TransformerMixin):
             text_df = text_df.align(self.text_df_structure, join='right', axis=1)[0]
 
             # Fill missing values in the dataframe that may appear after alignment with zeros.
-            text_df = self.fillna(text_df, missing="zeros")
+            text_df = utils.fillna(text_df, method="zeros")
 
             # Add the text similary OHE data to the result dataset
             if X_transform is None:
@@ -449,7 +449,7 @@ class Preprocessor(TransformerMixin):
             else:
                 scale_df = hash_df
                 # If only hashed columns are being scaled, the scaler needs to be instantiated
-                self.scaler_instance = self.get_scaler(scale_df, missing=self.missing, scaler=self.scaler, **self.kwargs)
+                self.scaler_instance = utils.get_scaler(scale_df, missing=self.missing, scaler=self.scaler, **self.kwargs)
         elif self.hash:
             # Add the hashed columns to the result dataset
             if X_transform is None:
@@ -464,7 +464,7 @@ class Preprocessor(TransformerMixin):
             else:
                 scale_df = cv_df
                 # If only count vectorized columns are being scaled, the scaler needs to be instantiated
-                self.scaler_instance = self.get_scaler(scale_df, missing=self.missing, scaler=self.scaler, **self.kwargs)
+                self.scaler_instance = utils.get_scaler(scale_df, missing=self.missing, scaler=self.scaler, **self.kwargs)
         elif self.cv:
             # Add the count vectorized columns to the result dataset
             if X_transform is None:
@@ -479,7 +479,7 @@ class Preprocessor(TransformerMixin):
             else:
                 scale_df = tfidf_df
                 # If only tfidf vectorized columns are being scaled, the scaler needs to be instantiated
-                self.scaler_instance = self.get_scaler(scale_df, missing=self.missing, scaler=self.scaler, **self.kwargs)
+                self.scaler_instance = utils.get_scaler(scale_df, missing=self.missing, scaler=self.scaler, **self.kwargs)
         elif self.tfidf:
             # Add the count vectorized columns to the result dataset
             if X_transform is None:
@@ -494,7 +494,7 @@ class Preprocessor(TransformerMixin):
                 # This is to prevent different number or order of features between training and test datasets.
                 scale_df = scale_df.align(self.scale_df_structure, join='right', axis=1)[0]
                 
-                scale_df = self.fillna(scale_df, missing=self.missing)
+                scale_df = utils.fillna(scale_df, method=self.missing)
 
                 scale_df = pd.DataFrame(self.scaler_instance.transform(scale_df), index=scale_df.index, columns=scale_df.columns)
                 
@@ -510,7 +510,7 @@ class Preprocessor(TransformerMixin):
             # Get a subset of the data that doesn't require preprocessing
             no_prep_df = X[self.none_meta.index.tolist()]
             # Fill any missing values in the no prep dataframe
-            no_prep_df = self.fillna(no_prep_df, missing="zeros")
+            no_prep_df = utils.fillna(no_prep_df, method="zeros")
         
             # Finally join the columns that do not require preprocessing to the result dataset
             if X_transform is None:
@@ -706,44 +706,153 @@ class Preprocessor(TransformerMixin):
         
         return unique.set_index(col)
 
-    @staticmethod
-    def fillna(df, missing="zeros"):
-        """
-        Fill empty values in a Data Frame with the chosen method.
-        Valid options for missing are: zeros, mean, median, mode
-        """
+class TargetTransformer:
+    """
+    A class to transform the target variable.
+    This class can scale the target using the specified sklearn scaler.
+    It can also make the series stationary by differencing the values. Note that this is only valid when predictions will include multiple samples.
+    An inverse transform method allows for reversing the transformations.
+    """
 
-        if missing == "mean":
-            return df.fillna(df.mean())
-        elif missing == "median":
-            return df.fillna(df.median())
-        elif missing == "mode":
-            return df.fillna(df.mode().iloc[0])
-        elif missing == "none":
-            return df
-        else:
-            return df.fillna(0)
-    
-    @staticmethod
-    def get_scaler(df, missing="zeros", scaler="StandardScaler", **kwargs):
+    def __init__(self, scale=True, make_stationary=None, missing="zeros", scaler="StandardScaler", logfile=None, **kwargs):
         """
-        Fit a sklearn scaler on a Data Frame and return the scaler.
-        Valid options for the scaler are: StandardScaler, MinMaxScaler, MaxAbsScaler, RobustScaler, QuantileTransformer
-        Missing values must be dealt with before the scaling is applied. 
-        Valid options specified through the missing parameter are: zeros, mean, median, mode
-        """
-
-        s = getattr(preprocessing, scaler)
-        s = s(**kwargs)
-
-        df = Preprocessor.fillna(df, missing=missing)
+        Initialize the TargetTransformer instance.
         
-        return s.fit(df)       
+        scale is a boolean parameter to determine if the target will be scaled.
+        
+        make_stationary is a parameter to determine if the target will be made stationary. This should only be used for sequential data.
+        Passing make_stationary='log' will apply a logarithm to the target and use an exponential for the inverse transform.
+        Passing make_stationary='difference' will difference the values to make the target series stationary.
+        By default the difference will be done with lag = 1. Alternate lags can be provided by passing a list of lags as a kwarg.
+        e.g. lags=[1, 12]
+        
+        Other kwargs are keyword arguments passed to the sklearn scaler instance.
+        """
+        
+        self.scale = scale
+        self.make_stationary = make_stationary
+        self.missing = missing
+        self.scaler = scaler
+        self.logfile = logfile
+
+        if make_stationary and 'lags' in kwargs:
+            self.lags = kwargs.pop('lags')
+        else:
+            self.lags = [1]
+        
+        self.kwargs = kwargs
+    
+    def fit(self, y):
+        """
+        Fit the scaler to target values from the training set.
+        """
+
+        if self.scale:
+            # Get an instance of the sklearn scaler fit to y
+            self.scaler_instance = utils.get_scaler(y, missing=self.missing, scaler=self.scaler, **self.kwargs)
+        
+        return self
+
+    def transform(self, y):
+        """
+        Transform new targets using the previously fit scaler.
+        Also apply a logarithm or differencing if required for making the series stationary.
+        """
+
+        y_transform = y
+
+        # Scale the targets using the previously fit scaler
+        if self.scale:
+            y_transform = self.scaler_instance.transform(y)
+
+        # Apply a logarithm to make the array stationary
+        if self.make_stationary == 'log':
+            y_transform = np.log(y)
+
+        # Apply stationarity lags by differencing the array
+        elif self.make_stationary == 'difference':
+            y_diff = y_transform.copy()
+            len_y = len(y_diff)
+
+            for i in range(max(self.lags), len_y):
+                for lag in self.lags:
+                    if isinstance(y_diff, (pd.Series, pd.DataFrame)):
+                        y_diff.iloc[i] = y_diff.iloc[i] - y_transform.iloc[i - lag]
+                    else:
+                        y_diff[i] = y_diff[i] - y_transform[i - lag]
+            
+            # Remove targets with insufficient lag periods
+            # NOTE: The corresponding samples will need to be dropped elsewhere
+            if isinstance(y_diff, (pd.Series, pd.DataFrame)):
+                y_transform = y_diff.iloc[max(self.lags):]
+            else:
+                y_transform = y_diff[max(self.lags):]
+
+        if self.logfile is not None:
+            self._print_log(1, data=y_transform)
+        
+        return y_transform
+
+    def fit_transform(self, y):
+        """
+        Apply fit then transform
+        """
+
+        return self.fit(y).transform(y)
+
+    def inverse_transform(self, y_transform):
+        """
+        Reverse the transformations and return the target in it's original form.
+        """
+
+        if self.scale:
+            y = self.scaler_instance.inverse_transform(y_transform)
+
+        # Apply an exponential to reverse the logarithm applied during transform
+        if self.make_stationary == 'log':
+            y = np.exp(y_transform)
+
+        # Reverse the differencing applied during transform
+        # NOTE: y_transform will need to include actual values preceding the lags
+        elif self.make_stationary == 'difference':
+            y = y_transform.copy()
+            len_y = len(y_transform)
+            
+            for i in range(max(self.lags), len_y):
+                for lag in self.lags:
+                    if isinstance(y, (pd.Series, pd.DataFrame)):
+                        y.iloc[i] = y.iloc[i] + y.iloc[i - lag]
+                    else:
+                        y[i] = y[i] + y[i - lag]
+
+        if self.logfile is not None:
+            self._print_log(2, data=y)
+
+        return y
+    
+    def _print_log(self, step, data=None):
+        """
+        Print debug info to the log
+        """
+        
+        # Set mode to append to log file
+        mode = 'a'
+
+        if step == 1:
+            # Output the transformed targets
+            output = "Targets transformed {0}:\nSample Data:\n{1}\n\n".format(data.shape, data[:5])
+        elif step == 2:
+            # Output sample data after adding lag observations
+            output = "Targets inverse transformed {0}:\nSample Data:\n{1}\n\n".format(data.shape, data[:5])
+
+        sys.stdout.write(output)
+        with open(self.logfile, mode, encoding='utf-8') as f:
+            f.write(output)
 
 class Reshaper(TransformerMixin):
     """
     A class that reshapes the feature matrix based on the input_shape.
-    This class is built for Keras estimators where recurrent and convolutional layers can required 3D or 4D inputs.
+    This class is built for Keras estimators where recurrent and convolutional layers can require 3D or 4D inputs.
     It is meant to be used after preprocessing and before fitting the estimator.
     """
 
@@ -751,8 +860,8 @@ class Reshaper(TransformerMixin):
         """
         Initialize the Reshaper with the Keras model first layer's kwargs.
         Additionally take in the number of lag observations to be used in reshaping the data.
-        If lag_target is True, an additional feature will be created for each sample i.e. the previous value of y 
-        first_layer_kwargs is updated during fit and transform, so it must be a reference to the kwargs used to build the Keras model.
+        If lag_target is True, an additional feature will be created for each sample i.e. the previous value of y. 
+        first_layer_kwargs should be a reference to the first layer kwargs of the Keras architecture being used to build the model.
         Optional arguments are a logfile to output debug info.
         """
 
@@ -763,22 +872,10 @@ class Reshaper(TransformerMixin):
     
     def fit(self, X, y=None):
         """
-        Update the input shape based on the number of features in X.
+        Update the input shape based on the number of samples in X.
         Return this Reshaper object.
         """
 
-        # If it has not been specified, it is simply the number of features in X
-        if 'input_shape' not in self.first_layer_kwargs:
-            self.first_layer_kwargs['input_shape'] = tuple([X.shape[1]])
-        # Else update the input shape based on the number of features after preprocessing
-        else:
-            # Transform to a list to make the input_shape mutable
-            self.first_layer_kwargs['input_shape'] = list(self.first_layer_kwargs['input_shape'])
-            # Update the number of features based on X
-            self.first_layer_kwargs['input_shape'][-1] = X.shape[1]
-            # Transform back to a tuple as required by Keras
-            self.first_layer_kwargs['input_shape'] = tuple(self.first_layer_kwargs['input_shape'])
-        
         # Create the input_shape property as a list
         self.input_shape = list(self.first_layer_kwargs['input_shape'])
         # Add the number of samples to the input_shape
@@ -810,15 +907,14 @@ class Reshaper(TransformerMixin):
             # Add targets to the lag observations if required
             # This will create an additional feature for each sample i.e. the previous value of y 
             if y is not None and self.lag_target:
-                X_transform = X.copy()
                 X_transform["previous_y"] = y
                 X_transform["previous_y"] = X_transform["previous_y"].shift(1)
-
-                # Update the number of features in the input shape
-                self.input_shape[-1] = X_transform.shape[1]
             
             # Add the lag observations
             X_transform = utils.add_lags(X_transform, lag=self.lags, extrapolate=1, dropna=True, suffix="t")
+
+            # Update the number of samples in the input_shape as some samples may be discarded for not having enough lag periods
+            self.input_shape[0] = X_transform.shape[0]
 
             # Debug information is printed to the terminal and logs if required
             if self.logfile:
@@ -828,9 +924,8 @@ class Reshaper(TransformerMixin):
         # e.g. The input_shape can be a tuple of (samples, subsequences, timesteps, features), with subsequences and timesteps as optional.
         # A 5D shape may be valid for e.g. a ConvLSTM with (samples, timesteps, rows, columns, features) 
         if len(self.input_shape) > 5:
-                err = "Unsupported input_shape: {}".format(self.input_shape)
-                raise Exception(err)
-       
+            err = "Unsupported input_shape: {}".format(self.input_shape)
+            raise Exception(err)
         # Reshape the data
         elif len(self.input_shape) > 2:
             # Reshape input data using numpy
@@ -839,9 +934,6 @@ class Reshaper(TransformerMixin):
             # Debug information is printed to the terminal and logs if required
             if self.logfile:
                 self._print_log(3, data=X_transform)
-
-        # Update the original input_shape in the Keras architecture to match X_transform
-        self.first_layer_kwargs['input_shape'] = tuple(self.input_shape[1:])
 
         return X_transform
     
@@ -855,10 +947,10 @@ class Reshaper(TransformerMixin):
 
         if step == 1:
             # Output the updated input shape
-            output = "Input shape of the data: {0}\n\n".format(self.first_layer_kwargs['input_shape'])
+            output = "Input shape specification for Keras: {0}\n\n".format(self.first_layer_kwargs['input_shape'])
         elif step == 2:
             # Output sample data after adding lag observations
-            output = "Lag observations added ({0} per sample).\nSample Data:\n{1}\n\n".format(self.lags, data.head())
+            output = "Lag observations added ({0} per sample). New input shape is {1}.\nSample Data:\n{2}\n\n".format(self.lags, data.shape, data.head())
         elif step == 3:
             # Output sample data after reshaping
             output = "Input data reshaped to {0}.\nSample Data:\n{1}\n\n".format(data.shape, data[:5])

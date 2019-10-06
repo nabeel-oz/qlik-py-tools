@@ -64,7 +64,7 @@ from keras import backend as kerasbackend
 sys.stderr = stderr
 
 import _utils as utils
-from _machine_learning import Preprocessor, PersistentModel, Reshaper, KerasClassifierForQlik, KerasRegressorForQlik
+from _machine_learning import Preprocessor, PersistentModel, TargetTransformer, Reshaper, KerasClassifierForQlik, KerasRegressorForQlik
 import ServerSideExtension_pb2 as SSE
 
 # Add Generated folder to module path
@@ -356,7 +356,9 @@ class SKLearnForQlik:
         When using recurrent or convolutional layers you will need to pass a valid input_shape to reshape the data.
         Additionally, the feature definitions should include an 'identifier' variable that will be used for reshaping.
         E.g. The identifier is a date field and you want to use a LSTM with 10 time steps on a dataset with 20 features.
-        'RNN', 1, 'LSTM', '64|int', 'input_shape=10,20|tuple|int, activation=relu|str'
+        'RNN', 1, 'LSTM', '64|int', 'input_shape=10;20|tuple|int, activation=relu|str'
+        Note that you can pass None instead of 20 for the features, as the actual number of features will be calculated after 
+        preprocessing the data.
 
         """
 
@@ -446,6 +448,8 @@ class SKLearnForQlik:
         # Add the feature definitions to the model
         self.model.features_df = self.request_df
         self.model.features_df.set_index("name", drop=False, inplace=True)
+        # Store a copy of the features_df that will remain untouched in later calls
+        self.model.original_features_df = self.model.features_df.copy()
 
         # Ensure there is at most one feature with variable_type identifier
         if len(self.model.features_df.loc[self.model.features_df["variable_type"] == "identifier"]) > 1:
@@ -503,7 +507,7 @@ class SKLearnForQlik:
         """
         
         # Open an existing model and get the training & test dataset and targets
-        train_test_df, target_df = self._get_model_and_data(set_feature_def = True)
+        train_test_df, target_df = self._get_model_and_data(set_feature_def=True)
         
         # Check that the estimator is an supervised ML algorithm
         if self.model.estimator_type not in ["classifier", "regressor"]:
@@ -542,8 +546,35 @@ class SKLearnForQlik:
             except AttributeError:
                 pass
         
+        # Scale the targets and increase stationarity if required
+        if self.model.scale_target or self.model.make_stationary:
+            # Set up the target transformer
+            self.model.target_transformer = TargetTransformer(scale=self.model.scale_target, make_stationary=self.model.make_stationary, missing=self.model.missing,\
+            scaler=self.model.scaler, logfile=self.logfile, **self.model.scaler_kwargs)
+
+            # Fit the transformer to the training targets
+            self.model.target_transformer = self.model.target_transformer.fit(self.y_train)
+
+            # Apply the transformer to the training targets
+            self.y_train = self.model.target_transformer.transform(self.y_train)
+            # Drop samples where the target cannot be transformed due to insufficient lags
+            self.X_train = self.X_train.iloc[len(self.X_train)-len(self.y_train):] 
+            # Do the same for the test set if applicable
+            try:
+                self.y_test = self.model.target_transformer.transform(self.y_test)
+                self.X_test = self.X_test.iloc[len(self.X_test)-len(self.y_test):]
+            except AttributeError:
+                pass
+        
+        # If this is a Keras estimator, we require the preprocessing to return a data frame instead of a numpy array
+        if self.model.estimator in ['KerasRegressor', 'KerasClassifier']:
+            using_keras = True
+            prep_return = 'df'
+        else:
+            prep_return = 'np'
+
         # Construct the preprocessor
-        prep = Preprocessor(self.model.features_df, scale_hashed=self.model.scale_hashed, scale_vectors=self.model.scale_vectors,\
+        prep = Preprocessor(self.model.features_df, return_type=prep_return, scale_hashed=self.model.scale_hashed, scale_vectors=self.model.scale_vectors,\
         missing=self.model.missing, scaler=self.model.scaler, logfile=self.logfile, **self.model.scaler_kwargs)
 
         # Setup a list to store steps for the sklearn pipeline
@@ -560,7 +591,10 @@ class SKLearnForQlik:
             self.model.estimation_step = 0      
 
         # If this is a Keras estimator, update the input shape and reshape the data if required
-        if self.model.estimator in ['KerasRegressor', 'KerasClassifier']:
+        if using_keras:
+            # Update the input shape based on the final number of features after preprocessing
+            self._keras_update_shape(prep)
+
             # Add the Keras build function and architecture to the estimator keyword arguments
             self.model.estimator_kwargs['build_fn'] = self._keras_build_fn
             self.model.estimator_kwargs['architecture'] = self.model.architecture
@@ -639,8 +673,8 @@ class SKLearnForQlik:
                 X = self.X_test
                 y = self.y_test
             else:
-                X = train_test_df
-                y = target_df.values.ravel()
+                X = self.X_train
+                y = self.y_train.values.ravel()
             
             # Calculate model agnostic feature importances
             self._calc_importances(X = X, y = y)
@@ -816,7 +850,14 @@ class SKLearnForQlik:
         # If the function call was made externally, process the request
         if caller == "external":
             # Open an existing model and get the training & test dataset and targets based on the request
-            self.X_test, self.y_test = self._get_model_and_data()            
+            self.X_test, self.y_test = self._get_model_and_data()    
+
+            # Scale the targets and increase stationarity if required
+            if self.model.scale_target or self.model.make_stationary:
+                # Apply the transformer to the test targets
+                self.y_test = self.model.target_transformer.transform(self.y_test)  
+                # Drop samples where self.y_test cannot be transformed due to insufficient lags
+                self.X_test = self.X_test.iloc[len(self.X_test)-len(self.y_test):]      
 
         # Get predictions based on the samples
         self.y_pred = self.model.pipe.predict(self.X_test)
@@ -1007,6 +1048,11 @@ class SKLearnForQlik:
             # Predict y for X using the previously fit pipeline
             self.y = self.model.pipe.predict(self.X)
 
+            # Inverse transformations on the targets if required
+            if self.model.scale_target or self.model.make_stationary:
+                # Apply the transformer to the test targets
+                self.y = self.model.target_transformer.inverse_transform(self.y) 
+
         # Prepare the response
         self.response = pd.DataFrame(self.y, columns=["result"], index=self.X.index)
         
@@ -1034,7 +1080,7 @@ class SKLearnForQlik:
     def keras_sequence_predict(self, load_script=False, variant="predict"):
         """
         Make Predictions using a trained Keras model. 
-        This function is built for sequence and time series predictions. For traditional ML simply use the predict function.
+        This function is built for sequence and time series predictions. For standard ML simply use the predict function.
         For sequence prediction we expect reshaping of data for e.g. based on n lag periods. 
         A previous prediction then needs to be fed as input to the next prediction. 
         
@@ -1043,8 +1089,6 @@ class SKLearnForQlik:
         If the previous target is being included in the lag observations, i.e. the lag_target parameter was set to True,
         include the target in n_features in the same order as the feature definitions provided during model training. 
         The target can be empty or 0 for future periods.
-
-        The 
 
         If variant='predict_proba', we return the predicted probabilties for each sample. Otherwise, we simply return the predictions.
         
@@ -1055,6 +1099,13 @@ class SKLearnForQlik:
         # Open an existing model and get the input dataset. 
         # Target for historical data are expected if using previous targets as a feature.
         X, y = self._get_model_and_data(target=self.model.lag_target, ordered_data=True) 
+
+        # Scale the targets and increase stationarity if required
+        if self.model.scale_target or self.model.make_stationary:
+            # Apply the transformer to the targets
+            y = self.model.target_transformer.transform(y)
+            # Drop samples where y cannot be transformed due to insufficient lags
+            X = X.iloc[len(X)-len(y):]
         
         # Transform target to the expected shape
         y = y.values.ravel()
@@ -1102,6 +1153,10 @@ class SKLearnForQlik:
                     s = s + ", {0}: {1:.3f}".format(self.model.pipe.named_steps['estimator'].classes_[i], b)
                     i += 1
                 y.append(s[2:])
+        # Inverse transformations on the targets if required 
+        elif self.model.scale_target or self.model.make_stationary:
+            # Apply the transformer to the test targets
+            y = self.model.target_transformer.inverse_transform(y) 
         
         # Add predictions / probabilities to the response
         self.response['result'] = y
@@ -1268,103 +1323,6 @@ class SKLearnForQlik:
         # Finally send the response
         return self.response
 
-    @staticmethod
-    def _keras_build_fn(architecture=None):
-        """
-        Create and compile a Keras Sequential model based on the model's architecture dataframe.
-        
-        The architecture dataframe should define the layers and compilation parameters for a Keras sequential model.
-        Each layer has to be defined across three columns: layer, args, kwargs.
-        The first layer should define the input_shape. This SSE does not support the alternative input_dim argument.
-        The final row of the dataframe should define the compilation parameters.
-
-        For example:
-          layer        args    kwargs
-        0 Dense        [12]    {'input_shape': (8,), activation': 'relu'}
-        1 Dropout      [0.25]  {}
-        2 Dense        [8]     {'activation': 'relu'}
-        3 Dense        [1]     {'activation': 'sigmoid'}
-        4 Compilation  []      {'loss': 'binary_crossentropy', 'optimizer': 'adam', 'metrics': ['accuracy']}
-
-        If you want to specify parameters for the optimizer, you can add that as the second last row of the architecture:
-        ...
-        4 SGD          []      {'lr': 0.01, 'clipvalue': 0.5}
-        5 Compilation  []      {'loss': 'binary_crossentropy'}
-
-        Layer wrappers can be used by including them in the layer name followed by a space:
-        0 TimeDistributed Dense ...
-        ...
-        For the Bidirectional wrapper the merge_mode parameter can be specified in the kwargs.
-
-        When using recurrent or convolutional layers you will need to pass a valid input_shape to reshape the data.
-        Additionally, the feature definitions should include an 'identifier' variable that will be used for reshaping.
-        E.g. The identifier is a date field and you want to use a LSTM with 10 time steps on a dataset with 20 features.
-        0 LSTM         [64]    {'input_shape': (10,20), 'activation': 'relu''
-        
-        For further information on the columns refer to the project documentation: 
-        https://github.com/nabeel-oz/qlik-py-tools
-        """
-        
-        # List of optimizers that can be specified in the architecture
-        optimizers = ['Adadelta', 'Adagrad', 'Adam', 'Adamax', 'Nadam', 'RMSprop', 'SGD']
-        
-        # The model definition should contain at least one layer and the compilation parameters
-        if architecture is None or len(architecture) < 2:
-            err = "Invalid Keras architecture. Expected at least one layer and compilation parameters."
-            raise Exception(err)
-        # The last row of the model definition should contain compilation parameters
-        elif not architecture.iloc[-1,0].capitalize() in ['Compile', 'Compilation']:
-            err = "Invalid Keras architecture. The last row of the model definition should provide 'Compile' parameters."
-            raise Exception(err)
-        
-        neural_net = keras.models.Sequential()
-
-        for i in architecture.index:
-            # Name items in the row for easy access
-            name, args, kwargs = architecture.iloc[i,0], architecture.iloc[i,1], architecture.iloc[i,2]
-
-            # The last row of the DataFrame should provide compilation keyword arguments
-            if i == max(architecture.index):
-                # Check if an optimizer with custom parameters has been defined
-                try:
-                    kwargs['optimizer'] = opt
-                except UnboundLocalError:
-                    pass
-                
-                # Compile the model
-                neural_net.compile(**kwargs)
-            # Watch out for a row providing optimizer parameters
-            elif name in optimizers:
-                opt = getattr(keras.optimizers, name)(**kwargs) 
-            # All other rows of the DataFrame define the model architecture
-            else:
-                # Check if the name includes a layer wrapper e.g. TimeDistributed Dense
-                names = name.split(' ')
-                if len(names) == 2:
-                    wrapper = names[0]
-                    name = names[1]
-                    
-                    # Get wrapper kwargs
-                    wrapper_kwargs = dict()
-                    if 'merge_mode' in kwargs:
-                        wrapper_kwargs['merge_mode'] = kwargs.pop('merge_mode')
-                else:
-                    wrapper = None
-
-                # Create a keras layer of the required type with the provided positional and keyword arguments
-                layer = getattr(keras.layers, name)(*args, **kwargs)
-
-                if wrapper:
-                    # Create the layer wrapper
-                    wrapper = getattr(keras.layers, wrapper)(layer, **wrapper_kwargs)
-                    # Add the layer wrapper to the model
-                    neural_net.add(wrapper)    
-                else:
-                    # Add the layer to the model
-                    neural_net.add(layer)
-            
-        return neural_net
-
     def _set_params(self, estimator_args, scaler_args, execution_args, metric_args=None, dim_reduction_args=None):
         """
         Set input parameters based on the request.
@@ -1398,6 +1356,8 @@ class SKLearnForQlik:
         self.model.calc_feature_importances = False
         self.model.lags= None
         self.model.lag_target = False
+        self.model.scale_target = False
+        self.model.make_stationary = None
         
         # Default metric parameters:
         if metric_args is None:
@@ -1449,6 +1409,18 @@ class SKLearnForQlik:
             # If True an additional feature will be created for each sample using the previous value of y 
             if 'lag_target' in execution_args:
                 self.model.lag_target = 'true' == execution_args['lag_target'].lower()
+            
+            # Scale the target before fitting
+            # The scaling will be inversed before predictions so they are returned in the original scale 
+            if 'scale_target' in execution_args:
+                self.model.scale_target = 'true' == execution_args['scale_target'].lower()
+
+            # Make the target series more stationary. This only applies to sequence prediction problems.
+            # Valid values are 'log' in which case we apply a logarithm to the target values,
+            # or 'difference' in which case we transform the targets into variance from the previous value.
+            # The transformation will be reversed before returning predictions.
+            if 'make_stationary' in execution_args:
+                self.model.make_stationary = execution_args['make_stationary'].lower()
             
             # Seed used by the random number generator when generating the training testing split
             if 'random_state' in execution_args:
@@ -1673,10 +1645,10 @@ class SKLearnForQlik:
             self._print_log(3)
 
         # Get the expected features for this request
-        if set_feature_def:
-            features_df = self.model.features_df
-        else:
-            features_df = self.model.original_features_df
+        features_df = self.model.original_features_df.copy()
+        
+        # Set features that are not expected in the current request
+        if not set_feature_def:
             exclude = ["excluded"]
 
             if not target:
@@ -1716,8 +1688,6 @@ class SKLearnForQlik:
         if set_feature_def:
             # Get the features to be excluded from the model
             exclusions = features_df['variable_type'].isin(["excluded", "target", "identifier"])
-            # Store the original feature definitions
-            self.model.original_features_df = features_df.copy()
             # Store the featuer definitions except exclusions
             self.model.features_df = features_df.loc[~exclusions]
         
@@ -1728,6 +1698,133 @@ class SKLearnForQlik:
             return [samples_df, target_df]
         else:
             return samples_df
+    
+    def _keras_update_shape(self, prep):
+        """
+        Update the input shape for the Keras architecture.
+        We do this by running preprocessing on the training data frame to get the final number of features.
+        """
+
+        # Run preprocessing on the training data
+        X_transform = prep.fit_transform(self.X_train)
+
+        # If the input shape has not been specified, it is simply the number of features in X_transform
+        if 'input_shape' not in self.model.first_layer_kwargs:
+            self.model.first_layer_kwargs['input_shape'] = tuple([X_transform.shape[1]])
+        # Else update the input shape based on the number of features after preprocessing
+        else:
+            # Transform to a list to make the input_shape mutable
+            self.model.first_layer_kwargs['input_shape'] = list(self.model.first_layer_kwargs['input_shape'])
+            # Update the number of features based on X_transform
+            self.model.first_layer_kwargs['input_shape'][-1] = X_transform.shape[1]+1 if self.lags and self.model.lag_target else X_transform.shape[1]
+            # Transform back to a tuple as required by Keras
+            self.model.first_layer_kwargs['input_shape'] = tuple(self.model.first_layer_kwargs['input_shape'])
+        
+        # 2D, 3D and 4D data is valid. 
+        # e.g. The input_shape can be a tuple of (subsequences, timesteps, features), with subsequences and timesteps as optional.
+        # A 4D shape may be valid for e.g. a ConvLSTM with (timesteps, rows, columns, features) 
+        if len(self.model.first_layer_kwargs['input_shape']) > 5:
+            err = "Unsupported input_shape: {}".format(self.model.first_layer_kwargs['input_shape'])
+            raise Exception(err)
+
+    @staticmethod
+    def _keras_build_fn(architecture=None):
+        """
+        Create and compile a Keras Sequential model based on the model's architecture dataframe.
+        
+        The architecture dataframe should define the layers and compilation parameters for a Keras sequential model.
+        Each layer has to be defined across three columns: layer, args, kwargs.
+        The first layer should define the input_shape. This SSE does not support the alternative input_dim argument.
+        The final row of the dataframe should define the compilation parameters.
+
+        For example:
+          layer        args    kwargs
+        0 Dense        [12]    {'input_shape': (8,), activation': 'relu'}
+        1 Dropout      [0.25]  {}
+        2 Dense        [8]     {'activation': 'relu'}
+        3 Dense        [1]     {'activation': 'sigmoid'}
+        4 Compilation  []      {'loss': 'binary_crossentropy', 'optimizer': 'adam', 'metrics': ['accuracy']}
+
+        If you want to specify parameters for the optimizer, you can add that as the second last row of the architecture:
+        ...
+        4 SGD          []      {'lr': 0.01, 'clipvalue': 0.5}
+        5 Compilation  []      {'loss': 'binary_crossentropy'}
+
+        Layer wrappers can be used by including them in the layer name followed by a space:
+        0 TimeDistributed Dense ...
+        ...
+        For the Bidirectional wrapper the merge_mode parameter can be specified in the kwargs.
+
+        When using recurrent or convolutional layers you will need to pass a valid input_shape to reshape the data.
+        Additionally, the feature definitions should include an 'identifier' variable that will be used for reshaping.
+        E.g. The identifier is a date field and you want to use a LSTM with 10 time steps on a dataset with 20 features.
+        0 LSTM         [64]    {'input_shape': (10,20), 'activation': 'relu''
+        
+        For further information on the columns refer to the project documentation: 
+        https://github.com/nabeel-oz/qlik-py-tools
+        """
+        
+        # List of optimizers that can be specified in the architecture
+        optimizers = ['Adadelta', 'Adagrad', 'Adam', 'Adamax', 'Nadam', 'RMSprop', 'SGD']
+        
+        # The model definition should contain at least one layer and the compilation parameters
+        if architecture is None or len(architecture) < 2:
+            err = "Invalid Keras architecture. Expected at least one layer and compilation parameters."
+            raise Exception(err)
+        # The last row of the model definition should contain compilation parameters
+        elif not architecture.iloc[-1,0].capitalize() in ['Compile', 'Compilation']:
+            err = "Invalid Keras architecture. The last row of the model definition should provide 'Compile' parameters."
+            raise Exception(err)
+        
+        sys.stdout.write("Architecture Data Frame in _keras_build_fn:\n{}\n\n".format(architecture.to_string()))
+
+        neural_net = keras.models.Sequential()
+
+        for i in architecture.index:
+            # Name items in the row for easy access
+            name, args, kwargs = architecture.iloc[i,0], architecture.iloc[i,1], architecture.iloc[i,2]
+
+            # The last row of the DataFrame should provide compilation keyword arguments
+            if i == max(architecture.index):
+                # Check if an optimizer with custom parameters has been defined
+                try:
+                    kwargs['optimizer'] = opt
+                except UnboundLocalError:
+                    pass
+                
+                # Compile the model
+                neural_net.compile(**kwargs)
+            # Watch out for a row providing optimizer parameters
+            elif name in optimizers:
+                opt = getattr(keras.optimizers, name)(**kwargs) 
+            # All other rows of the DataFrame define the model architecture
+            else:
+                # Check if the name includes a layer wrapper e.g. TimeDistributed Dense
+                names = name.split(' ')
+                if len(names) == 2:
+                    wrapper = names[0]
+                    name = names[1]
+                    
+                    # Get wrapper kwargs
+                    wrapper_kwargs = dict()
+                    if 'merge_mode' in kwargs:
+                        wrapper_kwargs['merge_mode'] = kwargs.pop('merge_mode')
+                else:
+                    wrapper = None
+
+                # Create a keras layer of the required type with the provided positional and keyword arguments
+                layer = getattr(keras.layers, name)(*args, **kwargs)
+
+                if wrapper:
+                    # Create the layer wrapper
+                    wrapper = getattr(keras.layers, wrapper)(layer, **wrapper_kwargs)
+                    # Add the layer wrapper to the model
+                    neural_net.add(wrapper)    
+                else:
+                    # Add the layer to the model
+                    neural_net.add(layer)
+            
+        return neural_net
 
     def _cross_validate(self, fit_params={}):
         """
@@ -1767,6 +1864,9 @@ class SKLearnForQlik:
                 output_format = "clf_classes"
 
         elif self.model.estimator_type == "regressor":
+            # Flatten the true labels for the training data
+            y_train = self.y_train.values.ravel()
+
             scoring = ['r2', 'neg_mean_squared_error', 'neg_mean_absolute_error', 'neg_median_absolute_error', 'explained_variance']
         
         # Perform cross validation using the training data and the model pipeline
