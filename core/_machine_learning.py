@@ -18,6 +18,7 @@ from sklearn.pipeline import Pipeline
 from sklearn.feature_extraction import FeatureHasher
 from sklearn.feature_extraction.text import CountVectorizer
 from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.utils.metaestimators import if_delegate_has_method
 
 # Workaround for Keras issue #1406
 # "Using X backend." always printed to stdout #1406 
@@ -904,6 +905,8 @@ class Reshaper(TransformerMixin):
         if self.lags:
             X_transform = X.copy()
 
+            sys.stdout.write("Reshaper transform - y:\n{}\n\n".format(y if y is None else y[:5]))
+
             # Add targets to the lag observations if required
             # This will create an additional feature for each sample i.e. the previous value of y 
             if y is not None and self.lag_target:
@@ -937,6 +940,13 @@ class Reshaper(TransformerMixin):
 
         return X_transform
     
+    def fit_transform(self, X, y=None):
+        """
+        Apply fit() then transform()
+        """
+        
+        return self.fit(X, y).transform(X, y)
+    
     def _print_log(self, step, data=None):
         """
         Print debug info to the log
@@ -950,7 +960,8 @@ class Reshaper(TransformerMixin):
             output = "Input shape specification for Keras: {0}\n\n".format(self.first_layer_kwargs['input_shape'])
         elif step == 2:
             # Output sample data after adding lag observations
-            output = "Lag observations added ({0} per sample). New input shape is {1}.\nSample Data:\n{2}\n\n".format(self.lags, data.shape, data.head())
+            output = "Lag observations added ({0} per sample). New input shape of X_transform is {1}.\n\nUpdated Features:\n{2}\n\nSample Data:\n{3}\n\n"\
+            .format(self.lags, data.shape, data.columns.tolist(), data.head())
         elif step == 3:
             # Output sample data after reshaping
             output = "Input data reshaped to {0}.\nSample Data:\n{1}\n\n".format(data.shape, data[:5])
@@ -959,6 +970,55 @@ class Reshaper(TransformerMixin):
         with open(self.logfile, mode, encoding='utf-8') as f:
             f.write(output)
 
+class KerasPipeline(Pipeline):
+    """
+    A subclass of scikit-learn Pipeline.
+    This class overrides the predict and predict_proba methods to allows for historical targets to be passed to transformers.
+    """
+
+    @if_delegate_has_method(delegate='_final_estimator')
+    def predict(self, X, y=None, **predict_params):
+        """Apply transforms to the data, and predict with the final estimator
+        Parameters
+        ----------
+        X : iterable
+            Data to predict on. Must fulfill input requirements of first step of the pipeline.
+        y:  iterable
+            Historical targets to be passed to transformers.
+            These will be used in adding lags using the Reshaper class above.
+        **predict_params : dict of string -> object
+            Parameters to the ``predict`` called at the end of all transformations in the pipeline. 
+        Returns
+        -------
+        y_pred : array-like
+        """
+        
+        Xt = X
+        for name, transform in self.steps[:-1]:
+            if transform is not None:
+                Xt = transform.transform(Xt, y=y)
+        return self.steps[-1][-1].predict(Xt, **predict_params)
+    
+    @if_delegate_has_method(delegate='_final_estimator')
+    def predict_proba(self, X, y=None):
+        """Apply transforms, and predict_proba of the final estimator
+        Parameters
+        ----------
+        X : iterable
+            Data to predict on. Must fulfill input requirements of first step of the pipeline.
+        y:  iterable
+            Historical targets to be passed to transformers.
+            These will be used in adding lags using the Reshaper class above.
+        Returns
+        -------
+        y_proba : array-like, shape = [n_samples, n_classes]
+        """
+        
+        Xt = X
+        for name, transform in self.steps[:-1]:
+            if transform is not None:
+                Xt = transform.transform(Xt, y=y)
+        return self.steps[-1][-1].predict_proba(Xt)
 
 class KerasClassifierForQlik(KerasClassifier):
     """
@@ -1002,6 +1062,11 @@ class KerasClassifierForQlik(KerasClassifier):
         """
         Call the super class' fit method and store metrics from the history.
         """
+
+        # Match the samples to the targets. 
+        # x and y can be out of sync due to dropped samples in the Reshaper transformer.
+        if len(y) > len(x):
+            y = y[len(y)-len(x):] 
         
         # Fit the model to the data and store information on the training
         history = super().fit(x, y, sample_weight, **kwargs)
@@ -1059,6 +1124,11 @@ class KerasRegressorForQlik(KerasRegressor):
         """
         Call the super class' fit method and store metrics from the history.
         """
+
+        # Match the samples to the targets. 
+        # x and y can be out of sync due to dropped samples in the Reshaper transformer.
+        if len(y) > len(x):
+            y = y[len(y)-len(x):] 
 
         # Fit the model to the data and store information on the training
         history = super().fit(x, y, **kwargs)
