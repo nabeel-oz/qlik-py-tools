@@ -857,7 +857,7 @@ class Reshaper(TransformerMixin):
     It is meant to be used after preprocessing and before fitting the estimator.
     """
 
-    def __init__(self, first_layer_kwargs=None, lags=None, lag_target=False, logfile=None, **kwargs):
+    def __init__(self, first_layer_kwargs=None, logfile=None, **kwargs):
         """
         Initialize the Reshaper with the Keras model first layer's kwargs.
         Additionally take in the number of lag observations to be used in reshaping the data.
@@ -867,8 +867,6 @@ class Reshaper(TransformerMixin):
         """
 
         self.first_layer_kwargs = first_layer_kwargs
-        self.lags = lags
-        self.lag_target = lag_target
         self.logfile = logfile
     
     def fit(self, X, y=None):
@@ -879,8 +877,6 @@ class Reshaper(TransformerMixin):
 
         # Create the input_shape property as a list
         self.input_shape = list(self.first_layer_kwargs['input_shape'])
-        # Add the number of samples to the input_shape
-        self.input_shape.insert(0, X.shape[0])
 
         # Debug information is printed to the terminal and logs if required
         if self.logfile:
@@ -892,47 +888,31 @@ class Reshaper(TransformerMixin):
         """
         Apply the new shape to the data provided in X.
         X is expected to be a 2D DataFrame of samples and features.
-        If self.lags is an integer, previous samples will be used as lag observations and added as input for each sample.
-        If self.lag_target is True, an additional feature will be created for each sample i.e. the previous value of y 
-        The lags parameter is expected when using a 3D or 4D input shape.
+        The data will be reshaped according to self.input_shape. 
         """
         
-        # If X is n_samples by n_features and no lags need to be added, we have nothing to do here
-        if (len(self.input_shape) == 2) and not self.lags:
+        # Add the number of samples to the input_shape
+        input_shape = self.input_shape.copy()
+        input_shape.insert(0, X.shape[0])
+
+        # Debug information is printed to the terminal and logs if required
+        if self.logfile:
+            self._print_log(2, data=input_shape)
+
+        # If the final shape is n_samples by n_features we have nothing to do here
+        if (len(input_shape) == 2):
             return X
         
-        # Get the lag observations and add to X
-        if self.lags:
-            X_transform = X.copy()
-
-            sys.stdout.write("Reshaper transform - y:\n{}\n\n".format(y if y is None else y[:5]))
-
-            # Add targets to the lag observations if required
-            # This will create an additional feature for each sample i.e. the previous value of y 
-            if y is not None and self.lag_target:
-                X_transform["previous_y"] = y
-                X_transform["previous_y"] = X_transform["previous_y"].shift(1)
-            
-            # Add the lag observations
-            X_transform = utils.add_lags(X_transform, lag=self.lags, extrapolate=1, dropna=True, suffix="t")
-
-            # Update the number of samples in the input_shape as some samples may be discarded for not having enough lag periods
-            self.input_shape[0] = X_transform.shape[0]
-
-            # Debug information is printed to the terminal and logs if required
-            if self.logfile:
-                self._print_log(2, data=X_transform)
-
         # 2D, 3D and 4D data is valid. 
         # e.g. The input_shape can be a tuple of (samples, subsequences, timesteps, features), with subsequences and timesteps as optional.
         # A 5D shape may be valid for e.g. a ConvLSTM with (samples, timesteps, rows, columns, features) 
-        if len(self.input_shape) > 5:
-            err = "Unsupported input_shape: {}".format(self.input_shape)
+        if len(input_shape) > 5:
+            err = "Unsupported input_shape: {}".format(input_shape)
             raise Exception(err)
         # Reshape the data
-        elif len(self.input_shape) > 2:
+        elif len(input_shape) > 2:
             # Reshape input data using numpy
-            X_transform = X_transform.values.reshape(self.input_shape)
+            X_transform = X.values.reshape(input_shape)
 
             # Debug information is printed to the terminal and logs if required
             if self.logfile:
@@ -959,9 +939,8 @@ class Reshaper(TransformerMixin):
             # Output the updated input shape
             output = "Input shape specification for Keras: {0}\n\n".format(self.first_layer_kwargs['input_shape'])
         elif step == 2:
-            # Output sample data after adding lag observations
-            output = "Lag observations added ({0} per sample). New input shape of X_transform is {1}.\n\nUpdated Features:\n{2}\n\nSample Data:\n{3}\n\n"\
-            .format(self.lags, data.shape, data.columns.tolist(), data.head())
+            # Output the updated input shape
+            output = "{0} samples added to the input shape. Data will be reshaped to: {1}\n\n".format(data[0], tuple(data))
         elif step == 3:
             # Output sample data after reshaping
             output = "Input data reshaped to {0}.\nSample Data:\n{1}\n\n".format(data.shape, data[:5])
@@ -969,56 +948,6 @@ class Reshaper(TransformerMixin):
         sys.stdout.write(output)
         with open(self.logfile, mode, encoding='utf-8') as f:
             f.write(output)
-
-class KerasPipeline(Pipeline):
-    """
-    A subclass of scikit-learn Pipeline.
-    This class overrides the predict and predict_proba methods to allows for historical targets to be passed to transformers.
-    """
-
-    @if_delegate_has_method(delegate='_final_estimator')
-    def predict(self, X, y=None, **predict_params):
-        """Apply transforms to the data, and predict with the final estimator
-        Parameters
-        ----------
-        X : iterable
-            Data to predict on. Must fulfill input requirements of first step of the pipeline.
-        y:  iterable
-            Historical targets to be passed to transformers.
-            These will be used in adding lags using the Reshaper class above.
-        **predict_params : dict of string -> object
-            Parameters to the ``predict`` called at the end of all transformations in the pipeline. 
-        Returns
-        -------
-        y_pred : array-like
-        """
-        
-        Xt = X
-        for name, transform in self.steps[:-1]:
-            if transform is not None:
-                Xt = transform.transform(Xt, y=y)
-        return self.steps[-1][-1].predict(Xt, **predict_params)
-    
-    @if_delegate_has_method(delegate='_final_estimator')
-    def predict_proba(self, X, y=None):
-        """Apply transforms, and predict_proba of the final estimator
-        Parameters
-        ----------
-        X : iterable
-            Data to predict on. Must fulfill input requirements of first step of the pipeline.
-        y:  iterable
-            Historical targets to be passed to transformers.
-            These will be used in adding lags using the Reshaper class above.
-        Returns
-        -------
-        y_proba : array-like, shape = [n_samples, n_classes]
-        """
-        
-        Xt = X
-        for name, transform in self.steps[:-1]:
-            if transform is not None:
-                Xt = transform.transform(Xt, y=y)
-        return self.steps[-1][-1].predict_proba(Xt)
 
 class KerasClassifierForQlik(KerasClassifier):
     """

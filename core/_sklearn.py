@@ -66,7 +66,7 @@ from keras import backend as kerasbackend
 sys.stderr = stderr
 
 import _utils as utils
-from _machine_learning import Preprocessor, PersistentModel, TargetTransformer, Reshaper, KerasPipeline, KerasClassifierForQlik, KerasRegressorForQlik
+from _machine_learning import Preprocessor, PersistentModel, TargetTransformer, Reshaper, KerasClassifierForQlik, KerasRegressorForQlik
 import ServerSideExtension_pb2 as SSE
 
 # Add Generated folder to module path
@@ -518,7 +518,7 @@ class SKLearnForQlik:
         
         # Add lag observations to the samples if required
         if self.model.lags or self.model.lag_target:
-            train_test_df = self._add_lags(train_test_df, target_df)
+            train_test_df = self._add_lags(train_test_df, target_df, update_features_df=True)
             # Drop targets for samples which were dropped due to null values after adding lags.
             if len(target_df) > len(train_test_df):
                 target_df = target_df.iloc[len(target_df)-len(train_test_df):]
@@ -621,7 +621,7 @@ class SKLearnForQlik:
             # Add a pipeline step to update the input shape and reshape the data if required
             # This transform will also add lag observations if specified through the lags parameter
             # If lag_target is True, an additional feature will be created for each sample using the previous value of y 
-            reshape = Reshaper(first_layer_kwargs=self.model.first_layer_kwargs, lags=self.model.lags, lag_target=self.model.lag_target, logfile=self.logfile)
+            reshape = Reshaper(first_layer_kwargs=self.model.first_layer_kwargs, logfile=self.logfile)
             pipe_steps.append(('reshape', reshape))
         
         # Try assuming the pipeline involves a grid search
@@ -867,7 +867,14 @@ class SKLearnForQlik:
                 # Apply the transformer to the test targets
                 self.y_test = self.model.target_transformer.transform(self.y_test)  
                 # Drop samples where self.y_test cannot be transformed due to insufficient lags
-                self.X_test = self.X_test.iloc[len(self.X_test)-len(self.y_test):]      
+                self.X_test = self.X_test.iloc[len(self.X_test)-len(self.y_test):]
+            
+            # Add lag observations to the samples if required
+            if self.model.lags or self.model.lag_target:
+                self.X_test = self._add_lags(self.X_test, self.y_test)
+                # Drop targets for samples which were dropped due to null values after adding lags.
+                if len(self.y_test) > len(self.X_test):
+                    self.y_test = self.y_test.iloc[len(self.y_test)-len(self.X_test):]
 
         # Get predictions based on the samples
         self.y_pred = self.model.pipe.predict(self.X_test)
@@ -1097,7 +1104,7 @@ class SKLearnForQlik:
         The input data will be reshaped based on the input_shape specified in the Keras model's architecture and the lags parameter.
         Therefore, ensure the number of features and historical data passed to get a prediction matches the model's requirements.
         If the previous target is being included in the lag observations, i.e. the lag_target parameter was set to True,
-        include the target in n_features in the same order as the feature definitions provided during model training. 
+        include historical target values in n_features in the same order as the feature definitions provided during model training. 
         The target can be empty or 0 for future periods.
 
         If variant='predict_proba', we return the predicted probabilties for each sample. Otherwise, we simply return the predictions.
@@ -1117,14 +1124,21 @@ class SKLearnForQlik:
             # Drop samples where y cannot be transformed due to insufficient lags
             X = X.iloc[len(X)-len(y):]
         
-        # Transform target to the expected shape
-        y = y.values.ravel()
-
         # Check that the input data includes history to meet any lag calculation requirements
         if self.model.lags:
             # An additional lag observation is needed if previous targets are being added to the features
             lag_requirement = self.model.lags+2 if self.model.lag_target else self.model.lags+1
             assert len(X) >= lag_requirement, "Insufficient input data as the model requires {} lag periods".format(lag_requirement)
+        
+        # Add lag observations to the samples if required
+        if self.model.lags or self.model.lag_target:
+            X = self._add_lags(X, y)
+            # Drop targets for samples which were dropped due to null values after adding lags.
+            if len(y) > len(X):
+                y = y.iloc[len(y)-len(X):]
+
+        # Transform target to the expected shape
+        y = y.values.ravel()
                 
         # Get the input shape for the model
         input_shape = self.model.first_layer_kwargs["input_shape"]
@@ -1142,20 +1156,19 @@ class SKLearnForQlik:
         
         # Get the predictions by walking forward over the data
         for i in range(rows_per_pred, len(X)):
-            batch_X = X[i-rows_per_pred : i]
-            batch_y = y[i-rows_per_pred : i]
+            batch_X = X.iloc[i-rows_per_pred : i]
 
             # Get prediction and add to y for use in the next step
-            y[i] = self.model.pipe.predict(batch_X, y=batch_y)
+            y[i] = self.model.pipe.predict(batch_X)
 
             # If probabilities need to be returned
             if get_proba:
                 # Get the predicted probability for each sample 
-                probabilities.append(self.model.pipe.predict_proba(batch_X, y=batch_y))
+                probabilities.append(self.model.pipe.predict_proba(batch_X))
         
         # Transform probabilities to a readable string
         if get_proba:
-            y = []
+            y = ["\x00"] * rows_per_pred
             for a in probabilities:
                 s = ""
                 i = 0
@@ -1287,7 +1300,7 @@ class SKLearnForQlik:
                 self._send_table_description("metrics_clf")
             elif self.model.estimator_type == "regressor":
                 self._send_table_description("metrics_reg")
-        elif self.model.validation == "k-fold":
+        elif self.model.validation in ["k-fold", "timeseries"]:
             if self.model.estimator_type == "classifier":
                 self._send_table_description("metrics_clf_cv")
             elif self.model.estimator_type == "regressor":
@@ -1711,7 +1724,7 @@ class SKLearnForQlik:
         else:
             return samples_df
     
-    def _add_lags(self, X, y=None):
+    def _add_lags(self, X, y=None, update_features_df=False):
         """
         Add lag observations to X.
         If y is available and self.model.lag_target is True, the previous target will become an additional feature in X.
@@ -1722,21 +1735,25 @@ class SKLearnForQlik:
         # This will create an additional feature for each sample i.e. the previous value of y 
         if y is not None and self.model.lag_target:
             X["previous_y"] = y.shift(1)
-            # Check the target's data type
-            dt = 'float' if is_numeric_dtype(y.dtype) else 'str'
-            # Check if the target needs to be scaled
-            fs = 'scaling' if dt == 'float' and self.model.scale_target else 'none'
-            # Update feature definitions for the model
-            self.model.features_df.loc['previous_y'] = [self.model.name, 'previous_y', 'feature', dt, fs, '']
+            
+            if update_features_df:
+                # Check the target's data type
+                dt = 'float' if is_numeric_dtype(y.dtypes) else 'str'
+                # Check if the target needs to be scaled
+                fs = 'scaling' if dt == 'float' and self.model.scale_target else 'none'
+                # Update feature definitions for the model
+                self.model.features_df.loc['previous_y'] = [self.model.name, 'previous_y', 'feature', dt, fs, '']
             
         if self.model.lags:
             # Add the lag observations
             X = utils.add_lags(X, lag=self.model.lags, extrapolate=1, dropna=True, suffix="t")
-            # Duplicate the feature definitions by the number of lags
-            self.model.features_df = pd.concat([self.model.features_df] * (self.model.lags+1))
-            # Set the new feature names as the index of the feature definitions data frame
-            self.model.features_df['new_names'] = X.columns
-            self.model.features_df = self.model.features_df.set_index('new_names', drop=True)
+            
+            if update_features_df:
+                # Duplicate the feature definitions by the number of lags
+                self.model.features_df = pd.concat([self.model.features_df] * (self.model.lags+1))
+                # Set the new feature names as the index of the feature definitions data frame
+                self.model.features_df['name'] = X.columns
+                self.model.features_df = self.model.features_df.set_index('name', drop=True)
         
         self._print_log(11, data=X)
 
@@ -1759,7 +1776,7 @@ class SKLearnForQlik:
             # Transform to a list to make the input_shape mutable
             self.model.first_layer_kwargs['input_shape'] = list(self.model.first_layer_kwargs['input_shape'])
             # Update the number of features based on X_transform
-            self.model.first_layer_kwargs['input_shape'][-1] = X_transform.shape[1]+1 if self.model.lags and self.model.lag_target else X_transform.shape[1]
+            self.model.first_layer_kwargs['input_shape'][-1] = X_transform.shape[1]//np.prod(self.model.first_layer_kwargs['input_shape'][:-1])
             # Transform back to a tuple as required by Keras
             self.model.first_layer_kwargs['input_shape'] = tuple(self.model.first_layer_kwargs['input_shape'])
         
@@ -2280,7 +2297,7 @@ class SKLearnForQlik:
         elif step == 11:
             # Output after adding lag observations to input data
             output = "Lag observations added ({0} per sample). New input shape of X is {1}.\n\n".format(self.model.lags, data.shape)
-            output += "Updated Feature Definitions:\n{0}\n\n".format(self.model.features_df.to_list())
+            output += "Feature Definitions:\n{0}\n\n".format(self.model.features_df.to_string())
             output += "Sample Data:\n{0}\n...\n{1}\n\n".format(data.head(5).to_string(), data.tail(5).to_string())
                         
         sys.stdout.write(output)
