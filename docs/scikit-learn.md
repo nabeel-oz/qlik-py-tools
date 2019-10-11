@@ -455,7 +455,7 @@ If you want to use default values you can simply pass an empty string for `Execu
 
 | Keyword | Description | Sample Values | Remarks |
 | --- | --- | --- | --- |
-| overwrite | Specify whether any existing model with the same name should be overwritten | `true`, `false` | Defaults to `false`. |
+| overwrite | Specify whether any existing model with the same name should be overwritten | `true`, `false` | Defaults to `true`. |
 | test_size | Set the ratio that will be used to split the samples into training and testing data sets | `0.3` | Defaults to `0.33`. |
 | cv | Enable k-fold cross validation | `5` | Defaults to `0` in which case the hold-out testing strategy is used as per `test_size`. <br><br>The value represents the cross validation splitting strategy as defined in the scikit-learn [cross_validate](http://scikit-learn.org/stable/modules/generated/sklearn.model_selection.cross_validate.html#sklearn.model_selection.cross_validate) method. <br><br>Refer to the [Testing strategy](#testing-strategy) section for further explanation. |
 | random_state | Seed used by the random number generator when generating the training testing split | `42` | Default to `42`.<br><br>Must be an integer. |

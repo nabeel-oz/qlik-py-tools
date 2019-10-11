@@ -10,13 +10,13 @@ python -m pip install --upgrade setuptools pip
 pip install grpcio grpcio-tools numpy scipy pandas cython joblib
 pip install pystan==2.17
 pip install fbprophet==0.4.post2
-pip install scikit-learn==0.20.3
-pip install hdbscan==0.8.22
+pip install scikit-learn==0.21.3
+pip install hdbscan==0.8.23
 pip install skater==1.1.2
 pip install spacy==2.1.4
 pip install efficient_apriori==1.0.0
 pip install tensorflow==1.14.0
-pip install keras==2.2.4
+pip install keras==2.2.5
 python -m spacy download en
 Write-Output "Creating a new firewall rule for TCP port 50055..."
 netsh advfirewall firewall add rule name=Qlik-PyTools dir=in action=allow protocol=TCP localport=50055

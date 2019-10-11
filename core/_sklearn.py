@@ -247,7 +247,7 @@ class SKLearnForQlik:
             self.model.dim_reduction = False 
         
         # Persist the model to disk
-        self.model = self.model.save(self.model.name, self.path, self.model.compress)
+        self.model = self.model.save(self.model.name, self.path, overwrite=self.model.overwrite, compress=self.model.compress)
         
         # Update the cache to keep this model in memory
         self._update_cache()
@@ -302,7 +302,7 @@ class SKLearnForQlik:
         self._set_grid_params(param_grid, grid_search_args)
         
         # Persist the model to disk
-        self.model = self.model.save(self.model.name, self.path, self.model.compress)
+        self.model = self.model.save(self.model.name, self.path, overwrite=self.model.overwrite, compress=self.model.compress)
         
         # Update the cache to keep this model in memory
         self._update_cache()
@@ -384,6 +384,9 @@ class SKLearnForQlik:
         if self.model.debug:
             self._print_log(3)
 
+        # Set a flag which will let us know that this is a Keras model
+        self.model.using_keras = True
+
         # Sort the layers, drop unnecessart columns and save the model architecture to a new data frame
         architecture = self.request_df.sort_values(by=['sort_order']).reset_index(drop=True).drop(labels=['model_name', 'sort_order'], axis = 1)
 
@@ -402,7 +405,7 @@ class SKLearnForQlik:
             self._print_log(10)
 
         # Persist the model to disk
-        self.model = self.model.save(self.model.name, self.path, self.model.compress)
+        self.model = self.model.save(self.model.name, self.path, overwrite=self.model.overwrite, compress=self.model.compress)
         
         # Update the cache to keep this model in memory
         self._update_cache()
@@ -459,7 +462,7 @@ class SKLearnForQlik:
             raise Exception(err)
 
         # Persist the model to disk
-        self.model = self.model.save(self.model.name, self.path, self.model.compress)
+        self.model = self.model.save(self.model.name, self.path, overwrite=self.model.overwrite, compress=self.model.compress)
         
         # Update the cache to keep this model in memory
         self._update_cache()
@@ -509,7 +512,7 @@ class SKLearnForQlik:
         """
         
         # Open an existing model and get the training & test dataset and targets
-        train_test_df, target_df = self._get_model_and_data(set_feature_def=True)
+        train_test_df, target_df = self._get_model_and_data(target=True, set_feature_def=True)
         
         # Check that the estimator is an supervised ML algorithm
         if self.model.estimator_type not in ["classifier", "regressor"]:
@@ -576,12 +579,7 @@ class SKLearnForQlik:
                 pass
         
         # If this is a Keras estimator, we require the preprocessing to return a data frame instead of a numpy array
-        if self.model.estimator in ['KerasRegressor', 'KerasClassifier']:
-            using_keras = True
-            prep_return = 'df'
-        else:
-            using_keras = False
-            prep_return = 'np'
+        prep_return = 'df' if self.model.using_keras else 'np'
 
         # Construct the preprocessor
         prep = Preprocessor(self.model.features_df, return_type=prep_return, scale_hashed=self.model.scale_hashed, scale_vectors=self.model.scale_vectors,\
@@ -601,7 +599,7 @@ class SKLearnForQlik:
             self.model.estimation_step = 0      
 
         # If this is a Keras estimator, update the input shape and reshape the data if required
-        if using_keras:
+        if self.model.using_keras:
             # Update the input shape based on the final number of features after preprocessing
             self._keras_update_shape(prep)
 
@@ -690,7 +688,13 @@ class SKLearnForQlik:
             self._calc_importances(X = X, y = y)
 
         # Persist the model to disk
-        self.model = self.model.save(self.model.name, self.path, self.model.compress)
+        self.model = self.model.save(self.model.name, self.path, overwrite=self.model.overwrite, compress=self.model.compress)
+        # For Keras models we need to save the model architecture and weights using the Keras method
+        if self.model.using_keras:
+            # Get the trained keras model from the pipeline's estimator
+            keras_model = self.model.pipe.named_steps['estimator'].model
+            # Save the keras model architecture and weights to disk
+            keras_model.save(self.path + self.model.name + '.h5', overwrite=self.model.overwrite)
         
         # Update the cache to keep this model in memory
         self._update_cache()
@@ -860,7 +864,7 @@ class SKLearnForQlik:
         # If the function call was made externally, process the request
         if caller == "external":
             # Open an existing model and get the training & test dataset and targets based on the request
-            self.X_test, self.y_test = self._get_model_and_data()    
+            self.X_test, self.y_test = self._get_model_and_data(target=True)    
 
             # Scale the targets and increase stationarity if required
             if self.model.scale_target or self.model.make_stationary:
@@ -931,6 +935,11 @@ class SKLearnForQlik:
             
             # Get the explained variance score
             metrics_df.loc[:,"explained_variance_score"] = metrics.explained_variance_score(self.y_test, self.y_pred, **metric_args)
+
+            # If the target was scaled we need to inverse transform certain metrics to the original scale
+            if self.model.scale_target or self.model.make_stationary:
+                for m in ["r2_score", "mean_squared_error", "mean_absolute_error", "median_absolute_error"]:
+                    metrics_df.loc[:, m] = self.model.target_transformer.inverse_transform(metrics_df.loc[:, m], array_like=False)
             
             # Finalize the structure of the result DataFrame
             metrics_df.loc[:,"model_name"] = self.model.name
@@ -1115,7 +1124,7 @@ class SKLearnForQlik:
 
         # Open an existing model and get the input dataset. 
         # Target for historical data are expected if using previous targets as a feature.
-        X, y = self._get_model_and_data(target=self.model.lag_target, ordered_data=True) 
+        X, y = self._get_model_and_data(ordered_data=True) 
 
         # Scale the targets and increase stationarity if required
         if self.model.scale_target or self.model.make_stationary:
@@ -1147,7 +1156,7 @@ class SKLearnForQlik:
 
         # Prepare the response DataFrame
         # Initially set up with the 'model_name' and 'key' columns and the same index as request_df
-        self.response = self.request_df.drop(columns=['n_features', 'kwargs'])
+        self.response = self.request_df.drop(columns=['n_features'])
 
         # Set up a list to contain prediction probabilities if required
         if variant == 'predict_proba':
@@ -1156,7 +1165,7 @@ class SKLearnForQlik:
         
         # Get the predictions by walking forward over the data
         for i in range(rows_per_pred, len(X)):
-            batch_X = X.iloc[i-rows_per_pred : i]
+            batch_X = X.iloc[i-rows_per_pred : i]            
 
             # Get prediction and add to y for use in the next step
             y[i] = self.model.pipe.predict(batch_X)
@@ -1165,7 +1174,7 @@ class SKLearnForQlik:
             if get_proba:
                 # Get the predicted probability for each sample 
                 probabilities.append(self.model.pipe.predict_proba(batch_X))
-        
+              
         # Transform probabilities to a readable string
         if get_proba:
             y = ["\x00"] * rows_per_pred
@@ -1183,6 +1192,13 @@ class SKLearnForQlik:
         
         # Add predictions / probabilities to the response
         self.response['result'] = y
+
+        # Remove actual values for which we did not generate predictions due to insufficient lags
+        if not get_proba:
+            if is_numeric_dtype(y.dtype):
+                self.response.iloc[:rows_per_pred,2] = np.NaN
+            else:
+                self.response.iloc[:rows_per_pred,2] = "\x00"
 
         # Reindex the response to reset to the original sort order
         self.response = self.response.reindex(self.original_index)
@@ -1327,12 +1343,10 @@ class SKLearnForQlik:
         # Get the model from cache or disk based on the model_name in request
         self._get_model_by_name()
 
-        if self.model.estimator not in ['KerasClassifier', 'KerasRegressor']:
-            err = "Loss history is only available for Keras models"
-            raise Exception(err)
+        assert self.model.using_keras, "Loss history is only available for Keras models"
 
         # Prepare the response using the histories data frame from the Keras model
-        self.response = self.model.pipe.named_steps['estimator'].histories
+        self.response = self.model.pipe.named_steps['estimator'].histories.copy()
         
         # Add the model name to the response
         self.response.insert(0, 'model_name', self.model.name)
@@ -1361,7 +1375,7 @@ class SKLearnForQlik:
         # Set default values which will be used if execution arguments are not passed
         
         # Default parameters:
-        self.model.overwrite = False
+        self.model.overwrite = True
         self.model.debug = False
         self.model.test_size = 0.33
         self.model.cv = 0
@@ -1381,6 +1395,7 @@ class SKLearnForQlik:
         self.model.lag_target = False
         self.model.scale_target = False
         self.model.make_stationary = None
+        self.model.using_keras = False
         
         # Default metric parameters:
         if metric_args is None:
@@ -1629,7 +1644,7 @@ class SKLearnForQlik:
         if self.model.debug:
             self._print_log(3)
     
-    def _get_model_and_data(self, target=True, set_feature_def=False, ordered_data=False):
+    def _get_model_and_data(self, target=False, set_feature_def=False, ordered_data=False):
         """
         Get samples and targets based on the request and an existing model's feature definitions.
         If target=False, just return the samples.
@@ -1660,7 +1675,7 @@ class SKLearnForQlik:
         self.model = PersistentModel()
         
         # Get the model name from the request dataframe
-        self.model.name = self.request_df.loc[0, 'model_name']
+        self.model.name = self.request_df.iloc[0, 0]
         
         # Get the model from cache or disk
         self._get_model()
@@ -1669,6 +1684,10 @@ class SKLearnForQlik:
         if self.model.debug:
             self._print_log(3)
 
+        # If the model requires lag targets, the data is always expected to contain targets
+        if not target:
+            target = self.model.lag_target
+        
         # Get the expected features for this request
         features_df = self.model.original_features_df.copy()
         
@@ -1704,7 +1723,7 @@ class SKLearnForQlik:
         
         if target:
             # Get the target feature
-            target_name = self.model.features_df.loc[self.model.features_df["variable_type"] == "target"].index[0]
+            target_name = self.model.original_features_df.loc[self.model.original_features_df["variable_type"] == "target"].index[0]
 
             # Get the target data
             target_df = samples_df.loc[:,[target_name]]
@@ -1714,10 +1733,11 @@ class SKLearnForQlik:
             # Get the features to be excluded from the model
             exclusions = features_df['variable_type'].isin(["excluded", "target", "identifier"])
             # Store the featuer definitions except exclusions
-            self.model.features_df = features_df.loc[~exclusions]
+            features_df = features_df.loc[~exclusions]
+            self.model.features_df = features_df
         
         # Remove excluded features, target and identifier from the data
-        samples_df = samples_df[self.model.features_df.index.tolist()]
+        samples_df = samples_df[features_df.index.tolist()]
         
         if target:
             return [samples_df, target_df]
@@ -1738,7 +1758,7 @@ class SKLearnForQlik:
             
             if update_features_df:
                 # Check the target's data type
-                dt = 'float' if is_numeric_dtype(y.dtypes) else 'str'
+                dt = 'float' if is_numeric_dtype(y.iloc[:,0]) else 'str'
                 # Check if the target needs to be scaled
                 fs = 'scaling' if dt == 'float' and self.model.scale_target else 'none'
                 # Update feature definitions for the model
@@ -1776,7 +1796,10 @@ class SKLearnForQlik:
             # Transform to a list to make the input_shape mutable
             self.model.first_layer_kwargs['input_shape'] = list(self.model.first_layer_kwargs['input_shape'])
             # Update the number of features based on X_transform
-            self.model.first_layer_kwargs['input_shape'][-1] = X_transform.shape[1]//np.prod(self.model.first_layer_kwargs['input_shape'][:-1])
+            if self.model.lags:
+                self.model.first_layer_kwargs['input_shape'][-1] = X_transform.shape[1]//(self.model.lags + 1)
+            else:
+                self.model.first_layer_kwargs['input_shape'][-1] = X_transform.shape[1]//np.prod(self.model.first_layer_kwargs['input_shape'][:-1])
             # Transform back to a tuple as required by Keras
             self.model.first_layer_kwargs['input_shape'] = tuple(self.model.first_layer_kwargs['input_shape'])
         
@@ -2021,7 +2044,7 @@ class SKLearnForQlik:
         Importances are calculated using the Skater library to provide this capability for all sklearn algorithms.
         For more information: https://www.datascience.com/resources/tools/skater
         """
-
+        
         # Fill null values in the test set according to the model settings
         X_test = utils.fillna(X, method=self.model.missing)
         
@@ -2171,11 +2194,6 @@ class SKLearnForQlik:
         Return the model.
         """
         
-        # Avoid tensorflow error for keras models
-        # https://github.com/tensorflow/tensorflow/issues/14356
-        # https://stackoverflow.com/questions/40785224/tensorflow-cannot-interpret-feed-dict-key-as-tensor
-        kerasbackend.clear_session()
-
         if use_cache and self.model.name in self.__class__.model_cache:
             # Load the model from cache
             self.model = self.__class__.model_cache[self.model.name]
@@ -2186,6 +2204,22 @@ class SKLearnForQlik:
         else:
             # Load the model from disk
             self.model = self.model.load(self.model.name, self.path)
+            
+            # For Keras models we need to load an additional file
+            if self.model.using_keras:
+                # Avoid tensorflow error for keras models
+                # https://github.com/tensorflow/tensorflow/issues/14356
+                # https://stackoverflow.com/questions/40785224/tensorflow-cannot-interpret-feed-dict-key-as-tensor
+                kerasbackend.clear_session()
+
+                # The model will only be available if the fit method has been called previously
+                try:
+                    # Load the keras model architecture and weights from disk
+                    keras_model = keras.models.load_model(self.path + self.model.name + '.h5')
+                    # Point the model's estimator in the sklearn pipeline to the keras model architecture and weights 
+                    self.model.pipe.named_steps['estimator'].model = keras_model
+                except OSError:
+                    pass
             
             # Debug information is printed to the terminal and logs if the paramater debug = true
             if self.model.debug:

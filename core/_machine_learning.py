@@ -44,13 +44,12 @@ class PersistentModel:
         self.name = None
         self.state = None
         self.state_timestamp = None
-        self.overwrite = False
         
-    def save(self, name, path, compress=3, locked_timeout=2):
+    def save(self, name, path, overwrite=True, compress=3, locked_timeout=2):
         """
         Save the model to disk at the specified path.
-        If the model already exists and self.overwrite=False, throw an exception.
-        If self.overwrite=True, replace any existing file.
+        If the model already exists and overwrite=False, throw an exception.
+        If overwrite=True, replace any existing file with the same name at the path.
         If the model is found to be locked, wait 'locked_timeout' seconds and try again before quitting.
         """
         
@@ -67,7 +66,7 @@ class PersistentModel:
             pass
         
         # If the file exists and overwriting is not allowed, raise an exception
-        if Path(f).exists() and not self.overwrite:
+        if Path(f).exists() and not overwrite:
             raise FileExistsError("The specified model name already exists: {0}.".format(name + '.joblib')\
                                   +"\nPass overwrite=True if it is ok to overwrite.")
         # Check if the file is currently locked
@@ -754,10 +753,13 @@ class TargetTransformer:
         
         return self
 
-    def transform(self, y):
+    def transform(self, y, array_like=True):
         """
         Transform new targets using the previously fit scaler.
         Also apply a logarithm or differencing if required for making the series stationary.
+
+        array_like determines if y is expected to be multiple values or a single value.
+        Note that the differencing won't be done if array_like=False.
         """
 
         y_transform = y
@@ -765,13 +767,15 @@ class TargetTransformer:
         # Scale the targets using the previously fit scaler
         if self.scale:
             y_transform = self.scaler_instance.transform(y)
+            # The scaler returns a numpy array which needs to be converted back to a data frame
+            y_transform = pd.DataFrame(y_transform, columns=y.columns, index=y.index)
 
         # Apply a logarithm to make the array stationary
         if self.make_stationary == 'log':
             y_transform = np.log(y)
 
         # Apply stationarity lags by differencing the array
-        elif self.make_stationary == 'difference':
+        elif self.make_stationary == 'difference' and array_like:
             y_diff = y_transform.copy()
             len_y = len(y_diff)
 
@@ -790,7 +794,7 @@ class TargetTransformer:
                 y_transform = y_diff[max(self.lags):]
 
         if self.logfile is not None:
-            self._print_log(1, data=y_transform)
+            self._print_log(1, data=y_transform, array_like=array_like)
         
         return y_transform
 
@@ -801,9 +805,12 @@ class TargetTransformer:
 
         return self.fit(y).transform(y)
 
-    def inverse_transform(self, y_transform):
+    def inverse_transform(self, y_transform, array_like=True):
         """
         Reverse the transformations and return the target in it's original form.
+
+        array_like determines if y_transform is expected to be multiple values or a single value.
+        Note that the differencing won't be done if array_like=False.
         """
 
         if self.scale:
@@ -815,7 +822,7 @@ class TargetTransformer:
 
         # Reverse the differencing applied during transform
         # NOTE: y_transform will need to include actual values preceding the lags
-        elif self.make_stationary == 'difference':
+        elif self.make_stationary == 'difference' and array_like:
             y = y_transform.copy()
             len_y = len(y_transform)
             
@@ -827,24 +834,30 @@ class TargetTransformer:
                         y[i] = y[i] + y[i - lag]
 
         if self.logfile is not None:
-            self._print_log(2, data=y)
+            self._print_log(2, data=y, array_like=array_like)
 
         return y
     
-    def _print_log(self, step, data=None):
+    def _print_log(self, step, data=None, array_like=True):
         """
         Print debug info to the log
         """
         
         # Set mode to append to log file
         mode = 'a'
+        output = ''
 
         if step == 1:
             # Output the transformed targets
-            output = "Targets transformed {0}:\nSample Data:\n{1}\n\n".format(data.shape, data[:5])
+            output = "Targets transformed"
         elif step == 2:
             # Output sample data after adding lag observations
-            output = "Targets inverse transformed {0}:\nSample Data:\n{1}\n\n".format(data.shape, data[:5])
+            output = "Targets inverse transformed"
+
+        if array_like:
+            output += " {0}:\nSample Data:\n{1}\n\n".format(data.shape, data.head())
+        else:
+            output += " {0}".format(data)
 
         sys.stdout.write(output)
         with open(self.logfile, mode, encoding='utf-8') as f:
@@ -972,6 +985,7 @@ class KerasClassifierForQlik(KerasClassifier):
         # This DataFrame will provide metrics such as loss for each run of the fit method
         # Columns will be ['iteration', 'epoch', 'loss'] and any other metrics being calculated during training
         self.histories = pd.DataFrame()
+        self.iteration = 0
         
         # Check the parameters using the super class method
         self.check_params(self.sk_params)  
@@ -1001,7 +1015,7 @@ class KerasClassifierForQlik(KerasClassifier):
         history = super().fit(x, y, sample_weight, **kwargs)
 
         # Set up a data frame with the epochs and a counter to track multiple histories
-        history_df = pd.DataFrame({'iteration': len(self.histories), 'epoch': history.epoch})
+        history_df = pd.DataFrame({'iteration': self.iteration+1, 'epoch': history.epoch})
         
         # Add a column per metric for each epoch e.g. loss, acc
         for key in history.history:
@@ -1009,6 +1023,7 @@ class KerasClassifierForQlik(KerasClassifier):
 
         # Concatenate results from the training to the history data frame
         self.histories = pd.concat([self.histories, history_df], sort=True).sort_values(by=['iteration', 'epoch']).reset_index(drop=True)
+        self.iteration += 1
 
         return history
 
@@ -1035,6 +1050,7 @@ class KerasRegressorForQlik(KerasRegressor):
         # This DataFrame will provide metrics such as loss for each run of the fit method
         # Columns will be ['iteration', 'epoch', 'loss'] and any other metrics being calculated during training
         self.histories = pd.DataFrame()
+        self.iteration = 0
 
         # Check the parameters using the super class method
         self.check_params(self.sk_params)
@@ -1063,7 +1079,7 @@ class KerasRegressorForQlik(KerasRegressor):
         history = super().fit(x, y, **kwargs)
 
         # Set up a data frame with the epochs and a counter to track multiple histories
-        history_df = pd.DataFrame({'iteration': len(self.histories), 'epoch': history.epoch})
+        history_df = pd.DataFrame({'iteration': self.iteration+1, 'epoch': history.epoch})
         
         # Add a column per metric for each epoch e.g. loss
         for key in history.history:
@@ -1071,5 +1087,6 @@ class KerasRegressorForQlik(KerasRegressor):
 
         # Concatenate results from the training to the history data frame
         self.histories = pd.concat([self.histories, history_df], sort=True).sort_values(by=['iteration', 'epoch']).reset_index(drop=True)
+        self.iteration += 1
 
         return history

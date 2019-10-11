@@ -146,6 +146,7 @@ def count_placeholders(series):
     Count the number of null or zero values at the bottom of a series.
     """
     count = 0
+    series = series.reset_index(drop=True)
 
     for i in range(series.size-1, -1, -1):
         if pd.isnull(series[i]) or series[i] == 0:
@@ -287,6 +288,51 @@ def get_args_by_type(str_args):
                 
                 # Convert the value based on the correct type
                 result_list.append(types[split[1]](split[0]))
+
+            elif split[1] == "dict":
+                # If the argument is a dictionary convert keys and values according to the correct types
+                items = split[0].split(";")
+                d = {}
+                
+                for i in items:
+                    a,b = i.split(":")
+                    
+                    # Handle conversion from string to boolean
+                    if split[2] in ("boolean", "bool"):
+                        a = a.capitalize()
+                    if split[3] in ("boolean", "bool"):
+                        b = b.capitalize()
+                    
+                    # Handle None as an item in the dictionary
+                    if b == "None":
+                        d[types[split[2]](a)] = None
+                    else:
+                        d[types[split[2]](a)] = types[split[3]](b)
+                
+                result_list.append(d)
+            
+            elif split[1] in ("list", "array", "tuple"):
+                # If the argument is a list, array or tuple convert keys and values according to the correct types
+                items = split[0].split(";")
+                l = []
+                
+                for i in items:
+                    # Handle conversion from string to boolean
+                    if split[2] in ("boolean", "bool"):
+                        i = i.capitalize()
+
+                    # Handle None as an item in the dictionary
+                    if i == "None":
+                        l.append(None)
+                    else:
+                        l.append(types[split[2]](i))
+                
+                if split[1] == "array":
+                    l = np.array(l)
+                elif split[1] == "tuple":
+                    l = tuple(l)
+                    
+                result_list.append(l)
             else:
                 err = "Incorrect syntax for argument: '{}'. Expected 'value1|type1, value2|type2, ...'".format(str_args)
                 raise Exception(err)    
