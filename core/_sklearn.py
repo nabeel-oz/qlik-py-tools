@@ -1108,7 +1108,7 @@ class SKLearnForQlik:
         Make Predictions using a trained Keras model. 
         This function is built for sequence and time series predictions. For standard ML simply use the predict function.
         For sequence prediction we expect reshaping of data for e.g. based on n lag periods. 
-        A previous prediction then needs to be fed as input to the next prediction. 
+        So previous samples, and possibly predictions, need to be fed as input for the next prediction. 
         
         The input data will be reshaped based on the input_shape specified in the Keras model's architecture and the lags parameter.
         Therefore, ensure the number of features and historical data passed to get a prediction matches the model's requirements.
@@ -1116,7 +1116,7 @@ class SKLearnForQlik:
         include historical target values in n_features in the same order as the feature definitions provided during model training. 
         The target can be empty or 0 for future periods.
 
-        If variant='predict_proba', we return the predicted probabilties for each sample. Otherwise, we simply return the predictions.
+        If variant='predict_proba', we return the predicted probabilties for each sample. Otherwise, we return the predictions.
         
         This method can be called from a chart expression or the load script in Qlik. 
         The load_script flag needs to be set accordingly for the correct response.
@@ -1124,56 +1124,62 @@ class SKLearnForQlik:
 
         # Open an existing model and get the input dataset. 
         # Target for historical data are expected if using previous targets as a feature.
-        X, y = self._get_model_and_data(ordered_data=True) 
+        request_data = self._get_model_and_data(ordered_data=True) 
+        if type(request_data) == list:
+            X, y = request_data
+        else:
+            X = request_data
 
         # Scale the targets and increase stationarity if required
-        if self.model.scale_target or self.model.make_stationary:
+        if self.model.lag_target and (self.model.scale_target or self.model.make_stationary):
             # Apply the transformer to the targets
             y = self.model.target_transformer.transform(y)
             # Drop samples where y cannot be transformed due to insufficient lags
             X = X.iloc[len(X)-len(y):]
         
+        # Set the number of rows required for one prediction
+        rows_per_pred = 1
+
         # Check that the input data includes history to meet any lag calculation requirements
         if self.model.lags:
             # An additional lag observation is needed if previous targets are being added to the features
-            lag_requirement = self.model.lags+2 if self.model.lag_target else self.model.lags+1
-            assert len(X) >= lag_requirement, "Insufficient input data as the model requires {} lag periods".format(lag_requirement)
-        
-        # Add lag observations to the samples if required
-        if self.model.lags or self.model.lag_target:
-            X = self._add_lags(X, y)
-            # Drop targets for samples which were dropped due to null values after adding lags.
-            if len(y) > len(X):
-                y = y.iloc[len(y)-len(X):]
-
-        # Transform target to the expected shape
-        y = y.values.ravel()
-                
-        # Get the input shape for the model
-        input_shape = self.model.first_layer_kwargs["input_shape"]
-        # Calculate the number of rows required for one prediction
-        rows_per_pred = np.prod(input_shape[:-1])
+            rows_per_pred = self.model.lags+2 if self.model.lag_target else self.model.lags+1
+            assert len(X) >= rows_per_pred, "Insufficient input data as the model requires {} lag periods".format(rows_per_pred)
 
         # Prepare the response DataFrame
         # Initially set up with the 'model_name' and 'key' columns and the same index as request_df
         self.response = self.request_df.drop(columns=['n_features'])
 
-        # Set up a list to contain prediction probabilities if required
+        # Set up a list to contain predictions and probabilities if required
+        predictions = []
+        get_proba =  False
         if variant == 'predict_proba':
             get_proba =  True
             probabilities = []
         
         # Get the predictions by walking forward over the data
         for i in range(rows_per_pred, len(X)):
-            batch_X = X.iloc[i-rows_per_pred : i]            
+            batch_X = X.iloc[i-rows_per_pred : i] 
+            if self.model.lag_target:
+                batch_y = y.iloc[i-rows_per_pred : i] 
+            else:
+                batch_y = None 
 
-            # Get prediction and add to y for use in the next step
-            y[i] = self.model.pipe.predict(batch_X)
+            # Add lag observations to the samples if required
+            if self.model.lags or self.model.lag_target:
+                batch_X = self._add_lags(batch_X, y=batch_y)
+
+            # Get prediction and add to the list. We only get a prediction for the last sample in the batch, the remaining samples only being used to add lags.
+            pred = self.model.pipe.predict(batch_X.iloc[[-1],:])
+            predictions.append(pred)
+            # Add the prediction to y to be used as a lag target for the next prediction
+            if self.model.lag_target:
+                y.iloc[i, 0] = pred
 
             # If probabilities need to be returned
             if get_proba:
                 # Get the predicted probability for each sample 
-                probabilities.append(self.model.pipe.predict_proba(batch_X))
+                probabilities.append(self.model.pipe.predict_proba(batch_X.iloc[[-1],:]))
               
         # Transform probabilities to a readable string
         if get_proba:
@@ -1185,20 +1191,25 @@ class SKLearnForQlik:
                     s = s + ", {0}: {1:.3f}".format(self.model.pipe.named_steps['estimator'].classes_[i], b)
                     i += 1
                 y.append(s[2:])
-        # Inverse transformations on the targets if required 
-        elif self.model.scale_target or self.model.make_stationary:
-            # Apply the transformer to the test targets
-            y = self.model.target_transformer.inverse_transform(y) 
+        # Prepare predictions
+        else:
+            if self.model.lag_target: 
+                # Remove actual values for which we did not generate predictions due to insufficient lags
+                if is_numeric_dtype(y.iloc[:, 0].dtype):
+                    y.iloc[:rows_per_pred, 0] = np.NaN
+                else:
+                    y.iloc[:rows_per_pred, 0] = "\x00"
+                y = y.values.tolist()
+            else:
+                y = predictions 
+            
+            # Inverse transformations on the targets if required 
+            if self.model.scale_target or self.model.make_stationary:
+                # Apply the transformer to the test targets
+                y = self.model.target_transformer.inverse_transform(y) 
         
         # Add predictions / probabilities to the response
         self.response['result'] = y
-
-        # Remove actual values for which we did not generate predictions due to insufficient lags
-        if not get_proba:
-            if is_numeric_dtype(y.dtype):
-                self.response.iloc[:rows_per_pred,2] = np.NaN
-            else:
-                self.response.iloc[:rows_per_pred,2] = "\x00"
 
         # Reindex the response to reset to the original sort order
         self.response = self.response.reindex(self.original_index)
@@ -1775,7 +1786,8 @@ class SKLearnForQlik:
                 self.model.features_df['name'] = X.columns
                 self.model.features_df = self.model.features_df.set_index('name', drop=True)
         
-        self._print_log(11, data=X)
+        if self.model.debug:
+            self._print_log(11, data=X)
 
         return X
     
@@ -2216,6 +2228,7 @@ class SKLearnForQlik:
                 try:
                     # Load the keras model architecture and weights from disk
                     keras_model = keras.models.load_model(self.path + self.model.name + '.h5')
+                    keras_model._make_predict_function()
                     # Point the model's estimator in the sklearn pipeline to the keras model architecture and weights 
                     self.model.pipe.named_steps['estimator'].model = keras_model
                 except OSError:
