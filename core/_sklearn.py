@@ -1667,18 +1667,20 @@ class SKLearnForQlik:
         # Interpret the request data based on the expected row and column structure
         row_template = ['strData', 'strData']
         col_headers = ['model_name', 'n_features']
+        features_col_num = 1
 
         # If True, the request is expected to have a key field which will be used as an index.
         if ordered_data:
             row_template.append('strData')
             col_headers.insert(1, 'key')
+            features_col_num = 2
         
         # Create a Pandas Data Frame for the request data
         self.request_df = utils.request_df(self.request, row_template, col_headers)
 
         if ordered_data:
             # Set the key column as the index
-            self.request_df.set_index("key", drop=True, inplace=True)
+            self.request_df.set_index("key", drop=False, inplace=True)
             # Store this index so we can reset the data to its original sort order
             self.original_index = self.request_df.index.copy()
         
@@ -1717,7 +1719,7 @@ class SKLearnForQlik:
         
         try:
             # Split the features provided as a string into individual columns
-            samples_df = pd.DataFrame([x[1].split("|") for x in self.request_df.values.tolist()],\
+            samples_df = pd.DataFrame([x[features_col_num].split("|") for x in self.request_df.values.tolist()],\
                                             columns=features_df.loc[:,"name"].tolist(),\
                                             index=self.request_df.index)
         except AssertionError as ae:
