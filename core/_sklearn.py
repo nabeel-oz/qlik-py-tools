@@ -65,6 +65,8 @@ import keras
 from keras import backend as kerasbackend
 sys.stderr = stderr
 
+import tensorflow as tf
+
 import _utils as utils
 from _machine_learning import Preprocessor, PersistentModel, TargetTransformer, Reshaper, KerasClassifierForQlik, KerasRegressorForQlik
 import ServerSideExtension_pb2 as SSE
@@ -641,7 +643,15 @@ class SKLearnForQlik:
                 self._cross_validate()
 
             # Fit the training data to the pipeline
-            self.model.pipe.fit(self.X_train, self.y_train.values.ravel())
+            if self.model.using_keras:
+                # https://stackoverflow.com/questions/54652536/keras-tensorflow-backend-error-tensor-input-10-specified-in-either-feed-de
+                session = tf.Session()
+                kerasbackend.set_session(session)
+                with session.as_default():
+                    with session.graph.as_default():
+                        self.model.pipe.fit(self.X_train, self.y_train.values.ravel())
+            else:
+                self.model.pipe.fit(self.X_train, self.y_train.values.ravel())
 
             # Get the best parameters and the cross validation results
             grid_search = self.model.pipe.named_steps['grid_search']
@@ -669,7 +679,15 @@ class SKLearnForQlik:
                 self._cross_validate()
 
             # Fit the training data to the pipeline
-            self.model.pipe.fit(self.X_train, self.y_train.values.ravel())
+            if self.model.using_keras:
+                # https://stackoverflow.com/questions/54652536/keras-tensorflow-backend-error-tensor-input-10-specified-in-either-feed-de
+                session = tf.Session()
+                kerasbackend.set_session(session)
+                with session.as_default():
+                    with session.graph.as_default():
+                        self.model.pipe.fit(self.X_train, self.y_train.values.ravel())
+            else:
+                self.model.pipe.fit(self.X_train, self.y_train.values.ravel())
         
         if self.model.validation == "hold-out":       
             # Evaluate the model using the test data            
@@ -854,7 +872,7 @@ class SKLearnForQlik:
             
             return self.response.loc[:,'result']
     
-    def calculate_metrics(self, caller="external"):
+    def calculate_metrics(self, caller="external", ordered_data=False):
         """
         Return key metrics based on a test dataset.
         Metrics returned for a classifier are: accuracy, precision, recall, fscore, support
@@ -864,7 +882,7 @@ class SKLearnForQlik:
         # If the function call was made externally, process the request
         if caller == "external":
             # Open an existing model and get the training & test dataset and targets based on the request
-            self.X_test, self.y_test = self._get_model_and_data(target=True)    
+            self.X_test, self.y_test = self._get_model_and_data(target=True, ordered_data=ordered_data)    
 
             # Scale the targets and increase stationarity if required
             if self.model.scale_target or self.model.make_stationary:
@@ -881,7 +899,13 @@ class SKLearnForQlik:
                     self.y_test = self.y_test.iloc[len(self.y_test)-len(self.X_test):]
 
         # Get predictions based on the samples
-        self.y_pred = self.model.pipe.predict(self.X_test)
+        if self.model.using_keras:
+            self._keras_refresh()
+        
+        if ordered_data:
+            self.y_pred = self.sequence_predict(variant="internal")
+        else:
+            self.y_pred = self.model.pipe.predict(self.X_test)
         
         # Flatten the y_test DataFrame
         self.y_test = self.y_test.values.ravel()
@@ -1103,32 +1127,36 @@ class SKLearnForQlik:
             
             return self.response.loc[:,'result']
     
-    def keras_sequence_predict(self, load_script=False, variant="predict"):
+    def sequence_predict(self, load_script=False, variant="predict"):
         """
-        Make Predictions using a trained Keras model. 
+        Make sequential predictions using a trained model. 
         This function is built for sequence and time series predictions. For standard ML simply use the predict function.
-        For sequence prediction we expect reshaping of data for e.g. based on n lag periods. 
+        For sequence prediction we expect using lag periods as features. 
         So previous samples, and possibly predictions, need to be fed as input for the next prediction. 
+        Therefore, ensure that the number of features and historical data passed to get a prediction matches the model's requirements.
         
-        The input data will be reshaped based on the input_shape specified in the Keras model's architecture and the lags parameter.
-        Therefore, ensure the number of features and historical data passed to get a prediction matches the model's requirements.
         If the previous target is being included in the lag observations, i.e. the lag_target parameter was set to True,
         include historical target values in n_features in the same order as the feature definitions provided during model training. 
         The target can be empty or 0 for future periods.
 
         If variant='predict_proba', we return the predicted probabilties for each sample. Otherwise, we return the predictions.
+        If variant='internal', the call can be made from within this class.
         
         This method can be called from a chart expression or the load script in Qlik. 
         The load_script flag needs to be set accordingly for the correct response.
         """
 
-        # Open an existing model and get the input dataset. 
-        # Target for historical data are expected if using previous targets as a feature.
-        request_data = self._get_model_and_data(ordered_data=True) 
-        if type(request_data) == list:
-            X, y = request_data
+        if variant != 'internal':
+            # Open an existing model and get the input dataset. 
+            # Target for historical data are expected if using previous targets as a feature.
+            request_data = self._get_model_and_data(ordered_data=True) 
+            if type(request_data) == list:
+                X, y = request_data
+            else:
+                X = request_data
         else:
-            X = request_data
+            X = self.X_test.copy()
+            y = self.y_test.copy()
 
         # Scale the targets and increase stationarity if required
         if self.model.lag_target and (self.model.scale_target or self.model.make_stationary):
@@ -1146,9 +1174,10 @@ class SKLearnForQlik:
             rows_per_pred = self.model.lags+2 if self.model.lag_target else self.model.lags+1
             assert len(X) >= rows_per_pred, "Insufficient input data as the model requires {} lag periods".format(rows_per_pred)
 
-        # Prepare the response DataFrame
-        # Initially set up with the 'model_name' and 'key' columns and the same index as request_df
-        self.response = self.request_df.drop(columns=['n_features'])
+        if variant != 'internal':
+            # Prepare the response DataFrame
+            # Initially set up with the 'model_name' and 'key' columns and the same index as request_df
+            self.response = self.request_df.drop(columns=['n_features'])
 
         # Set up a list to contain predictions and probabilities if required
         predictions = []
@@ -1169,8 +1198,13 @@ class SKLearnForQlik:
             if self.model.lags or self.model.lag_target:
                 batch_X = self._add_lags(batch_X, y=batch_y)
 
+            # Refresh the keras model to avoid tensorflow errors
+            if self.model.using_keras:
+                self._keras_refresh()
+
             # Get prediction and add to the list. We only get a prediction for the last sample in the batch, the remaining samples only being used to add lags.
             pred = self.model.pipe.predict(batch_X.iloc[[-1],:])
+            
             predictions.append(pred)
             # Add the prediction to y to be used as a lag target for the next prediction
             if self.model.lag_target:
@@ -1208,6 +1242,9 @@ class SKLearnForQlik:
                 # Apply the transformer to the test targets
                 y = self.model.target_transformer.inverse_transform(y) 
         
+        if variant == 'internal':
+            return y
+
         # Add predictions / probabilities to the response
         self.response['result'] = y
 
@@ -2263,6 +2300,20 @@ class SKLearnForQlik:
         # Debug information is printed to the terminal and logs if the paramater debug = true
         if self.model.debug:
             self._print_log(8)
+    
+    def _keras_refresh(self):
+        """
+        Avoid tensorflow errors for keras models by clearing the session and reloading from disk
+        https://github.com/tensorflow/tensorflow/issues/14356
+        https://stackoverflow.com/questions/40785224/tensorflow-cannot-interpret-feed-dict-key-as-tensor
+        """
+        kerasbackend.clear_session()
+
+        # Load the keras model architecture and weights from disk
+        keras_model = keras.models.load_model(self.path + self.model.name + '.h5')
+        keras_model._make_predict_function()
+        # Point the model's estimator in the sklearn pipeline to the keras model architecture and weights 
+        self.model.pipe.named_steps['estimator'].model = keras_model
     
     def _print_log(self, step, data=None):
         """

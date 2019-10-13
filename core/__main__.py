@@ -115,7 +115,8 @@ class ExtensionService(SSE.ConnectorServicer):
             38: '_sklearn',
             39: '_sklearn',
             40: '_prophet',
-            41: '_prophet_seasonality'
+            41: '_prophet_seasonality',
+            42: '_sklearn'
         }
 
     """
@@ -511,10 +512,10 @@ class ExtensionService(SSE.ConnectorServicer):
                 response = model.fit_transform(load_script=False)
             elif function == 36:
                 # Get sequence predictions from Keras
-                response = model.keras_sequence_predict(load_script=False)
+                response = model.sequence_predict(load_script=False)
             elif function == 38:
                 # Get sequence prediction probabilities from Keras
-                response = model.keras_sequence_predict(load_script=False, variant="predict_proba")
+                response = model.sequence_predict(load_script=False, variant="predict_proba")
             
             dtypes = ["str"]
             
@@ -530,18 +531,20 @@ class ExtensionService(SSE.ConnectorServicer):
                 response = model.fit_transform(load_script=True)
             elif function == 37:
                 # Get sequence predictions from Keras
-                response = model.keras_sequence_predict(load_script=True)
+                response = model.sequence_predict(load_script=True)
             elif function == 39:
                 # Get sequence prediction probabilities from Keras
-                response = model.keras_sequence_predict(load_script=True, variant="predict_proba")
+                response = model.sequence_predict(load_script=True, variant="predict_proba")
 
             dtypes = ["str", "str", "str"]
         
-        elif function in (18, 22):
+        elif function in (18, 22, 42):
             if function == 18:
                 response = model.get_metrics()
             elif function == 22:
                 response = model.calculate_metrics()
+            elif function == 42:
+                response = model.calculate_metrics(ordered_data=True)
             
             # Check whether the metrics are for a classifier or regressor and whether they come from cross validation or hold-out testing
             if "accuracy_std" in response.columns:
