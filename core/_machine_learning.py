@@ -767,8 +767,10 @@ class TargetTransformer:
         # Scale the targets using the previously fit scaler
         if self.scale:
             y_transform = self.scaler_instance.transform(y)
-            # The scaler returns a numpy array which needs to be converted back to a data frame
-            y_transform = pd.DataFrame(y_transform, columns=y.columns, index=y.index)
+            
+            if isinstance(y, pd.DataFrame):
+                # The scaler returns a numpy array which needs to be converted back to a data frame
+                y_transform = pd.DataFrame(y_transform, columns=y.columns, index=y.index)
 
         # Apply a logarithm to make the array stationary
         if self.make_stationary == 'log':
@@ -815,6 +817,10 @@ class TargetTransformer:
 
         if self.scale:
             y = self.scaler_instance.inverse_transform(y_transform)
+
+            if isinstance(y_transform, pd.DataFrame):
+                # The scaler returns a numpy array which needs to be converted back to a data frame
+                y = pd.DataFrame(y, columns=y_transform.columns, index=y_transform.index)
 
         # Apply an exponential to reverse the logarithm applied during transform
         if self.make_stationary == 'log':

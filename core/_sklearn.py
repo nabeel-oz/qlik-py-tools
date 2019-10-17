@@ -890,13 +890,6 @@ class SKLearnForQlik:
                 self.y_test = self.model.target_transformer.transform(self.y_test)  
                 # Drop samples where self.y_test cannot be transformed due to insufficient lags
                 self.X_test = self.X_test.iloc[len(self.X_test)-len(self.y_test):]
-            
-            # Add lag observations to the samples if required
-            if self.model.lags or self.model.lag_target:
-                self.X_test = self._add_lags(self.X_test, self.y_test)
-                # Drop targets for samples which were dropped due to null values after adding lags.
-                if len(self.y_test) > len(self.X_test):
-                    self.y_test = self.y_test.iloc[len(self.y_test)-len(self.X_test):]
 
         # Get predictions based on the samples
         if self.model.using_keras:
@@ -904,14 +897,17 @@ class SKLearnForQlik:
         
         if ordered_data:
             self.y_pred = self.sequence_predict(variant="internal")
+
+            # Handle possible null values where a prediction could not be generated
+            nulls = np.isnan(self.y_pred).sum()
+            if nulls:
+                self.y_pred = self.y_pred[nulls:]
+                self.y_test = self.y_test.iloc[nulls:]
         else:
             self.y_pred = self.model.pipe.predict(self.X_test)
         
         # Flatten the y_test DataFrame
         self.y_test = self.y_test.values.ravel()
-                    
-        # Test the accuracy of the model using the test data
-        self.model.score = self.model.pipe.score(self.X_test, self.y_test)
         
         # Try getting the metric_args from the model
         try:
@@ -935,6 +931,7 @@ class SKLearnForQlik:
                                        (self.y_test, self.y_pred, **metric_args)],\
                                       index=["precision", "recall", "fscore", "support"], columns=metric_rows).transpose()
             # Add accuracy
+            self.model.score = metrics.accuracy_score(self.y_test, self.y_pred)
             metrics_df.loc["overall", "accuracy"] = self.model.score
             # Finalize the structure of the result DataFrame
             metrics_df.loc[:,"model_name"] = self.model.name
@@ -946,6 +943,7 @@ class SKLearnForQlik:
             
         elif self.model.estimator_type == "regressor":
             # Get the r2 score
+            self.model.score = metrics.r2_score(self.y_test, self.y_pred, **metric_args)
             metrics_df = pd.DataFrame([[self.model.score]], columns=["r2_score"])
                         
             # Get the mean squared error
@@ -963,7 +961,7 @@ class SKLearnForQlik:
             # If the target was scaled we need to inverse transform certain metrics to the original scale
             if self.model.scale_target or self.model.make_stationary:
                 for m in ["r2_score", "mean_squared_error", "mean_absolute_error", "median_absolute_error"]:
-                    metrics_df.loc[:, m] = self.model.target_transformer.inverse_transform(metrics_df.loc[:, m], array_like=False)
+                    metrics_df.loc[:, m] = self.model.target_transformer.inverse_transform(metrics_df.loc[:, [m]], array_like=False).values.ravel()
             
             # Finalize the structure of the result DataFrame
             metrics_df.loc[:,"model_name"] = self.model.name
@@ -1159,7 +1157,7 @@ class SKLearnForQlik:
             y = self.y_test.copy()
 
         # Scale the targets and increase stationarity if required
-        if self.model.lag_target and (self.model.scale_target or self.model.make_stationary):
+        if variant=="predict" and self.model.lag_target and (self.model.scale_target or self.model.make_stationary):
             # Apply the transformer to the targets
             y = self.model.target_transformer.transform(y)
             # Drop samples where y cannot be transformed due to insufficient lags
@@ -1185,36 +1183,45 @@ class SKLearnForQlik:
         if variant == 'predict_proba':
             get_proba =  True
             probabilities = []
-        
-        # Get the predictions by walking forward over the data
-        for i in range(rows_per_pred, len(X)):
-            batch_X = X.iloc[i-rows_per_pred : i] 
-            if self.model.lag_target:
-                batch_y = y.iloc[i-rows_per_pred : i] 
-            else:
-                batch_y = None 
 
-            # Add lag observations to the samples if required
-            if self.model.lags or self.model.lag_target:
+        # Refresh the keras model to avoid tensorflow errors
+        if self.model.using_keras:
+            self._keras_refresh()
+
+        if self.model.lag_target:
+            # Get the predictions by walking forward over the data
+            for i in range(rows_per_pred, len(X)):
+                batch_X = X.iloc[i-rows_per_pred : i] 
+                batch_y = y.iloc[i-rows_per_pred : i] 
+
+                # Add lag observations to the samples
                 batch_X = self._add_lags(batch_X, y=batch_y)
 
-            # Refresh the keras model to avoid tensorflow errors
-            if self.model.using_keras:
-                self._keras_refresh()
+                # Get prediction and add to the list. We only get a prediction for the last sample in the batch, the remaining samples only being used to add lags.
+                pred = self.model.pipe.predict(batch_X.iloc[[-1],:])
+                
+                predictions.append(pred)
+                # Add the prediction to y to be used as a lag target for the next prediction
+                if self.model.lag_target:
+                    y.iloc[i, 0] = pred
 
-            # Get prediction and add to the list. We only get a prediction for the last sample in the batch, the remaining samples only being used to add lags.
-            pred = self.model.pipe.predict(batch_X.iloc[[-1],:])
-            
-            predictions.append(pred)
-            # Add the prediction to y to be used as a lag target for the next prediction
-            if self.model.lag_target:
-                y.iloc[i, 0] = pred
+                # If probabilities need to be returned
+                if get_proba:
+                    # Get the predicted probability for each sample 
+                    probabilities.append(self.model.pipe.predict_proba(batch_X.iloc[[-1],:]))
+        else:
+            # Add lag observations to the samples if required
+            if self.model.lags:
+                X = self._add_lags(X)
+
+            # Get prediction for X
+            predictions = self.model.pipe.predict(X)
 
             # If probabilities need to be returned
             if get_proba:
                 # Get the predicted probability for each sample 
-                probabilities.append(self.model.pipe.predict_proba(batch_X.iloc[[-1],:]))
-              
+                probabilities = self.model.pipe.predict_proba(X)
+
         # Transform probabilities to a readable string
         if get_proba:
             y = ["\x00"] * rows_per_pred
@@ -1233,14 +1240,16 @@ class SKLearnForQlik:
                     y.iloc[:rows_per_pred, 0] = np.NaN
                 else:
                     y.iloc[:rows_per_pred, 0] = "\x00"
-                y = y.values.tolist()
             else:
-                y = predictions 
+                y = pd.DataFrame([predictions])
             
             # Inverse transformations on the targets if required 
             if self.model.scale_target or self.model.make_stationary:
                 # Apply the transformer to the test targets
                 y = self.model.target_transformer.inverse_transform(y) 
+            
+            # Flatten y to the expected 1D shape
+            y = y.values.ravel()
         
         if variant == 'internal':
             return y
