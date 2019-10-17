@@ -1318,7 +1318,26 @@ class SKLearnForQlik:
         
         # Prepare the expression as a string
         delimiter = " &'|'& "
-        features = self.model.features_df["name"].tolist()
+
+        # Get the complete feature definitions for this model
+        features_df = self.model.original_features_df.copy()
+    
+        # Set features that are not expected in the features expression in Qlik
+        exclude = ["excluded"]
+
+        if not self.model.lag_target:
+            exclude.append("target")
+        if not self.model.lags:
+            exclude.append("identifier")
+
+        # Exclude columns that are not expected in the request data
+        exclusions = features_df['variable_type'].isin(exclude)
+        features_df = features_df.loc[~exclusions]
+    
+        # Get the feature names
+        features = features_df["name"].tolist()
+        
+        # Prepare a string which can be evaluated to an expression in Qlik with features as field names
         self.response = pd.Series(delimiter.join(["[" + f + "]" for f in features]))
         
         # Send the reponse table description to Qlik
@@ -1966,7 +1985,7 @@ class SKLearnForQlik:
                 else:
                     # Add the layer to the model
                     neural_net.add(layer)
-            
+        
         return neural_net
 
     def _cross_validate(self, fit_params={}):

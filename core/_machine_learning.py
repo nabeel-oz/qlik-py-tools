@@ -1020,9 +1020,13 @@ class KerasClassifierForQlik(KerasClassifier):
         # Fit the model to the data and store information on the training
         history = super().fit(x, y, sample_weight, **kwargs)
 
+        sys.stdout.write("\n\nKeras Model Summary:\n")
+        self.model.summary()
+        sys.stdout.write("\n\n")
+
         # Set up a data frame with the epochs and a counter to track multiple histories
         history_df = pd.DataFrame({'iteration': self.iteration+1, 'epoch': history.epoch})
-        
+
         # Add a column per metric for each epoch e.g. loss, acc
         for key in history.history:
             history_df[key] = pd.Series(history.history[key])
@@ -1084,9 +1088,13 @@ class KerasRegressorForQlik(KerasRegressor):
         # Fit the model to the data and store information on the training
         history = super().fit(x, y, **kwargs)
 
+        sys.stdout.write("\n\nKeras Model Summary:\n")
+        self.model.summary()
+        sys.stdout.write("\n\n")
+
         # Set up a data frame with the epochs and a counter to track multiple histories
         history_df = pd.DataFrame({'iteration': self.iteration+1, 'epoch': history.epoch})
-        
+       
         # Add a column per metric for each epoch e.g. loss
         for key in history.history:
             history_df[key] = pd.Series(history.history[key])
