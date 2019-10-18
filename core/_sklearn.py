@@ -959,8 +959,9 @@ class SKLearnForQlik:
             metrics_df.loc[:,"explained_variance_score"] = metrics.explained_variance_score(self.y_test, self.y_pred, **metric_args)
 
             # If the target was scaled we need to inverse transform certain metrics to the original scale
-            if self.model.scale_target or self.model.make_stationary:
-                for m in ["r2_score", "mean_squared_error", "mean_absolute_error", "median_absolute_error"]:
+            # However, if we used the sequence prediction function, the inverse transform has already been performed
+            if not ordered_data and (self.model.scale_target or self.model.make_stationary):
+                for m in ["mean_squared_error", "mean_absolute_error", "median_absolute_error"]:
                     metrics_df.loc[:, m] = self.model.target_transformer.inverse_transform(metrics_df.loc[:, [m]], array_like=False).values.ravel()
             
             # Finalize the structure of the result DataFrame
