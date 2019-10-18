@@ -81,6 +81,13 @@ class PersistentModel:
             self.name = name
             self.state = 'saved'
             self.state_timestamp = time.time()
+
+            # Keras models are excluded from the joblib file as they are saved to a special HDF5 file in _sklearn.py
+            try:
+                if self.using_keras:
+                    self.pipe.named_steps['estimator'].model = None
+            except AttributeError as ae:
+                pass
             
             # Create the lock file
             joblib.dump(f_lock, filename=Path(f_lock), compress=compress)

@@ -66,6 +66,7 @@ from keras import backend as kerasbackend
 sys.stderr = stderr
 
 import tensorflow as tf
+tf.compat.v1.logging.set_verbosity(tf.compat.v1.logging.ERROR)
 
 import _utils as utils
 from _machine_learning import Preprocessor, PersistentModel, TargetTransformer, Reshaper, KerasClassifierForQlik, KerasRegressorForQlik
@@ -705,15 +706,16 @@ class SKLearnForQlik:
             # Calculate model agnostic feature importances
             self._calc_importances(X = X, y = y)
 
-        # Persist the model to disk
-        self.model = self.model.save(self.model.name, self.path, overwrite=self.model.overwrite, compress=self.model.compress)
-        # For Keras models we need to save the model architecture and weights using the Keras method
+        # For Keras models we need to save the model architecture and weights using Keras
         if self.model.using_keras:
             # Get the trained keras model from the pipeline's estimator
             keras_model = self.model.pipe.named_steps['estimator'].model
             # Save the keras model architecture and weights to disk
             keras_model.save(self.path + self.model.name + '.h5', overwrite=self.model.overwrite)
         
+        # Persist the model to disk
+        self.model = self.model.save(self.model.name, self.path, overwrite=self.model.overwrite, compress=self.model.compress)
+                
         # Update the cache to keep this model in memory
         self._update_cache()
         
@@ -2283,24 +2285,7 @@ class SKLearnForQlik:
                 self._print_log(6)
         else:
             # Load the model from disk
-            self.model = self.model.load(self.model.name, self.path)
-            
-            # For Keras models we need to load an additional file
-            if self.model.using_keras:
-                # Avoid tensorflow error for keras models
-                # https://github.com/tensorflow/tensorflow/issues/14356
-                # https://stackoverflow.com/questions/40785224/tensorflow-cannot-interpret-feed-dict-key-as-tensor
-                kerasbackend.clear_session()
-
-                # The model will only be available if the fit method has been called previously
-                try:
-                    # Load the keras model architecture and weights from disk
-                    keras_model = keras.models.load_model(self.path + self.model.name + '.h5')
-                    keras_model._make_predict_function()
-                    # Point the model's estimator in the sklearn pipeline to the keras model architecture and weights 
-                    self.model.pipe.named_steps['estimator'].model = keras_model
-                except OSError:
-                    pass
+            self.model = self.model.load(self.model.name, self.path)           
             
             # Debug information is printed to the terminal and logs if the paramater debug = true
             if self.model.debug:
@@ -2308,6 +2293,23 @@ class SKLearnForQlik:
             
             # Update the cache to keep this model in memory
             self._update_cache()
+        
+         # For Keras models we need to load an additional file
+        if self.model.using_keras:
+            # Avoid tensorflow error for keras models
+            # https://github.com/tensorflow/tensorflow/issues/14356
+            # https://stackoverflow.com/questions/40785224/tensorflow-cannot-interpret-feed-dict-key-as-tensor
+            kerasbackend.clear_session()
+
+            # The model will only be available if the fit method has been called previously
+            try:
+                # Load the keras model architecture and weights from disk
+                keras_model = keras.models.load_model(self.path + self.model.name + '.h5')
+                keras_model._make_predict_function()
+                # Point the model's estimator in the sklearn pipeline to the keras model architecture and weights 
+                self.model.pipe.named_steps['estimator'].model = keras_model
+            except (OSError, AttributeError):
+                pass
     
     def _update_cache(self):
         """
