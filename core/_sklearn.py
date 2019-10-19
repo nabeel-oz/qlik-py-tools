@@ -624,6 +624,11 @@ class SKLearnForQlik:
             # If lag_target is True, an additional feature will be created for each sample using the previous value of y 
             reshape = Reshaper(first_layer_kwargs=self.model.first_layer_kwargs, logfile=self.logfile)
             pipe_steps.append(('reshape', reshape))
+
+            # Avoid tensorflow error for keras models
+            # https://github.com/tensorflow/tensorflow/issues/14356
+            # https://stackoverflow.com/questions/40785224/tensorflow-cannot-interpret-feed-dict-key-as-tensor
+            kerasbackend.clear_session()
         
         # Try assuming the pipeline involves a grid search
         try:
@@ -686,6 +691,7 @@ class SKLearnForQlik:
                 kerasbackend.set_session(session)
                 with session.as_default():
                     with session.graph.as_default():
+                        sys.stdout.write("MODEL: {}, INPUT SHAPE: {}\n\n".format(self.model.name, self.model.first_layer_kwargs['input_shape']))
                         self.model.pipe.fit(self.X_train, self.y_train.values.ravel())
             else:
                 self.model.pipe.fit(self.X_train, self.y_train.values.ravel())
@@ -706,13 +712,6 @@ class SKLearnForQlik:
             # Calculate model agnostic feature importances
             self._calc_importances(X = X, y = y)
 
-        # For Keras models we need to save the model architecture and weights using Keras
-        if self.model.using_keras:
-            # Get the trained keras model from the pipeline's estimator
-            keras_model = self.model.pipe.named_steps['estimator'].model
-            # Save the keras model architecture and weights to disk
-            keras_model.save(self.path + self.model.name + '.h5', overwrite=self.model.overwrite)
-        
         # Persist the model to disk
         self.model = self.model.save(self.model.name, self.path, overwrite=self.model.overwrite, compress=self.model.compress)
                 
@@ -893,10 +892,11 @@ class SKLearnForQlik:
                 # Drop samples where self.y_test cannot be transformed due to insufficient lags
                 self.X_test = self.X_test.iloc[len(self.X_test)-len(self.y_test):]
 
-        # Get predictions based on the samples
+        # Refresh the keras model to avoid tensorflow errors
         if self.model.using_keras:
             self._keras_refresh()
         
+        # Get predictions based on the samples
         if ordered_data:
             self.y_pred = self.sequence_predict(variant="internal")
 
@@ -1885,6 +1885,9 @@ class SKLearnForQlik:
             # Transform back to a tuple as required by Keras
             self.model.first_layer_kwargs['input_shape'] = tuple(self.model.first_layer_kwargs['input_shape'])
         
+        # Ensure the Architecture has been updated
+        self.model.architecture.iloc[0, 2]['input_shape'] = self.model.first_layer_kwargs['input_shape']
+        
         # 2D, 3D and 4D data is valid. 
         # e.g. The input_shape can be a tuple of (subsequences, timesteps, features), with subsequences and timesteps as optional.
         # A 4D shape may be valid for e.g. a ConvLSTM with (timesteps, rows, columns, features) 
@@ -2279,37 +2282,24 @@ class SKLearnForQlik:
         if use_cache and self.model.name in self.__class__.model_cache:
             # Load the model from cache
             self.model = self.__class__.model_cache[self.model.name]
+
+            # Refresh the keras model to avoid tensorflow errors 
+            if self.model.using_keras and hasattr(self.model, 'pipe'):
+                self._keras_refresh()
             
             # Debug information is printed to the terminal and logs if the paramater debug = true
             if self.model.debug:
                 self._print_log(6)
         else:
             # Load the model from disk
-            self.model = self.model.load(self.model.name, self.path)           
-            
+            self.model = self.model.load(self.model.name, self.path) 
+
             # Debug information is printed to the terminal and logs if the paramater debug = true
             if self.model.debug:
                 self._print_log(7)
             
             # Update the cache to keep this model in memory
             self._update_cache()
-        
-         # For Keras models we need to load an additional file
-        if self.model.using_keras:
-            # Avoid tensorflow error for keras models
-            # https://github.com/tensorflow/tensorflow/issues/14356
-            # https://stackoverflow.com/questions/40785224/tensorflow-cannot-interpret-feed-dict-key-as-tensor
-            kerasbackend.clear_session()
-
-            # The model will only be available if the fit method has been called previously
-            try:
-                # Load the keras model architecture and weights from disk
-                keras_model = keras.models.load_model(self.path + self.model.name + '.h5')
-                keras_model._make_predict_function()
-                # Point the model's estimator in the sklearn pipeline to the keras model architecture and weights 
-                self.model.pipe.named_steps['estimator'].model = keras_model
-            except (OSError, AttributeError):
-                pass
     
     def _update_cache(self):
         """

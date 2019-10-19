@@ -25,6 +25,8 @@ from sklearn.utils.metaestimators import if_delegate_has_method
 # https://github.com/keras-team/keras/issues/1406
 stderr = sys.stderr
 sys.stderr = open(os.devnull, 'w')
+import keras
+from keras import backend as kerasbackend
 from keras.wrappers.scikit_learn import KerasClassifier
 from keras.wrappers.scikit_learn import KerasRegressor
 sys.stderr = stderr
@@ -44,6 +46,7 @@ class PersistentModel:
         self.name = None
         self.state = None
         self.state_timestamp = None
+        self.using_keras = False
         
     def save(self, name, path, overwrite=True, compress=3, locked_timeout=2):
         """
@@ -85,8 +88,13 @@ class PersistentModel:
             # Keras models are excluded from the joblib file as they are saved to a special HDF5 file in _sklearn.py
             try:
                 if self.using_keras:
+                    # Get the trained keras model from the pipeline's estimator
+                    keras_model = self.pipe.named_steps['estimator'].model
+                    # Save the keras model architecture and weights to disk
+                    keras_model.save(path + name + '.h5', overwrite=overwrite)
+                    # The Keras estimator is excluded from the model saved to the joblib file
                     self.pipe.named_steps['estimator'].model = None
-            except AttributeError as ae:
+            except AttributeError:
                 pass
             
             # Create the lock file
@@ -101,7 +109,7 @@ class PersistentModel:
                 
         return self
     
-    def load(self, name, path):        
+    def load(self, name, path):
         """
         Check if the model exists at the specified path and return it to the caller.
         If the model is not found throw an exception.
@@ -110,6 +118,20 @@ class PersistentModel:
         with open(Path(path + name + '.joblib'), 'rb') as f:
             self = joblib.load(f)
         
+        # If using Keras we need to load the HDF5 file as well
+        # The model will only be available if the fit method has been called previously
+        if self.using_keras and hasattr(self, 'pipe'):
+            # Avoid tensorflow error for keras models
+            # https://github.com/tensorflow/tensorflow/issues/14356
+            # https://stackoverflow.com/questions/40785224/tensorflow-cannot-interpret-feed-dict-key-as-tensor
+            kerasbackend.clear_session()
+
+            # Load the keras model architecture and weights from disk
+            keras_model = keras.models.load_model(path + name + '.h5')
+            keras_model._make_predict_function()
+            # Point the estimator in the sklearn pipeline to the keras model architecture and weights 
+            self.pipe.named_steps['estimator'].model = keras_model
+
         return self
 
 class Preprocessor(TransformerMixin):
