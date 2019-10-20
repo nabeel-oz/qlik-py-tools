@@ -691,7 +691,7 @@ class SKLearnForQlik:
                 kerasbackend.set_session(session)
                 with session.as_default():
                     with session.graph.as_default():
-                        sys.stdout.write("MODEL: {}, INPUT SHAPE: {}\n\n".format(self.model.name, self.model.first_layer_kwargs['input_shape']))
+                        sys.stdout.write("\nMODEL: {}, INPUT SHAPE: {}\n\n".format(self.model.name, self.model.first_layer_kwargs['input_shape']))
                         self.model.pipe.fit(self.X_train, self.y_train.values.ravel())
             else:
                 self.model.pipe.fit(self.X_train, self.y_train.values.ravel())
@@ -1202,7 +1202,7 @@ class SKLearnForQlik:
 
                 # Get prediction and add to the list. We only get a prediction for the last sample in the batch, the remaining samples only being used to add lags.
                 pred = self.model.pipe.predict(batch_X.iloc[[-1],:])
-                
+
                 predictions.append(pred)
                 # Add the prediction to y to be used as a lag target for the next prediction
                 if self.model.lag_target:
@@ -1844,7 +1844,7 @@ class SKLearnForQlik:
                 fs = 'scaling' if dt == 'float' and self.model.scale_target else 'none'
                 # Update feature definitions for the model
                 self.model.features_df.loc['previous_y'] = [self.model.name, 'previous_y', 'feature', dt, fs, '']
-            
+
         if self.model.lags:
             # Add the lag observations
             X = utils.add_lags(X, lag=self.model.lags, extrapolate=1, dropna=True, suffix="t")
@@ -1855,7 +1855,7 @@ class SKLearnForQlik:
                 # Set the new feature names as the index of the feature definitions data frame
                 self.model.features_df['name'] = X.columns
                 self.model.features_df = self.model.features_df.set_index('name', drop=True)
-        
+
         if self.model.debug:
             self._print_log(11, data=X)
 
