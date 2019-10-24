@@ -59,23 +59,23 @@ To pull the image from Docker's public registry use the command below:
 ```
 docker pull nabeeloz/qlik-py-tools
 ```
-The image uses port 80 by default. You can add encryption using certificates as explained [here](https://github.com/qlik-oss/server-side-extension/blob/master/generate_certs_guide/README.md).
+The image uses port 50055 by default. You can add encryption using certificates as explained [here](https://github.com/qlik-oss/server-side-extension/blob/master/generate_certs_guide/README.md).
 
 ```
-docker run -p 50055:80 -it nabeeloz/qlik-py-tools
+docker run -p 50055:50055 -it nabeeloz/qlik-py-tools
 ```
 Containers built with this image only retain data while they are running. This means that to persist trained models or log files you will need to add a volume or bind mount using [Docker capabilities for managing data](https://docs.docker.com/storage/).
 
 ```
 # Store predictive models to a Docker volume on the host machine
-docker run -p 50055:80 -it -v pytools-models:/qlik-py-tools/models nabeeloz/qlik-py-tools
+docker run -p 50055:50055 -it -v pytools-models:/qlik-py-tools/models nabeeloz/qlik-py-tools
 
 # Store log files to a bind mount on the host machine
-docker run -p 50055:80 -it -v ~/Documents/logs:/qlik-py-tools/core/logs nabeeloz/qlik-py-tools
+docker run -p 50055:50055 -it -v ~/Documents/logs:/qlik-py-tools/core/logs nabeeloz/qlik-py-tools
 
 # Run a container in detached mode, storing predictive models on a volume and logs on a bind mount
 docker run \
-    -p 50055:80 \
+    -p 50055:50055 \
     -d \
     -v pytools-models:/qlik-py-tools/models \
     -v ~/Documents/logs:/qlik-py-tools/core/logs \
