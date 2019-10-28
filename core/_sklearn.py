@@ -606,9 +606,10 @@ class SKLearnForQlik:
             # Update the input shape based on the final number of features after preprocessing
             self._keras_update_shape(prep)
 
-            # Add the Keras build function and architecture to the estimator keyword arguments
+            # Add the Keras build function, architecture and prediction_periods to the estimator keyword arguments
             self.model.estimator_kwargs['build_fn'] = self._keras_build_fn
             self.model.estimator_kwargs['architecture'] = self.model.architecture
+            self.model.estimator_kwargs['prediction_periods'] = self.model.prediction_periods
 
             # Debug information is printed to the terminal and logs if the paramater debug = true
             if self.model.debug:
@@ -618,6 +619,13 @@ class SKLearnForQlik:
             if self.model.lags or len(self.model.first_layer_kwargs["input_shape"]) > 1:
                 assert len(self.model.original_features_df[self.model.original_features_df['variable_type'].isin(["identifier"])]) == 1, \
                     "An identifier is mandatory when using lags or with sequence prediction problems. Define this field in your feature definitions."
+
+            # Cater for multi-step predictions
+            if self.model.prediction_periods > 1:
+                # Transform y to a vector of values equal to prediction_periods
+                self.y_train = utils.vectorize_array(self.y_train, steps=self.model.prediction_periods)
+                # Drop values from x for which we don't have sufficient y values
+                self.X_train = self.X_train.iloc[:-len(self.X_train)+len(self.y_train)]
 
             # Add a pipeline step to update the input shape and reshape the data if required
             # This transform will also add lag observations if specified through the lags parameter
@@ -655,7 +663,9 @@ class SKLearnForQlik:
                 kerasbackend.set_session(session)
                 with session.as_default():
                     with session.graph.as_default():
-                        self.model.pipe.fit(self.X_train, self.y_train.values.ravel())
+                        sys.stdout.write("\nMODEL: {}, INPUT SHAPE: {}\n\n".format(self.model.name, self.model.first_layer_kwargs['input_shape']))
+                        y = self.y_train.values if self.y_train.shape[1] > 1 else self.y_train.values.ravel()
+                        self.model.pipe.fit(self.X_train, y)
             else:
                 self.model.pipe.fit(self.X_train, self.y_train.values.ravel())
 
@@ -692,7 +702,8 @@ class SKLearnForQlik:
                 with session.as_default():
                     with session.graph.as_default():
                         sys.stdout.write("\nMODEL: {}, INPUT SHAPE: {}\n\n".format(self.model.name, self.model.first_layer_kwargs['input_shape']))
-                        self.model.pipe.fit(self.X_train, self.y_train.values.ravel())
+                        y = self.y_train.values if self.y_train.shape[1] > 1 else self.y_train.values.ravel()
+                        self.model.pipe.fit(self.X_train, y)
             else:
                 self.model.pipe.fit(self.X_train, self.y_train.values.ravel())
         
@@ -704,7 +715,7 @@ class SKLearnForQlik:
             # Select the dataset for calculating importances
             if self.model.validation == "hold-out":
                 X = self.X_test
-                y = self.y_test
+                y = self.y_test.values.ravel()
             else:
                 X = self.X_train
                 y = self.y_train.values.ravel()
@@ -873,7 +884,7 @@ class SKLearnForQlik:
             
             return self.response.loc[:,'result']
     
-    def calculate_metrics(self, caller="external", ordered_data=False):
+    def calculate_metrics(self, caller="external", ordered_data=False): 
         """
         Return key metrics based on a test dataset.
         Metrics returned for a classifier are: accuracy, precision, recall, fscore, support
@@ -901,10 +912,8 @@ class SKLearnForQlik:
             self.y_pred = self.sequence_predict(variant="internal")
 
             # Handle possible null values where a prediction could not be generated
-            nulls = np.isnan(self.y_pred).sum()
-            if nulls:
-                self.y_pred = self.y_pred[nulls:]
-                self.y_test = self.y_test.iloc[nulls:]
+            self.y_pred = self.y_pred[self.placeholders:]
+            self.y_test = self.y_test.iloc[self.placeholders:]
         else:
             self.y_pred = self.model.pipe.predict(self.X_test)
         
@@ -1012,7 +1021,10 @@ class SKLearnForQlik:
             raise Exception(err)
         
         # Send the reponse table description to Qlik
-        self._send_table_description("confusion_matrix")
+        if "step" in self.response.columns:
+            self._send_table_description("confusion_matrix_multi")
+        else:
+            self._send_table_description("confusion_matrix")
         
         # Debug information is printed to the terminal and logs if the paramater debug = true
         if self.model.debug:
@@ -1139,6 +1151,7 @@ class SKLearnForQlik:
         If the previous target is being included in the lag observations, i.e. the lag_target parameter was set to True,
         include historical target values in n_features in the same order as the feature definitions provided during model training. 
         The target can be empty or 0 for future periods.
+        For multi-step predictions, the features can be empty or 0 for future periods as well.
 
         If variant='predict_proba', we return the predicted probabilties for each sample. Otherwise, we return the predictions.
         If variant='internal', the call can be made from within this class.
@@ -1160,12 +1173,14 @@ class SKLearnForQlik:
             y = self.y_test.copy()
 
         # Scale the targets and increase stationarity if required
-        if variant=="predict" and self.model.lag_target and (self.model.scale_target or self.model.make_stationary):
+        if variant != 'internal' and self.model.lag_target and (self.model.scale_target or self.model.make_stationary):
             # Apply the transformer to the targets
             y = self.model.target_transformer.transform(y)
             # Drop samples where y cannot be transformed due to insufficient lags
             X = X.iloc[len(X)-len(y):]
         
+        # Set the number of periods to be predicted
+        prediction_periods = self.model.prediction_periods
         # Set the number of rows required for one prediction
         rows_per_pred = 1
 
@@ -1173,13 +1188,15 @@ class SKLearnForQlik:
         if self.model.lags:
             # An additional lag observation is needed if previous targets are being added to the features
             rows_per_pred = self.model.lags+2 if self.model.lag_target else self.model.lags+1
-            assert len(X) >= rows_per_pred, "Insufficient input data as the model requires {} lag periods".format(rows_per_pred)
+            # For multi-step predictions we only expect lag values, not the current period's values
+            rows_per_pred = rows_per_pred-1 if prediction_periods > 1 else rows_per_pred
+            assert len(X) >= rows_per_pred, "Insufficient input data as the model requires {} lag periods for each prediction".format(rows_per_pred)
 
         if variant != 'internal':
             # Prepare the response DataFrame
             # Initially set up with the 'model_name' and 'key' columns and the same index as request_df
             self.response = self.request_df.drop(columns=['n_features'])
-
+        
         # Set up a list to contain predictions and probabilities if required
         predictions = []
         get_proba =  False
@@ -1191,27 +1208,65 @@ class SKLearnForQlik:
         if self.model.using_keras:
             self._keras_refresh()
 
-        if self.model.lag_target:
+        if prediction_periods > 1:
+            if not self.model.lag_target:
+                y = None
+
+            # Check that we can generate 1 or more predictions of prediction_periods each
+            n_samples = len(X)
+            assert (n_samples - rows_per_pred) >= prediction_periods, \
+                "Cannot generate predictions for {} periods with {} rows, with {} rows required for lag observations. You may need to provide more historical data or sufficient placeholder rows for future periods."\
+                .format(prediction_periods, n_samples, rows_per_pred)
+            
+            # For multi-step predictions we can add lag observations up front as we only use actual values
+            # i.e. We don't use predicted y values for further predictions    
+            if self.model.lags or self.model.lag_target:
+                X = self._add_lags(X, y=y)   
+            
+            # We start generating predictions from the first row as lags will already have been added to each sample
+            start = 0
+        else:
+            # We start generating predictions from the point where we will have sufficient lag observations
+            start = rows_per_pred
+        
+        if self.model.lag_target or prediction_periods > 1:
             # Get the predictions by walking forward over the data
-            for i in range(rows_per_pred, len(X)):
-                batch_X = X.iloc[i-rows_per_pred : i] 
-                batch_y = y.iloc[i-rows_per_pred : i] 
+            for i in range(start, len(X), prediction_periods):      
+                # For multi-step predictions we take in rows_per_pred rows of X to generate predictions for prediction_periods
+                if prediction_periods > 1:
+                    batch_X = X.iloc[[i]]
+                    
+                    if not get_proba:
+                        # Get the prediction. 
+                        pred = self.model.pipe.predict(batch_X)
+                        # Flatten the predictions for multi-step outputs and add to the list
+                        pred = pred.ravel().tolist()
+                        predictions += pred
+                    else:
+                        # Get the predicted probability for each sample 
+                        proba = self.model.pipe.predict_proba(batch_X)
+                        proba = proba.reshape(-1, len(self.model.pipe.named_steps['estimator'].classes_))
+                        probabilities += proba.tolist()
+                # For walk forward predictions with lag targets we use each prediction as input to the next prediction, with X values avaialble for future periods.
+                else:
+                    batch_X = X.iloc[i-rows_per_pred : i] 
+                    # Add lag observations
+                    batch_y = y.iloc[i-rows_per_pred : i]
+                    batch_X = self._add_lags(batch_X, y=batch_y)
 
-                # Add lag observations to the samples
-                batch_X = self._add_lags(batch_X, y=batch_y)
+                    # Get the prediction. We only get a prediction for the last sample in the batch, the remaining samples only being used to add lags.
+                    pred = self.model.pipe.predict(batch_X.iloc[[-1],:])
 
-                # Get prediction and add to the list. We only get a prediction for the last sample in the batch, the remaining samples only being used to add lags.
-                pred = self.model.pipe.predict(batch_X.iloc[[-1],:])
-
-                predictions.append(pred)
-                # Add the prediction to y to be used as a lag target for the next prediction
-                if self.model.lag_target:
+                    # Add the prediction to the list. 
+                    predictions.append(pred)
+                                
+                    # Add the prediction to y to be used as a lag target for the next prediction
                     y.iloc[i, 0] = pred
 
-                # If probabilities need to be returned
-                if get_proba:
-                    # Get the predicted probability for each sample 
-                    probabilities.append(self.model.pipe.predict_proba(batch_X.iloc[[-1],:]))
+                    # If probabilities need to be returned
+                    if get_proba:
+                        # Get the predicted probability for each sample 
+                        probabilities.append(self.model.pipe.predict_proba(batch_X.iloc[[-1],:]))
         else:
             # Add lag observations to the samples if required
             if self.model.lags:
@@ -1225,9 +1280,18 @@ class SKLearnForQlik:
                 # Get the predicted probability for each sample 
                 probabilities = self.model.pipe.predict_proba(X)
 
+        # Set the number of placeholders needed in the response
+        # These are samples for which predictions were not generated due to insufficient lag periods or for meeting multi-step prediction period requirements
+        self.placeholders = rows_per_pred
         # Transform probabilities to a readable string
         if get_proba:
-            y = ["\x00"] * rows_per_pred
+            # Add the required number of placeholders at the start of the response list
+            y = ["\x00"] * self.placeholders
+            
+            if prediction_periods > 1:
+                # Match the number of predictions to the input number of samples
+                probabilities = probabilities[:-len(probabilities)+n_samples]
+            
             for a in probabilities:
                 s = ""
                 i = 0
@@ -1237,23 +1301,31 @@ class SKLearnForQlik:
                 y.append(s[2:])
         # Prepare predictions
         else:
-            if self.model.lag_target: 
+            if prediction_periods > 1:
+                if is_numeric_dtype(np.array(predictions)):
+                    null = np.NaN
+                else:
+                    null = "\x00"
+                # Match the number of predictions to the input number of samples
+                predictions = predictions[:-len(predictions)+(n_samples-rows_per_pred)]
+                # Add null values at the start of the response list to match the cardinality of the input from Qlik
+                y = np.array(([null] * self.placeholders) + predictions)
+            elif self.model.lag_target: 
                 # Remove actual values for which we did not generate predictions due to insufficient lags
                 if is_numeric_dtype(y.iloc[:, 0].dtype):
-                    y.iloc[:rows_per_pred, 0] = np.NaN
+                    y.iloc[:self.placeholders, 0] = np.NaN
                 else:
-                    y.iloc[:rows_per_pred, 0] = "\x00"
+                    y.iloc[:self.placeholders, 0] = "\x00"
+                # Flatten y to the expected 1D shape
+                y = y.values.ravel()
             else:
-                y = pd.DataFrame([predictions])
+                y = np.array(predictions)
             
             # Inverse transformations on the targets if required 
             if self.model.scale_target or self.model.make_stationary:
                 # Apply the transformer to the test targets
                 y = self.model.target_transformer.inverse_transform(y) 
-            
-            # Flatten y to the expected 1D shape
-            y = y.values.ravel()
-        
+           
         if variant == 'internal':
             return y
 
@@ -1475,6 +1547,7 @@ class SKLearnForQlik:
         self.model.scale_target = False
         self.model.make_stationary = None
         self.model.using_keras = False
+        self.model.prediction_periods = 1
         
         # Default metric parameters:
         if metric_args is None:
@@ -1538,6 +1611,12 @@ class SKLearnForQlik:
             # The transformation will be reversed before returning predictions.
             if 'make_stationary' in execution_args:
                 self.model.make_stationary = execution_args['make_stationary'].lower()
+
+            # Specify the number of predictions expected from the model
+            # This can be used to get a model to predict the next m periods given inputs for the previous n periods.
+            # This is only valid for Keras models which have a final output layer with more than one node
+            if 'prediction_periods' in execution_args:
+                self.model.prediction_periods = utils.atoi(execution_args['prediction_periods'])
             
             # Seed used by the random number generator when generating the training testing split
             if 'random_state' in execution_args:
@@ -1896,7 +1975,7 @@ class SKLearnForQlik:
             raise Exception(err)
 
     @staticmethod
-    def _keras_build_fn(architecture=None):
+    def _keras_build_fn(architecture=None, prediction_periods=1):
         """
         Create and compile a Keras Sequential model based on the model's architecture dataframe.
         
@@ -1992,6 +2071,10 @@ class SKLearnForQlik:
                     # Add the layer to the model
                     neural_net.add(layer)
         
+        # Get the number of nodes for the final layer
+        output_features = neural_net.layers[-1].get_config()['units']
+        assert prediction_periods == output_features, "The number of nodes in the final layer of the network must match the prediction_periods execution argument. Expected {} nodes but got {}.".format(prediction_periods, output_features)
+        
         return neural_net
 
     def _cross_validate(self, fit_params={}):
@@ -1999,14 +2082,14 @@ class SKLearnForQlik:
         Perform K-fold cross validation on the model for the dataset provided in the request.
         """
 
+        # Flatten the true labels for the training data
+        y_train = self.y_train.values if self.y_train.shape[1] > 1 else self.y_train.values.ravel()
+
         if self.model.estimator_type == "classifier":
 
             # Get unique labels for classification
-            labels = np.unique(self.y_train.values)
+            labels = np.unique(y_train)
 
-            # Flatten the true labels for the training data
-            y_train = self.y_train.values.ravel()
-            
             # Set up a dictionary for the scoring metrics
             scoring = {'accuracy':'accuracy'}
 
@@ -2032,9 +2115,6 @@ class SKLearnForQlik:
                 output_format = "clf_classes"
 
         elif self.model.estimator_type == "regressor":
-            # Flatten the true labels for the training data
-            y_train = self.y_train.values.ravel()
-
             scoring = ['r2', 'neg_mean_squared_error', 'neg_mean_absolute_error', 'neg_median_absolute_error', 'explained_variance']
         
         # Perform cross validation using the training data and the model pipeline
@@ -2110,19 +2190,26 @@ class SKLearnForQlik:
         """
 
         # Calculate confusion matrix and flatten it to a simple array
-        confusion_array = metrics.confusion_matrix(y_test, y_pred).ravel()
-        
-        # Structure into a DataFrame suitable for Qlik
-        result = []
-        i = 0
-        for t in labels:
-            for p in labels:
-                result.append([str(t), str(p), confusion_array[i]])
-                i = i + 1
-        self.model.confusion_matrix = pd.DataFrame(result, columns=["true_label", "pred_label", "count"])
-        self.model.confusion_matrix.loc[:,"model_name"] = self.model.name
-        self.model.confusion_matrix = self.model.confusion_matrix.loc[:,["model_name", "true_label", "pred_label", "count"]]
-    
+        if len(y_test.shape) == 1:
+            confusion_array = metrics.confusion_matrix(y_test, y_pred).ravel()
+
+            # Structure into a DataFrame suitable for Qlik
+            result = []
+            i = 0
+            for t in labels:
+                for p in labels:
+                    result.append([str(t), str(p), confusion_array[i]])
+                    i = i + 1
+            self.model.confusion_matrix = pd.DataFrame(result, columns=["true_label", "pred_label", "count"])
+            self.model.confusion_matrix.insert(0, "model_name", self.model.name)
+        # Handle confusion matrix format for multi-label classification
+        else:
+            confusion_array = metrics.multilabel_confusion_matrix(y_test, y_pred)
+            result = pd.DataFrame(confusion_array.reshape(-1, 4), columns=["true_negative", "false_positive", "false_negative", "true_positive"])
+            self.model.confusion_matrix = pd.DataFrame(np.arange(len(confusion_array)), columns=["step"])
+            self.model.confusion_matrix = pd.concat([self.model.confusion_matrix, result], axis=1)
+            self.model.confusion_matrix.insert(0, "model_name", self.model.name)
+                
     def _calc_importances(self, X=None, y=None):
         """
         Calculate feature importances.
@@ -2235,6 +2322,13 @@ class SKLearnForQlik:
             self.table.fields.add(name="true_label")
             self.table.fields.add(name="pred_label")
             self.table.fields.add(name="count", dataType=1)
+        elif variant == "confusion_matrix_multi":
+            self.table.fields.add(name="model_name")
+            self.table.fields.add(name="step", dataType=1)
+            self.table.fields.add(name="true_negative", dataType=1)
+            self.table.fields.add(name="false_positive", dataType=1)
+            self.table.fields.add(name="false_negative", dataType=1)
+            self.table.fields.add(name="true_positive", dataType=1)
         elif variant == "importances":
             self.table.fields.add(name="model_name")
             self.table.fields.add(name="feature_name")

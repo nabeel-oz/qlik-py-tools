@@ -569,7 +569,10 @@ class ExtensionService(SSE.ConnectorServicer):
         elif function == 23:
             # Get the confusion matrix for the classifier
             response = model.get_confusion_matrix()
-            dtypes = ["str", "str", "str", "num"]
+            if response.shape[1] == 4:
+                dtypes = ["str", "str", "str", "num"]
+            else:
+                dtypes = ["str", "num", "num", "num", "num", "num"]
         
         elif function == 25:
             # Get the best parameters based on a grid search cross validation

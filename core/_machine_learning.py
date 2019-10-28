@@ -755,6 +755,11 @@ class TargetTransformer:
         By default the difference will be done with lag = 1. Alternate lags can be provided by passing a list of lags as a kwarg.
         e.g. lags=[1, 12]
         
+        missing deteremines how missing values are dealt with before the scaling is applied. 
+        Valid options specified through the missing parameter are: zeros, mean, median, mode
+
+        Valid options for scaler are the scaler classes in sklearn.preprocessing
+
         Other kwargs are keyword arguments passed to the sklearn scaler instance.
         """
         
@@ -818,7 +823,7 @@ class TargetTransformer:
                         y_diff[i] = y_diff[i] - y_transform[i - lag]
             
             # Remove targets with insufficient lag periods
-            # NOTE: The corresponding samples will need to be dropped elsewhere
+            # NOTE: The corresponding samples will need to be dropped at this function call's origin
             if isinstance(y_diff, (pd.Series, pd.DataFrame)):
                 y_transform = y_diff.iloc[max(self.lags):]
             else:
@@ -1039,6 +1044,7 @@ class KerasClassifierForQlik(KerasClassifier):
     def fit(self, x, y, sample_weight=None, **kwargs):
         """
         Call the super class' fit method and store metrics from the history.
+        Also cater for multi-step predictions.
         """
 
         # Match the samples to the targets. 
@@ -1107,6 +1113,7 @@ class KerasRegressorForQlik(KerasRegressor):
     def fit(self, x, y, **kwargs):
         """
         Call the super class' fit method and store metrics from the history.
+        Also cater for multi-step predictions.
         """
 
         # Match the samples to the targets. 

@@ -469,3 +469,32 @@ def add_lags(df, lag=1, extrapolate=1, dropna=True, suffix="t"):
         agg.dropna(inplace=True)
     
     return agg
+
+def vectorize_array(y, steps=1, return_type='df'):
+    """
+    Take in an array like sequence of values. 
+    Vectorize the array and add steps from further in the series to each item.
+    The values in the input array must be of shape [n, 1].
+    Rows with nan values in the result array will be dropped.
+    If return_type is 'df' return a dataframe, otherwise return a numpy array.
+
+    E.g. vectorize_array([1,2,3,4,5], steps=2) == array([[1,2], [2,3], [3,4], [4,5]], dtype=int64)
+    In the example the last row is dropped as it results in [5, nan]
+    """
+    if isinstance(y, pd.DataFrame):
+        assert len(y.columns) == 1, "This function is built for array like structures. Got input with shape {}".format(y.shape)
+        y_transform = y.copy().rename(lambda x: 'y', axis='columns')        
+    else:
+        y_transform = pd.DataFrame(y, columns=['y'])
+
+    dtype = y_transform['y'].dtype
+
+    for i in range(1, steps):
+        y_transform['y+{}'.format(i)] = y_transform['y'].shift(-1*i)
+    
+    y_transform = y_transform.dropna().astype(dtype)
+
+    if return_type.lower() != 'df':
+        return y_transform.values
+    
+    return y_transform
