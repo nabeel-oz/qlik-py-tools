@@ -1178,7 +1178,7 @@ class SKLearnForQlik:
             y = self.model.target_transformer.transform(y)
             # Drop samples where y cannot be transformed due to insufficient lags
             X = X.iloc[len(X)-len(y):]
-        
+
         # Set the number of periods to be predicted
         prediction_periods = self.model.prediction_periods
         # Set the number of rows required for one prediction
@@ -1222,7 +1222,7 @@ class SKLearnForQlik:
             # i.e. We don't use predicted y values for further predictions    
             if self.model.lags or self.model.lag_target:
                 X = self._add_lags(X, y=y)   
-            
+
             # We start generating predictions from the first row as lags will already have been added to each sample
             start = 0
         else:
@@ -1288,9 +1288,9 @@ class SKLearnForQlik:
             # Add the required number of placeholders at the start of the response list
             y = ["\x00"] * self.placeholders
             
-            if prediction_periods > 1:
-                # Match the number of predictions to the input number of samples
-                probabilities = probabilities[:-len(probabilities)+n_samples]
+            # Truncate multi-step predictions if the (number of samples - rows_per_pred) is not a multiple of prediction_periods
+            if prediction_periods > 1 and ((n_samples-rows_per_pred) % prediction_periods) > 0:              
+                probabilities = probabilities[:-len(probabilities)+(n_samples-rows_per_pred)]
             
             for a in probabilities:
                 s = ""
@@ -1302,12 +1302,16 @@ class SKLearnForQlik:
         # Prepare predictions
         else:
             if prediction_periods > 1:
+                # Set the value to use for nulls
                 if is_numeric_dtype(np.array(predictions)):
                     null = np.NaN
                 else:
                     null = "\x00"
-                # Match the number of predictions to the input number of samples
-                predictions = predictions[:-len(predictions)+(n_samples-rows_per_pred)]
+
+                # Truncate multi-step predictions if the (number of samples - rows_per_pred) is not a multiple of prediction_periods
+                if (n_samples-rows_per_pred) % prediction_periods > 0:
+                    predictions = predictions[:-len(predictions)+(n_samples-rows_per_pred)]
+                
                 # Add null values at the start of the response list to match the cardinality of the input from Qlik
                 y = np.array(([null] * self.placeholders) + predictions)
             elif self.model.lag_target: 
