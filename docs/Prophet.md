@@ -203,10 +203,10 @@ To use additional regressors you will need to use the `Prophet_Multivariate` fun
 <Analytic connection name>.Prophet_Multivariate([Date Column], [Value Column], [Holiday Name Column], [Regressor 1] & '|' & [Regressor 2]..., 'regressor1_arg1=value1, regressor1_arg2=value2, ...| regressor2_arg1=value1, ...', 'arg1=value1, arg2=value2, ...')
 ```
 
-Here is an example from the sample app where we use Temperature and Season as additional regressors when forecasting bike share rentals in Washington:
+Here is an example from the sample app where we use Temperature and Weather as additional regressors when forecasting bike share rentals in Washington:
 
 ```
-PyTools.Prophet_Multivariate([Date], Sum([Count 2011]), '', Temperature & '|' & Season, '', 'freq=D, cap=10000, floor=0')
+PyTools.Prophet_Multivariate([Date], Sum([Count 2011]), '', Temperature & '|' & Weather, '', 'freq=D, cap=10000, floor=0')
 ```
 
 The holiday column and regressor arguments can be empty strings `''`. The final argument can contain the parameters described in the [Additional Parameters](#additional-parameters) section.
@@ -216,7 +216,7 @@ The holiday column and regressor arguments can be empty strings `''`. The final 
 Valid options for the regressor arguments are as below. You can either provide one set of arguments per regressor, separated by the pipe `|` character, or just one set of arguments that will be applied to all regressors.
 
 ```
-PyTools.Prophet_Multivariate([Date], Sum([Count 2011]), '', Temperature & '|' & Season, 'prior_scale=10, mode=additive | prior_scale=10, mode=additive', 'freq=D, cap=10000, floor=0')
+PyTools.Prophet_Multivariate([Date], Sum([Count 2011]), '', Temperature & '|' & Weather, 'prior_scale=10, mode=additive | prior_scale=10, mode=additive', 'freq=D, cap=10000, floor=0')
 ```
 
 | Keyword | Description | Sample Values | Remarks |
@@ -234,7 +234,7 @@ LOAD
     Date as ds,
     [Count 2011] as y,
     '' as holiday_names,
-    Temperature & '|' & Season as added_regressors,
+    Temperature & '|' & Weather as added_regressors,
     '' as regressor_args,
     'freq=D, cap=10000, floor=0, return=all, load_script=true' as args
 RESIDENT [day];
