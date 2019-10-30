@@ -247,12 +247,14 @@ For more information on the [Execution Arguments](#execution-arguments) refer to
 
 ### Making predictions using the model
 
-To make predictions you need to use an existing model. A list of models can be obtained using the `sklearn_List_Models` function. This function is meant to be used in chart expressions, for example as a dimension in a table object.
+To make predictions you need to use a trained model. Trained models are found in the SSE under `../qlik-py-tools/qlik-py-env/models`.
 
-The input to this function is a string to search for within the directory. You can also provide an empty string to get a list of all the models.
+A list of models can be obtained using the `sklearn_List_Models` function. The input to this function is a string to search for within the directory. You can also provide an empty string to get a list of all files.
+
+This function is meant to be used in chart expressions, for example it can be used a measure in a text object with the following expression.
 
 ```
-PyTools.sklearn_List_Models('')
+'$(=PyTools.sklearn_List_Models(''))'
 ```
 
 To make predictions you must provide exactly the same features in exactly the same order as the training data. And as explained in the section above, all features need to be concatenated into a single string. To help with this the function `sklearn_Get_Features_Expression` provides the expression that can be added to a variable in the load script.

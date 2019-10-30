@@ -192,7 +192,7 @@ class SKLearnForQlik:
             search_pattern = '*'
         
         # Get the list of models as a string
-        models = ", ".join([str(p).split("\\")[-1] for p in list(pathlib.Path(self.path).glob(search_pattern))])
+        models = "\n".join([str(p).split("\\")[-1] for p in list(pathlib.Path(self.path).glob(search_pattern))])
         
         # Prepare the output
         self.response = pd.Series(models)
@@ -524,7 +524,10 @@ class SKLearnForQlik:
         
         # Add lag observations to the samples if required
         if self.model.lags or self.model.lag_target:
-            train_test_df = self._add_lags(train_test_df, target_df, update_features_df=True)
+            # Check if the current sample will be included as an input, or whether we only use lag observations for predictions
+            extrapolate = 1 if self.model.current_sample_as_input else 0
+            # Add the lag observations
+            train_test_df = self._add_lags(train_test_df, target_df, extrapolate=extrapolate, update_features_df=True)
             # Drop targets for samples which were dropped due to null values after adding lags.
             if len(target_df) > len(train_test_df):
                 target_df = target_df.iloc[len(target_df)-len(train_test_df):]
@@ -1186,10 +1189,12 @@ class SKLearnForQlik:
 
         # Check that the input data includes history to meet any lag calculation requirements
         if self.model.lags:
+            # Check if the current sample will be included as an input, or whether we only use lag observations for predictions
+            extrapolate = 1 if self.model.current_sample_as_input else 0        
             # An additional lag observation is needed if previous targets are being added to the features
-            rows_per_pred = self.model.lags+2 if self.model.lag_target else self.model.lags+1
+            rows_per_pred = self.model.lags+extrapolate+1 if self.model.lag_target else self.model.lags+extrapolate
             # For multi-step predictions we only expect lag values, not the current period's values
-            rows_per_pred = rows_per_pred-1 if prediction_periods > 1 else rows_per_pred
+            # rows_per_pred = rows_per_pred-1 if prediction_periods > 1 else rows_per_pred
             assert len(X) >= rows_per_pred, "Insufficient input data as the model requires {} lag periods for each prediction".format(rows_per_pred)
 
         if variant != 'internal':
@@ -1202,7 +1207,7 @@ class SKLearnForQlik:
         get_proba =  False
         if variant == 'predict_proba':
             get_proba =  True
-            probabilities = []
+            probabilities = []     
 
         # Refresh the keras model to avoid tensorflow errors
         if self.model.using_keras:
@@ -1221,7 +1226,7 @@ class SKLearnForQlik:
             # For multi-step predictions we can add lag observations up front as we only use actual values
             # i.e. We don't use predicted y values for further predictions    
             if self.model.lags or self.model.lag_target:
-                X = self._add_lags(X, y=y)   
+                X = self._add_lags(X, y=y, extrapolate=extrapolate)   
 
             # We start generating predictions from the first row as lags will already have been added to each sample
             start = 0
@@ -1252,7 +1257,7 @@ class SKLearnForQlik:
                     batch_X = X.iloc[i-rows_per_pred : i] 
                     # Add lag observations
                     batch_y = y.iloc[i-rows_per_pred : i]
-                    batch_X = self._add_lags(batch_X, y=batch_y)
+                    batch_X = self._add_lags(batch_X, y=batch_y, extrapolate=extrapolate)
 
                     # Get the prediction. We only get a prediction for the last sample in the batch, the remaining samples only being used to add lags.
                     pred = self.model.pipe.predict(batch_X.iloc[[-1],:])
@@ -1270,7 +1275,7 @@ class SKLearnForQlik:
         else:
             # Add lag observations to the samples if required
             if self.model.lags:
-                X = self._add_lags(X)
+                X = self._add_lags(X, extrapolate=extrapolate)
 
             # Get prediction for X
             predictions = self.model.pipe.predict(X)
@@ -1551,6 +1556,7 @@ class SKLearnForQlik:
         self.model.scale_target = False
         self.model.make_stationary = None
         self.model.using_keras = False
+        self.model.current_sample_as_input = True
         self.model.prediction_periods = 1
         
         # Default metric parameters:
@@ -1615,6 +1621,11 @@ class SKLearnForQlik:
             # The transformation will be reversed before returning predictions.
             if 'make_stationary' in execution_args:
                 self.model.make_stationary = execution_args['make_stationary'].lower()
+
+            # Specify if the current sample should be used as input to the model
+            # This is to allow for models that only use lag observations to make future predictions
+            if 'current_sample_as_input' in execution_args:
+                self.model.current_sample_as_input = 'true' == execution_args['current_sample_as_input'].lower()
 
             # Specify the number of predictions expected from the model
             # This can be used to get a model to predict the next m periods given inputs for the previous n periods.
@@ -1908,7 +1919,7 @@ class SKLearnForQlik:
         else:
             return samples_df
     
-    def _add_lags(self, X, y=None, update_features_df=False):
+    def _add_lags(self, X, y=None, extrapolate=1, update_features_df=False):
         """
         Add lag observations to X.
         If y is available and self.model.lag_target is True, the previous target will become an additional feature in X.
@@ -1930,11 +1941,11 @@ class SKLearnForQlik:
 
         if self.model.lags:
             # Add the lag observations
-            X = utils.add_lags(X, lag=self.model.lags, extrapolate=1, dropna=True, suffix="t")
+            X = utils.add_lags(X, lag=self.model.lags, extrapolate=extrapolate, dropna=True, suffix="t")
             
             if update_features_df:
                 # Duplicate the feature definitions by the number of lags
-                self.model.features_df = pd.concat([self.model.features_df] * (self.model.lags+1))
+                self.model.features_df = pd.concat([self.model.features_df] * (self.model.lags+extrapolate))
                 # Set the new feature names as the index of the feature definitions data frame
                 self.model.features_df['name'] = X.columns
                 self.model.features_df = self.model.features_df.set_index('name', drop=True)
@@ -1962,7 +1973,7 @@ class SKLearnForQlik:
             self.model.first_layer_kwargs['input_shape'] = list(self.model.first_layer_kwargs['input_shape'])
             # Update the number of features based on X_transform
             if self.model.lags:
-                self.model.first_layer_kwargs['input_shape'][-1] = X_transform.shape[1]//(self.model.lags + 1)
+                self.model.first_layer_kwargs['input_shape'][-1] = X_transform.shape[1]//(self.model.lags + (1 if self.model.current_sample_as_input else 0))
             else:
                 self.model.first_layer_kwargs['input_shape'][-1] = X_transform.shape[1]//np.prod(self.model.first_layer_kwargs['input_shape'][:-1])
             # Transform back to a tuple as required by Keras
