@@ -7,7 +7,7 @@ You will need an alternate Windows machine with Internet access to prepare the f
 ## Prepare the installation files
 Use a Windows machine with Internet access for these steps.
 
-1. Download the Python 3.6 offline [executable installer](https://www.python.org/ftp/python/3.6.7/python-3.6.7-amd64.exe) and copy it to the target machine.
+1. Download the Python 3.6 offline [executable installer](https://www.python.org/ftp/python/3.6.8/python-3.6.8-amd64.exe) and copy it to the target machine.
 2. Create a layout for the [MS Visual C++ Build Tools](https://visualstudio.microsoft.com/downloads/#build-tools-for-visual-studio-2017).
     - Get the [installation file](https://www.visualstudio.com/thank-you-downloading-visual-studio/?sku=BuildTools&rel=15) for Visual C++ Build Tools.
     - Use a terminal to create an offline layout for the required components.
@@ -20,7 +20,7 @@ Use a Windows machine with Internet access for these steps.
     - The Python version on this machine should match the target machine.
     - Download the required packages from a terminal using pip.
         ```
-        pip download setuptools wheel grpcio grpcio-tools numpy scipy pandas cython joblib==0.11 pystan==2.17 fbprophet==0.4.post2 scikit-learn==0.20.3 hdbscan==0.8.22 skater==1.1.2 efficient_apriori==1.0.0 spacy==2.1.4 https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-2.1.0/en_core_web_sm-2.1.0.tar.gz
+        pip download setuptools wheel grpcio grpcio-tools numpy scipy pandas cython joblib==0.11 pystan==2.17 fbprophet==0.4.post2 scikit-learn==0.21.3 hdbscan==0.8.23 skater==1.1.2 efficient_apriori==1.0.0 spacy==2.1.4 https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-2.1.0/en_core_web_sm-2.1.0.tar.gz tensorflow==1.14.0 keras==2.2.5
         ```
     - Copy the package files to the target machine into a folder named `offline`.
 4. Download the [latest release](https://github.com/nabeel-qlik/qlik-py-tools/releases) for this SSE and copy it to the target machine.

@@ -1,5 +1,7 @@
+import os
 import sys
 import time
+import copy
 import joblib
 import numpy as np
 import pandas as pd
@@ -16,6 +18,18 @@ from sklearn.pipeline import Pipeline
 from sklearn.feature_extraction import FeatureHasher
 from sklearn.feature_extraction.text import CountVectorizer
 from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.utils.metaestimators import if_delegate_has_method
+
+# Workaround for Keras issue #1406
+# "Using X backend." always printed to stdout #1406 
+# https://github.com/keras-team/keras/issues/1406
+stderr = sys.stderr
+sys.stderr = open(os.devnull, 'w')
+import keras
+from keras import backend as kerasbackend
+from keras.wrappers.scikit_learn import KerasClassifier
+from keras.wrappers.scikit_learn import KerasRegressor
+sys.stderr = stderr
 
 import _utils as utils
 
@@ -32,17 +46,21 @@ class PersistentModel:
         self.name = None
         self.state = None
         self.state_timestamp = None
-        self.overwrite = False
+        self.using_keras = False
         
-    def save(self, name, path, compress=3):
+    def save(self, name, path, overwrite=True, compress=3, locked_timeout=2):
         """
         Save the model to disk at the specified path.
-        If the model already exists and self.overwrite=False, throw an exception.
-        If self.overwrite=True, replace any existing file.
+        If the model already exists and overwrite=False, throw an exception.
+        If overwrite=True, replace any existing file with the same name at the path.
+        If the model is found to be locked, wait 'locked_timeout' seconds and try again before quitting.
         """
         
         # Create string for path and file name
         f = path + name + '.joblib'
+
+        # Create a path for the lock file
+        f_lock = f + '.lock'
                 
         # Create the directory if required
         try:
@@ -51,21 +69,47 @@ class PersistentModel:
             pass
         
         # If the file exists and overwriting is not allowed, raise an exception
-        if Path(f).exists() and not self.overwrite:
+        if Path(f).exists() and not overwrite:
             raise FileExistsError("The specified model name already exists: {0}.".format(name + '.joblib')\
                                   +"\nPass overwrite=True if it is ok to overwrite.")
+        # Check if the file is currently locked
+        elif Path(f_lock).exists():
+            # Wait a few seconds and check again
+            time.sleep(locked_timeout)
+            # If the file is still locked raise an exception
+            if Path(f_lock).exists():
+                raise TimeoutError("The specified model is locked. If you believe this to be wrong, please delete file {0}".format(f_lock))
         else:
             # Update properties
             self.name = name
             self.state = 'saved'
             self.state_timestamp = time.time()
+
+            # Keras models are excluded from the joblib file as they are saved to a special HDF5 file in _sklearn.py
+            try:
+                if self.using_keras:
+                    # Get the trained keras model from the pipeline's estimator
+                    keras_model = self.pipe.named_steps['estimator'].model
+                    # Save the keras model architecture and weights to disk
+                    keras_model.save(path + name + '.h5', overwrite=overwrite)
+                    # The Keras estimator is excluded from the model saved to the joblib file
+                    self.pipe.named_steps['estimator'].model = None
+            except AttributeError:
+                pass
             
-            # Store this instance to file
-            joblib.dump(self, filename=Path(f), compress=compress)
+            # Create the lock file
+            joblib.dump(f_lock, filename=Path(f_lock), compress=compress)
+
+            try:
+                # Store this instance to file
+                joblib.dump(self, filename=Path(f), compress=compress)
+            finally:
+                # Delete the lock file
+                Path(f_lock).unlink()
                 
         return self
     
-    def load(self, name, path):        
+    def load(self, name, path):
         """
         Check if the model exists at the specified path and return it to the caller.
         If the model is not found throw an exception.
@@ -74,6 +118,20 @@ class PersistentModel:
         with open(Path(path + name + '.joblib'), 'rb') as f:
             self = joblib.load(f)
         
+        # If using Keras we need to load the HDF5 file as well
+        # The model will only be available if the fit method has been called previously
+        if self.using_keras and hasattr(self, 'pipe'):
+            # Avoid tensorflow error for keras models
+            # https://github.com/tensorflow/tensorflow/issues/14356
+            # https://stackoverflow.com/questions/40785224/tensorflow-cannot-interpret-feed-dict-key-as-tensor
+            kerasbackend.clear_session()
+
+            # Load the keras model architecture and weights from disk
+            keras_model = keras.models.load_model(path + name + '.h5')
+            keras_model._make_predict_function()
+            # Point the estimator in the sklearn pipeline to the keras model architecture and weights 
+            self.pipe.named_steps['estimator'].model = keras_model
+
         return self
 
 class Preprocessor(TransformerMixin):
@@ -176,14 +234,13 @@ class Preprocessor(TransformerMixin):
         if self.log is not None:
             self._print_log(1)
     
-
     def fit(self, X, y=None, features=None, retrain=False):
         """
         Fit to the training dataset, storing information that will be needed for the transform dataset.
         Return the Preprocessor object.
         Optionally re-initizialise the object by passing retrain=True, and resending the features dataframe
         """
-        
+
         # Reinitialize this Preprocessor instance if required
         if retrain:
             if features is None:
@@ -193,6 +250,12 @@ class Preprocessor(TransformerMixin):
         
         # Set up an empty data frame for data to be scaled
         scale_df = pd.DataFrame()
+
+        ohe_df = None
+        hash_df = None
+        cv_df = None
+        tfidf_df = None
+        text_df = None
         
         if self.ohe:
             # Get a subset of the data that requires one hot encoding
@@ -286,7 +349,7 @@ class Preprocessor(TransformerMixin):
         try:
             if len(scale_df) > 0:
                 # Get an instance of the sklearn scaler fit to X
-                self.scaler_instance = self.get_scaler(scale_df, missing=self.missing, scaler=self.scaler, **self.kwargs)
+                self.scaler_instance = utils.get_scaler(scale_df, missing=self.missing, scaler=self.scaler, **self.kwargs)
 
                 # Keep a copy of the scaling dataframe structure so we can align the transform dataset 
                 self.scale_df_structure = pd.DataFrame().reindex_like(scale_df)
@@ -298,8 +361,7 @@ class Preprocessor(TransformerMixin):
             self._print_log(2, ohe_df=ohe_df, scale_df=scale_df, hash_df=hash_df, cv_df=cv_df, tfidf_df=tfidf_df, text_df=text_df)
 
         return self
-    
-    
+      
     def transform(self, X, y=None):
         """
         Transform X with the encoding and scaling requirements set by fit().
@@ -308,7 +370,12 @@ class Preprocessor(TransformerMixin):
         """        
         
         X_transform = None
-        scale_df = pd.DataFrame()
+        scale_df = pd.DataFrame() # Initialize as empty Data Frame for convenience of concat operations below
+        ohe_df = None
+        hash_df = None
+        cv_df = None
+        tfidf_df = None
+        text_df = None
         
         if self.ohe:
             # Get a subset of the data that requires one hot encoding
@@ -322,7 +389,7 @@ class Preprocessor(TransformerMixin):
             ohe_df = ohe_df.align(self.ohe_df_structure, join='right', axis=1)[0]
 
             # Fill missing values in the OHE dataframe, that may appear after alignment, with zeros.
-            ohe_df = self.fillna(ohe_df, missing="zeros")
+            ohe_df = utils.fillna(ohe_df, method="zeros")
             
             # Add the encoded columns to the result dataset
             X_transform = ohe_df
@@ -338,7 +405,7 @@ class Preprocessor(TransformerMixin):
                 hash_df = hash_df.join(unique, on=c)
                 hash_df = hash_df.drop(c, axis=1)
                 # Fill any missing values in the hash dataframe
-                hash_df = self.fillna(hash_df, missing="zeros")
+                hash_df = utils.fillna(hash_df, method="zeros")
         
         if self.cv:
             # Get a subset of the data that requires count vectorizing
@@ -356,7 +423,7 @@ class Preprocessor(TransformerMixin):
             cv_df = cv_df.align(self.cv_df_structure, join='right', axis=1)[0]
 
             # Fill missing values in the dataframe that may appear after alignment with zeros.
-            cv_df = self.fillna(cv_df, missing="zeros")
+            cv_df = utils.fillna(cv_df, method="zeros")
 
         if self.tfidf:
             # Get a subset of the data that requires tfidf vectorizing
@@ -374,7 +441,7 @@ class Preprocessor(TransformerMixin):
             tfidf_df = tfidf_df.align(self.tfidf_df_structure, join='right', axis=1)[0]
 
             # Fill missing values in the dataframe that may appear after alignment with zeros.
-            tfidf_df = self.fillna(tfidf_df, missing="zeros")
+            tfidf_df = utils.fillna(tfidf_df, method="zeros")
         
         if self.text:
             # Get a subset of the data that requires text similarity OHE
@@ -392,7 +459,7 @@ class Preprocessor(TransformerMixin):
             text_df = text_df.align(self.text_df_structure, join='right', axis=1)[0]
 
             # Fill missing values in the dataframe that may appear after alignment with zeros.
-            text_df = self.fillna(text_df, missing="zeros")
+            text_df = utils.fillna(text_df, method="zeros")
 
             # Add the text similary OHE data to the result dataset
             if X_transform is None:
@@ -411,7 +478,7 @@ class Preprocessor(TransformerMixin):
             else:
                 scale_df = hash_df
                 # If only hashed columns are being scaled, the scaler needs to be instantiated
-                self.scaler_instance = self.get_scaler(scale_df, missing=self.missing, scaler=self.scaler, **self.kwargs)
+                self.scaler_instance = utils.get_scaler(scale_df, missing=self.missing, scaler=self.scaler, **self.kwargs)
         elif self.hash:
             # Add the hashed columns to the result dataset
             if X_transform is None:
@@ -426,7 +493,7 @@ class Preprocessor(TransformerMixin):
             else:
                 scale_df = cv_df
                 # If only count vectorized columns are being scaled, the scaler needs to be instantiated
-                self.scaler_instance = self.get_scaler(scale_df, missing=self.missing, scaler=self.scaler, **self.kwargs)
+                self.scaler_instance = utils.get_scaler(scale_df, missing=self.missing, scaler=self.scaler, **self.kwargs)
         elif self.cv:
             # Add the count vectorized columns to the result dataset
             if X_transform is None:
@@ -441,7 +508,7 @@ class Preprocessor(TransformerMixin):
             else:
                 scale_df = tfidf_df
                 # If only tfidf vectorized columns are being scaled, the scaler needs to be instantiated
-                self.scaler_instance = self.get_scaler(scale_df, missing=self.missing, scaler=self.scaler, **self.kwargs)
+                self.scaler_instance = utils.get_scaler(scale_df, missing=self.missing, scaler=self.scaler, **self.kwargs)
         elif self.tfidf:
             # Add the count vectorized columns to the result dataset
             if X_transform is None:
@@ -456,7 +523,7 @@ class Preprocessor(TransformerMixin):
                 # This is to prevent different number or order of features between training and test datasets.
                 scale_df = scale_df.align(self.scale_df_structure, join='right', axis=1)[0]
                 
-                scale_df = self.fillna(scale_df, missing=self.missing)
+                scale_df = utils.fillna(scale_df, method=self.missing)
 
                 scale_df = pd.DataFrame(self.scaler_instance.transform(scale_df), index=scale_df.index, columns=scale_df.columns)
                 
@@ -472,7 +539,7 @@ class Preprocessor(TransformerMixin):
             # Get a subset of the data that doesn't require preprocessing
             no_prep_df = X[self.none_meta.index.tolist()]
             # Fill any missing values in the no prep dataframe
-            no_prep_df = self.fillna(no_prep_df, missing="zeros")
+            no_prep_df = utils.fillna(no_prep_df, method="zeros")
         
             # Finally join the columns that do not require preprocessing to the result dataset
             if X_transform is None:
@@ -489,7 +556,6 @@ class Preprocessor(TransformerMixin):
         
         return X_transform
     
-    
     def fit_transform(self, X, y=None, features=None, retrain=False):
         """
         Apply fit() then transform()
@@ -499,7 +565,6 @@ class Preprocessor(TransformerMixin):
             features = self.features
         
         return self.fit(X, y, features, retrain).transform(X, y)
-    
     
     def _print_log(self, step, **kwargs):
         """
@@ -670,37 +735,408 @@ class Preprocessor(TransformerMixin):
         
         return unique.set_index(col)
 
-    @staticmethod
-    def fillna(df, missing="zeros"):
-        """
-        Fill empty values in a Data Frame with the chosen method.
-        Valid options for missing are: zeros, mean, median, mode
-        """
+class TargetTransformer:
+    """
+    A class to transform the target variable.
+    This class can scale the target using the specified sklearn scaler.
+    It can also make the series stationary by differencing the values. Note that this is only valid when predictions will include multiple samples.
+    An inverse transform method allows for reversing the transformations.
+    """
 
-        if missing == "mean":
-            return df.fillna(df.mean())
-        elif missing == "median":
-            return df.fillna(df.median())
-        elif missing == "mode":
-            return df.fillna(df.mode().iloc[0])
-        elif missing == "none":
-            return df
-        else:
-            return df.fillna(0)
-    
-    @staticmethod
-    def get_scaler(df, missing="zeros", scaler="StandardScaler", **kwargs):
+    def __init__(self, scale=True, make_stationary=None, missing="zeros", scaler="StandardScaler", logfile=None, **kwargs):
         """
-        Fit a sklearn scaler on a Data Frame and return the scaler.
-        Valid options for the scaler are: StandardScaler, MinMaxScaler, MaxAbsScaler, RobustScaler, QuantileTransformer
-        Missing values must be dealt with before the scaling is applied. 
+        Initialize the TargetTransformer instance.
+        
+        scale is a boolean parameter to determine if the target will be scaled.
+        
+        make_stationary is a parameter to determine if the target will be made stationary. This should only be used for sequential data.
+        Passing make_stationary='log' will apply a logarithm to the target and use an exponential for the inverse transform.
+        Passing make_stationary='difference' will difference the values to make the target series stationary.
+        By default the difference will be done with lag = 1. Alternate lags can be provided by passing a list of lags as a kwarg.
+        e.g. lags=[1, 12]
+        
+        missing deteremines how missing values are dealt with before the scaling is applied. 
         Valid options specified through the missing parameter are: zeros, mean, median, mode
+
+        Valid options for scaler are the scaler classes in sklearn.preprocessing
+
+        Other kwargs are keyword arguments passed to the sklearn scaler instance.
+        """
+        
+        self.scale = scale
+        self.make_stationary = make_stationary
+        self.missing = missing
+        self.scaler = scaler
+        self.logfile = logfile
+
+        if make_stationary and 'lags' in kwargs:
+            self.lags = kwargs.pop('lags')
+        else:
+            self.lags = [1]
+        
+        self.kwargs = kwargs
+    
+    def fit(self, y):
+        """
+        Fit the scaler to target values from the training set.
         """
 
-        s = getattr(preprocessing, scaler)
-        s = s(**kwargs)
+        if self.scale:
+            # Get an instance of the sklearn scaler fit to y
+            self.scaler_instance = utils.get_scaler(y, missing=self.missing, scaler=self.scaler, **self.kwargs)
+        
+        return self
 
-        df = Preprocessor.fillna(df, missing=missing)
+    def transform(self, y, array_like=True):
+        """
+        Transform new targets using the previously fit scaler.
+        Also apply a logarithm or differencing if required for making the series stationary.
+
+        array_like determines if y is expected to be multiple values or a single value.
+        Note that the differencing won't be done if array_like=False.
+        """
+
+        y_transform = y
+
+        # Scale the targets using the previously fit scaler
+        if self.scale:
+            y_transform = self.scaler_instance.transform(y)
+            
+            if isinstance(y, pd.DataFrame):
+                # The scaler returns a numpy array which needs to be converted back to a data frame
+                y_transform = pd.DataFrame(y_transform, columns=y.columns, index=y.index)
+
+        # Apply a logarithm to make the array stationary
+        if self.make_stationary == 'log':
+            y_transform = np.log(y)
+
+        # Apply stationarity lags by differencing the array
+        elif self.make_stationary == 'difference' and array_like:
+            y_diff = y_transform.copy()
+            len_y = len(y_diff)
+
+            for i in range(max(self.lags), len_y):
+                for lag in self.lags:
+                    if isinstance(y_diff, (pd.Series, pd.DataFrame)):
+                        y_diff.iloc[i] = y_diff.iloc[i] - y_transform.iloc[i - lag]
+                    else:
+                        y_diff[i] = y_diff[i] - y_transform[i - lag]
+            
+            # Remove targets with insufficient lag periods
+            # NOTE: The corresponding samples will need to be dropped at this function call's origin
+            if isinstance(y_diff, (pd.Series, pd.DataFrame)):
+                y_transform = y_diff.iloc[max(self.lags):]
+            else:
+                y_transform = y_diff[max(self.lags):]
+
+        if self.logfile is not None:
+            self._print_log(1, data=y_transform, array_like=array_like)
         
-        return s.fit(df)       
+        return y_transform
+
+    def fit_transform(self, y):
+        """
+        Apply fit then transform
+        """
+
+        return self.fit(y).transform(y)
+
+    def inverse_transform(self, y_transform, array_like=True):
+        """
+        Reverse the transformations and return the target in it's original form.
+
+        array_like determines if y_transform is expected to be multiple values or a single value.
+        Note that the differencing won't be done if array_like=False.
+        """
+
+        if self.scale:
+            y = self.scaler_instance.inverse_transform(y_transform)
+
+            if isinstance(y_transform, pd.DataFrame):
+                # The scaler returns a numpy array which needs to be converted back to a data frame
+                y = pd.DataFrame(y, columns=y_transform.columns, index=y_transform.index)
+
+        # Apply an exponential to reverse the logarithm applied during transform
+        if self.make_stationary == 'log':
+            y = np.exp(y_transform)
+
+        # Reverse the differencing applied during transform
+        # NOTE: y_transform will need to include actual values preceding the lags
+        elif self.make_stationary == 'difference' and array_like:
+            y = y_transform.copy()
+            len_y = len(y_transform)
+            
+            for i in range(max(self.lags), len_y):
+                for lag in self.lags:
+                    if isinstance(y, (pd.Series, pd.DataFrame)):
+                        y.iloc[i] = y.iloc[i] + y.iloc[i - lag]
+                    else:
+                        y[i] = y[i] + y[i - lag]
+
+        if self.logfile is not None:
+            self._print_log(2, data=y, array_like=array_like)
+
+        return y
+    
+    def _print_log(self, step, data=None, array_like=True):
+        """
+        Print debug info to the log
+        """
         
+        # Set mode to append to log file
+        mode = 'a'
+        output = ''
+
+        if step == 1:
+            # Output the transformed targets
+            output = "Targets transformed"
+        elif step == 2:
+            # Output sample data after adding lag observations
+            output = "Targets inverse transformed"
+
+        if array_like:
+            output += " {0}:\nSample Data:\n{1}\n\n".format(data.shape, data.head())
+        else:
+            output += " {0}".format(data)
+
+        sys.stdout.write(output)
+        with open(self.logfile, mode, encoding='utf-8') as f:
+            f.write(output)
+
+class Reshaper(TransformerMixin):
+    """
+    A class that reshapes the feature matrix based on the input_shape.
+    This class is built for Keras estimators where recurrent and convolutional layers can require 3D or 4D inputs.
+    It is meant to be used after preprocessing and before fitting the estimator.
+    """
+
+    def __init__(self, first_layer_kwargs=None, logfile=None, **kwargs):
+        """
+        Initialize the Reshaper with the Keras model first layer's kwargs.
+        Additionally take in the number of lag observations to be used in reshaping the data.
+        If lag_target is True, an additional feature will be created for each sample i.e. the previous value of y. 
+        first_layer_kwargs should be a reference to the first layer kwargs of the Keras architecture being used to build the model.
+        Optional arguments are a logfile to output debug info.
+        """
+
+        self.first_layer_kwargs = first_layer_kwargs
+        self.logfile = logfile
+    
+    def fit(self, X, y=None):
+        """
+        Update the input shape based on the number of samples in X.
+        Return this Reshaper object.
+        """
+
+        # Create the input_shape property as a list
+        self.input_shape = list(self.first_layer_kwargs['input_shape'])
+
+        # Debug information is printed to the terminal and logs if required
+        if self.logfile:
+            self._print_log(1)
+
+        return self
+    
+    def transform(self, X, y=None):
+        """
+        Apply the new shape to the data provided in X.
+        X is expected to be a 2D DataFrame of samples and features.
+        The data will be reshaped according to self.input_shape. 
+        """
+        
+        # Add the number of samples to the input_shape
+        input_shape = self.input_shape.copy()
+        input_shape.insert(0, X.shape[0])
+
+        # Debug information is printed to the terminal and logs if required
+        if self.logfile:
+            self._print_log(2, data=input_shape)
+
+        # If the final shape is n_samples by n_features we have nothing to do here
+        if (len(input_shape) == 2):
+            return X
+        
+        # 2D, 3D and 4D data is valid. 
+        # e.g. The input_shape can be a tuple of (samples, subsequences, timesteps, features), with subsequences and timesteps as optional.
+        # A 5D shape may be valid for e.g. a ConvLSTM with (samples, timesteps, rows, columns, features) 
+        if len(input_shape) > 5:
+            err = "Unsupported input_shape: {}".format(input_shape)
+            raise Exception(err)
+        # Reshape the data
+        elif len(input_shape) > 2:
+            # Reshape input data using numpy
+            X_transform = X.values.reshape(input_shape)
+
+            # Debug information is printed to the terminal and logs if required
+            if self.logfile:
+                self._print_log(3, data=X_transform)
+
+        return X_transform
+    
+    def fit_transform(self, X, y=None):
+        """
+        Apply fit() then transform()
+        """
+        
+        return self.fit(X, y).transform(X, y)
+    
+    def _print_log(self, step, data=None):
+        """
+        Print debug info to the log
+        """
+        
+        # Set mode to append to log file
+        mode = 'a'
+
+        if step == 1:
+            # Output the updated input shape
+            output = "Input shape specification for Keras: {0}\n\n".format(self.first_layer_kwargs['input_shape'])
+        elif step == 2:
+            # Output the updated input shape
+            output = "{0} samples added to the input shape. Data will be reshaped to: {1}\n\n".format(data[0], tuple(data))
+        elif step == 3:
+            # Output sample data after reshaping
+            output = "Input data reshaped to {0}.\nSample Data:\n{1}\n\n".format(data.shape, data[:5])
+
+        sys.stdout.write(output)
+        with open(self.logfile, mode, encoding='utf-8') as f:
+            f.write(output)
+
+class KerasClassifierForQlik(KerasClassifier):
+    """
+    A subclass of the KerasClassifier Scikit-Learn wrapper.
+    This class takes in a compiled Keras model as part of sk_params and uses the __call__ method as the default build_fn.
+    It also stores a histories dataframe to provide metrics for each time the model is fit.
+    """
+      
+    def __init__(self, **sk_params):
+        """
+        Initialize the KerasClassifierForQlik.
+        The compiled Keras model should be included in sk_params under the 'neural_net' keyword argument.
+        """
+        
+        # Deep copy sk_params so that popping build_fn does not affect subsequent instances of the estimator
+        self.sk_params = sk_params
+        
+        # Set build_fn to the function supplied in sk_params
+        self.build_fn = self.sk_params.pop('build_fn')
+
+        # DataFrame to contain history of every training cycle
+        # This DataFrame will provide metrics such as loss for each run of the fit method
+        # Columns will be ['iteration', 'epoch', 'loss'] and any other metrics being calculated during training
+        self.histories = pd.DataFrame()
+        self.iteration = 0
+        
+        # Check the parameters using the super class method
+        self.check_params(self.sk_params)  
+
+    def get_params(self, **params):
+        """Gets parameters for this estimator.
+        # Arguments
+            **params: ignored (exists for API compatibility).
+        # Returns
+            Dictionary of parameter names mapped to their values.
+        """
+        res = self.sk_params
+        res.update({'build_fn': self.build_fn})
+        return res
+
+    def fit(self, x, y, sample_weight=None, **kwargs):
+        """
+        Call the super class' fit method and store metrics from the history.
+        Also cater for multi-step predictions.
+        """
+
+        # Match the samples to the targets. 
+        # x and y can be out of sync due to dropped samples in the Reshaper transformer.
+        if len(y) > len(x):
+            y = y[len(y)-len(x):] 
+        
+        # Fit the model to the data and store information on the training
+        history = super().fit(x, y, sample_weight, **kwargs)
+
+        sys.stdout.write("\n\nKeras Model Summary:\n")
+        self.model.summary()
+        sys.stdout.write("\n\n")
+
+        # Set up a data frame with the epochs and a counter to track multiple histories
+        history_df = pd.DataFrame({'iteration': self.iteration+1, 'epoch': history.epoch})
+
+        # Add a column per metric for each epoch e.g. loss, acc
+        for key in history.history:
+            history_df[key] = pd.Series(history.history[key])
+
+        # Concatenate results from the training to the history data frame
+        self.histories = pd.concat([self.histories, history_df], sort=True).sort_values(by=['iteration', 'epoch']).reset_index(drop=True)
+        self.iteration += 1
+
+        return history
+
+class KerasRegressorForQlik(KerasRegressor):
+    """
+    A subclass of the KerasRegressor Scikit-Learn wrapper.
+    This class takes in a compiled Keras model as part of sk_params and uses the __call__ method as the default build_fn.
+    It also stores a histories dataframe to provide metrics for each time the model is fit.
+    """
+      
+    def __init__(self, **sk_params):
+        """
+        Initialize the KerasRegressorForQlik.
+        The compiled Keras model should be included in sk_params under the 'neural_net' keyword argument.
+        """
+
+        # Deep copy sk_params so that popping build_fn does not affect subsequent instances of the estimator
+        self.sk_params = sk_params
+        
+        # Set build_fn to the function supplied in sk_params
+        self.build_fn = self.sk_params.pop('build_fn')
+        
+        # DataFrame to contain history of every training cycle
+        # This DataFrame will provide metrics such as loss for each run of the fit method
+        # Columns will be ['iteration', 'epoch', 'loss'] and any other metrics being calculated during training
+        self.histories = pd.DataFrame()
+        self.iteration = 0
+
+        # Check the parameters using the super class method
+        self.check_params(self.sk_params)
+
+    def get_params(self, **params):
+        """
+        Gets parameters for this estimator.
+        Overrides super class method for compatibility with sklearn cross_validate.
+        """
+
+        res = self.sk_params
+        res.update({'build_fn': self.build_fn})
+        return res
+
+    def fit(self, x, y, **kwargs):
+        """
+        Call the super class' fit method and store metrics from the history.
+        Also cater for multi-step predictions.
+        """
+
+        # Match the samples to the targets. 
+        # x and y can be out of sync due to dropped samples in the Reshaper transformer.
+        if len(y) > len(x):
+            y = y[len(y)-len(x):] 
+
+        # Fit the model to the data and store information on the training
+        history = super().fit(x, y, **kwargs)
+
+        sys.stdout.write("\n\nKeras Model Summary:\n")
+        self.model.summary()
+        sys.stdout.write("\n\n")
+
+        # Set up a data frame with the epochs and a counter to track multiple histories
+        history_df = pd.DataFrame({'iteration': self.iteration+1, 'epoch': history.epoch})
+       
+        # Add a column per metric for each epoch e.g. loss
+        for key in history.history:
+            history_df[key] = pd.Series(history.history[key])
+
+        # Concatenate results from the training to the history data frame
+        self.histories = pd.concat([self.histories, history_df], sort=True).sort_values(by=['iteration', 'epoch']).reset_index(drop=True)
+        self.iteration += 1
+
+        return history

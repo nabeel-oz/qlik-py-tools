@@ -8,6 +8,7 @@
 - [Tweaking the forecast](#tweaking-the-forecast)
 - [Seasonality](#seasonality)
 - [Holidays](#holidays)
+- [Additional Regressors](#additional-regressors)
 - [Use Prophet with your own app](#use-prophet-with-your-own-app)
 - [Precalculating forecasts in the load script](#precalculating-forecasts-in-the-load-script)
 - [Attribution](#attribution)
@@ -50,11 +51,12 @@ Any of these arguments can be included in the final string parameter for the Pro
 
 | Keyword | Description | Sample Values | Remarks |
 | --- | --- | --- | --- |
-| return | The output of the expression | `yhat`, `yhat_upper`, `yhat_lower`, `y_then_yhat`, `y_then_yhat_upper`, `y_then_yhat_lower`, `trend`, `trend_upper`, `trend_lower`, `seasonal`, `seasonal_upper`, `seasonal_lower`, `yearly`, `yearly_upper`, `yearly_lower` & any other column in the forecast output | `yhat` refers to the forecast values. This is the default value. The `y_then_yhat` options allow you to plot the actual values for historical data and forecast values only for future dates. Upper and lower limits are available for each type of output. |
+| return | The output of the expression | `all`, `yhat`, `yhat_upper`, `yhat_lower`, `y_then_yhat`, `y_then_yhat_upper`, `y_then_yhat_lower`, `trend`, `trend_upper`, `trend_lower`, `seasonal`, `seasonal_upper`, `seasonal_lower`, `yearly`, `yearly_upper`, `yearly_lower` & any other column in the forecast output | `yhat` refers to the forecast values. This is the default value. The `y_then_yhat` options allow you to plot the actual values for historical data and forecast values only for future dates. Upper and lower limits are available for each type of output.<br><br>The `all` option returns all the columns from the Prophet forecast. This option is only valid if used in combination with the `load_script=true` parameter as it will return multiple columns. |
 | freq | The frequency of the time series | `D`, `MS`, `M`, `H`, `T`, `S`, `ms`, `us` | The most common options would be D for Daily, MS for Month Start and M for Month End. The default value is D, however this will mess up results if you provide the values in a different frequency, so always specify the frequency. See the full set of options [here](http://pandas.pydata.org/pandas-docs/stable/user_guide/timeseries.html#offset-aliases). |
 | debug | Flag to output additional information to the terminal and logs | `true`, `false` | Information will be printed to the terminal as well to a log file: `..\qlik-py-env\core\logs\Prophet Log <n>.txt`. Particularly useful is looking at the Request Data Frame to see what you are sending to the algorithm and the Forecast Data Frame to see the possible result columns. |
 | load_script | Flag for calling the function from the Qlik load script. | `true`, `false` | Set to `true` if calling the Prophet function from the load script in the Qlik app. This will change the output to a table consisting of two fields; `ds` which is the datetime dimension passed to Prophet, and the specified return value (`yhat` by default). `ds` is returned as a string in the format `YYYY-MM-DD hh:mm:ss TT`.<br/><br/>This parameter only applies to the `Prophet` function. |
 | take_log | Take a logarithm of the values before forecasting | `true`, `false` | Default value is `false`. This can be applied when making the time series more stationary might improve forecast values. You can just try both options and compare the results. In either case the values are returned in the original scale. |
+| is_seasonality_request | Format the response for a seasonality plot | `true`, `false` | This parameter can be used when getting a seasonality component of the forecast. The Default value is `false`. This option is only valid if used with the `load_script=true` parameter as the response will have a different cardinality to the output. |
 | random_seed | An integer to control some of the stochasticity in the model | An integer value e.g. `42`, `1000` | The random seed can be used to make uncertaintly intervals for predictions deterministic and repeatable. If using `mmc_samples` > 0 this also applies to MMC sampling. However there may still be small variances in results from the model. More info [here](https://github.com/facebook/prophet/issues/849). |
 | cap | A saturating maximum for the forecast | A decimal or integer value e.g. `1000000` | You can apply a logistic growth trend model using this argument. For example when the maximum market size is known. More information [here](https://facebook.github.io/prophet/docs/saturating_forecasts.html). |
 | floor | A saturating minimum for the forecast | A decimal or integer value e.g. `0` | This argument must be used in combination with a cap. |
@@ -71,7 +73,7 @@ Any of these arguments can be included in the final string parameter for the Pro
 | seasonality_fourier | Fourier terms for the additional seasonality | An integer value e.g. `5` | For reference, by default Prophet uses 3 terms for weekly seasonality and 10 for yearly seasonality. Increasing the number of Fourier terms allows the seasonality to fit faster changing cycles, but can also lead to overfitting. |
 | seasonality_prior_scale | The extent to which the seasonality model will fit the data | A decimal or integer value e.g. `0.05` | If you find that the seasonalities are overfitting, you can adjust the prior scale to smooth them using this parameter. |
 | holidays_prior_scale | The magnitude of the holiday effect, if holidays are included in the function | A decimal or integer value e.g. `10` | If you find that the holidays are overfitting, you can adjust their prior scale to smooth them using this parameter. By default this parameter is `10`, which provides very little regularization. Reducing this parameter dampens holiday effects. |
-| weekly_start | Set the start of the week when calculating weekly seasonality | An integer value e.g. `6` (for Monday) | Only relevant when the using the Prophet_Seasonality function to get the weekly seasonality. See more below in the Seasonality section. `0` represents Sunday, `6` represents Monday. |
+| weekly_start | Set the start of the week when calculating weekly seasonality | An integer value e.g. `1` (for Monday) | Only relevant when the using the Prophet_Seasonality function to get the weekly seasonality. See more below in the Seasonality section. `0` represents Sunday, `1` represents Monday. |
 | yearly_start | Set the start of the year when calculating yearly seasonality | An integer value e.g. `0` (for 1st Jan) | Only relevant when the using the Prophet_Seasonality function to get the yearly seasonality. See more below in the Seasonality section. `0` represents 1st Jan, `1` represents 2nd Jan and so on. |
 | lower_window | Extend the holidays by certain no. of days prior to the date. | A negative integer value e.g. `-1` | Only relevant when passing holidays to Prophet. This can be used to analyze holiday effects before a holiday e.g. 7 days before Christmas. |
 | upper_window | Extend the holidays by certain no. of days after the date. | A positive integer value e.g. `1` | Only relevant when passing holidays to Prophet. This can be used to analyze holiday effects after a holiday e.g. 1 day after New Year. |
@@ -80,7 +82,7 @@ Any of these arguments can be included in the final string parameter for the Pro
 
 Prophet is meant to require little or no tweaking. Just make sure you provide the correct frequency in the arguments. If the forecast is overfitting (too much flexibility) or underfitting (not enough flexibility), you can adjust the `changepoint_prior_scale` argument described above.
 
-Other ways to adjust forecasts may be to use the `take_log` argument or to apply custom seasonality (see key word arguments above) or holidays (described below). You may also get better results by simply considering your selections in Qlik on the actual and forecasting periods.
+Other ways to adjust forecasts may be to use the `take_log` argument or to apply custom seasonality (see key word arguments above) or holidays and additional regressors (described below). Adding a `cap` and `floor` can also make the forecast more sensible. You may also get better results by simply considering your selections in Qlik on the actual and forecasting periods.
 
 ## Seasonality
 
@@ -88,13 +90,25 @@ Prophet will by default fit weekly and yearly seasonalities, if the time series 
 
 The seasonalities are available in the forecast and can be plotted against the original time series by specifying the correct return type e.g. return=yearly. However, you might want to plot the seasonality against a more relevant scale. For this you can use the `Prophet_Seasonality` function.
 
-This has somewhat different requirements:
+For instance, to plot yearly seasonality you may want to view the seasonality for a single year. Or for weekly seasonality you may want to view it for a single week.
 
-`<Analytic connection name>.Prophet_Seasonality([Seasonality Column], 'Concatenated TimeSeries as String', 'Concatentated Holidays as String', 'arg1=value1, arg2=value2, ...')`
+This is a bit of a challenge as Prophet needs the entire timeseries, yet the SSE cannot return a response with different cardinality in the frontend. To get around this we can concatenate the entire timeseries into a string which can then be parsed by the SSE:
+
+```
+<Analytic connection name>.Prophet_Seasonality([Seasonality Column], 'Concatenated TimeSeries as String', 'Concatentated Holidays as String', 'arg1=value1, arg2=value2, ...')
+```
 
 Here's an actual example for plotting yearly seasonality by day of year rather than over multiple years. The year itself (2017 in this case) is arbitrary as the seasonality effects are the same for every year.
 
-`PyTools.Prophet_Seasonality(Max({$<FORECAST_YEAR = {'2017'}>} FORECAST_DATE), $(vAccidentsByDate), '', 'freq=D, seasonality=yearly, return=yearly')`
+```
+// Dimension:
+if(FORECAST_YEAR = '2017', FORECAST_DATE)
+```
+
+```
+// Measure:
+PyTools.Prophet_Seasonality(Max({$<FORECAST_YEAR = {'2017'}>} FORECAST_DATE), $(vAccidentsByDate), '', 'freq=D, seasonality=yearly, return=yearly')
+```
 
 The time series is provided by a variable that concatenates all the data into a string. This is a workaround as AAI integration for charts requires the number of output rows to equal the number of input rows.
 
@@ -102,12 +116,50 @@ Here we don't provide holidays so an empty string is used as the third argument.
 
 Note that the dates must be provided in their numerical representation by using the `Num()` function in Qlik.
 
-`Concat(DISTINCT TOTAL Aggr(Num(FORECAST_DATE) & ':' & Count({$<FORECAST_LINK_TYPE = {'Actual'}>} Distinct ACCIDENT_NO), FORECAST_DATE), ';')`
+```
+// Variable vAccidentsByDate:
+Concat(DISTINCT TOTAL Aggr(Num(FORECAST_DATE) & ':' & Count({$<FORECAST_LINK_TYPE = {'Actual'}>} Distinct ACCIDENT_NO), FORECAST_DATE), ';')
+```
 
-With this we can get a nice seasonality plot by day of year. Similarly we can plot other seasonalities with different scales.
+With this we can get a nice seasonality plot by day of year. 
 
 ![yearly seasonality chart](images/Seasonality-01.png)
+
+For the weekly seasonality the dimension would be the WeekDay which is a Dual value in Qlik with both a numeric and string representation. In Qlik, Sunday is 0, Monday is 1 and so on. To correctly plot the weekly seasonality we can use the following dimension and measure.
+
+```
+// Dimension:
+Weekday(FORECAST_DATE)
+```
+
+```
+// Measure:
+PyTools.Prophet_Seasonality(Max(Weekday(FORECAST_DATE)), $(vAccidentsByDate), '', 'freq=D, return=weekly, seasonality=weekly')
+```
+
 ![weekly seasonality chart](images/Seasonality-02.png)
+
+The seasonality can also be obtained through the load script. This is somewhat easier as SSE calls from the load script can return a response with a different cardinality to the input. You will need to pass the `load_script=true` and `is_seasonality_request=true` paramaters. The number of response rows returned will be based on the `seasonality` parameter, e.g. 7 with `seasonality=weekly`. 
+
+This technique has been demonstrated in the [simple sample app](Sample_App_Forecasting_Simple.qvf).
+
+```
+// Setup an input table to for getting the seasonality component
+temp2:
+NoConcatenate
+LOAD
+    ds,
+    y,
+    'freq=M, load_script=true, is_seasonality_request=true, seasonality=yearly' as args
+RESIDENT temp;
+
+// Call the Prophet function and store the results in the Response table
+Seasonality:
+LOAD
+    *,
+    Date(MakeDate(2019,1,1) + [index]) as [Day of Year]
+Extension PyTools.Prophet(temp2{ds, y, args});
+```
 
 ## Holidays
 
@@ -136,6 +188,71 @@ You can analyze holiday effects around the date by specifying the `lower_window`
 The `Prophet_Seasonality` function also allows you to add holidays to the forecast. The holidays need to be provided as a concatenated string made up of the numerical value of the date followed by the holiday names. Use a colon between the date and holiday name and a semicolon between different dates. For example:
 
 `Concat({$<HOLIDAY_NAME={*}>} Distinct Total Num(FORECAST_DATE) & ':' & HOLIDAY_NAME, ';')`
+
+## Additional Regressors
+
+Prophet allows for the use of [Additional Regressors](https://facebook.github.io/prophet/docs/seasonality,_holiday_effects,_and_regressors.html#additional-regressors) for multivariate timeseries forecasting. This means that you can cater for the effect of multiple variables on the forecast, possibly improving the accuracy in modelling more complex timeseries.
+
+The values used as additional regressors need to be numeric and avaialble for both the past and future. So these need to be known quantities, e.g. events on known dates, or values that have been predicted elsewhere, e.g. by a machine learning model or an external source.
+
+The sample app [Sample-App-Prophet-Multivariate.qvf](Sample-App-Prophet-Multivariate.qvf) provides examples of applying these techniques in the frontend as well as the load script.
+
+To use additional regressors you will need to use the `Prophet_Multivariate` function:
+
+```
+<Analytic connection name>.Prophet_Multivariate([Date Column], [Value Column], [Holiday Name Column], [Regressor 1] & '|' & [Regressor 2]..., 'regressor1_arg1=value1, regressor1_arg2=value2, ...| regressor2_arg1=value1, ...', 'arg1=value1, arg2=value2, ...')
+```
+
+Here is an example from the sample app where we use Temperature and Weather as additional regressors when forecasting bike share rentals in Washington:
+
+```
+PyTools.Prophet_Multivariate([Date], Sum([Count 2011]), '', Temperature & '|' & Weather, '', 'freq=D, cap=10000, floor=0')
+```
+
+The holiday column and regressor arguments can be empty strings `''`. The final argument can contain the parameters described in the [Additional Parameters](#additional-parameters) section.
+
+![Multivariate forecast using Prophet](images/Additional-Regressors-01.png)
+
+Valid options for the regressor arguments are as below. You can either provide one set of arguments per regressor, separated by the pipe `|` character, or just one set of arguments that will be applied to all regressors.
+
+```
+PyTools.Prophet_Multivariate([Date], Sum([Count 2011]), '', Temperature & '|' & Weather, 'prior_scale=10, mode=additive | prior_scale=10, mode=additive', 'freq=D, cap=10000, floor=0')
+```
+
+| Keyword | Description | Sample Values | Remarks |
+| --- | --- | --- | --- |
+| prior_scale | The magnitude of the regressor's effect | A decimal or integer value e.g. `10` | If not provided, `holidays_prior_scale` will be used. |
+| standardize | Specify whether this regressor will be standardized prior to fitting | `auto`, `true`, `false` | The default is `auto`, which means that the regressor will be standardized unless it is binary. |
+| mode | Use additive or multiplicative model for the regressor | `additive`, `multiplicative` | Defaults to `seasonality_mode`. |
+
+The `Prophet_Multivariate` function can be called through the load script by passing the `load_script=true` parameter. 
+
+```
+// Set up the input table for the forecast
+[temp]:
+LOAD
+    Date as ds,
+    [Count 2011] as y,
+    '' as holiday_names,
+    Temperature & '|' & Weather as added_regressors,
+    '' as regressor_args,
+    'freq=D, cap=10000, floor=0, return=all, load_script=true' as args
+RESIDENT [day];
+
+// Call the Prophet function and store the results in the Response table
+[Pre-calculated Forecast]:
+LOAD *,
+    Date(Floor(Date#(ds, 'YYYY-MM-DD hh:mm:ss TT'))) as Date
+Extension PyTools.Prophet_Multivariate(temp{ds, y, holiday_names, added_regressors, regressor_args, args});
+```
+
+Seasonality can be obtained using the `Prophet_Seasonality_Multivariate` function. This works similarly to the `Prophet_Seasonality` function with the ability to add additional regressors.
+
+```
+<Analytic connection name>.Prophet_Seasonality_Multivariate([Seasonality Column], 'Concatenated TimeSeries as String', 'Concatentated Holidays as String', 'Concatentated Additional Regressors as String', 'regressor1_arg1=value1, regressor1_arg2=value2, ...| regressor2_arg1=value1, ...', 'arg1=value1, arg2=value2, ...')
+```
+
+The concatenation should be done as described in the [Seasonality](#seasonality) section, with additional concatenation using the pipe `|` delimeter for multiple regressors, i.e `ds:regressor1|regressor2...`.
 
 ## Use Prophet with your own app
 
@@ -414,7 +531,7 @@ The approach explained above provides the forecast in the context of the user's 
 
 However, in some cases, you may want to precalculate the forecast for a given set of dimensions, e.g. by product and region. This can be done through the Qlik load script. 
 
-For an example, refer to the [simple sample app](Sample_App_Forecasting_Simple.qvf)
+For an example, refer to the [simple sample app](Sample_App_Forecasting_Simple.qvf).
 
 ```
 // Generate forecasts for each value in the Hospital field
@@ -467,4 +584,7 @@ Drop table Response
 ```
 
 ## Attribution
-The data used in the sample apps was obtained from the [Crash Stats Data Extract](https://www.data.vic.gov.au/data/dataset/crash-stats-data-extract) and the [Victorian Health Services Performance](http://performance.health.vic.gov.au/Home/Report.aspx?ReportKey=157) report published by the Victorian State Government.
+The data used in the sample apps was obtained from:
+- [Crash Stats Data Extract](https://www.data.vic.gov.au/data/dataset/crash-stats-data-extract) published by the Victorian State Government.
+- [Victorian Health Services Performance](http://performance.health.vic.gov.au/Home/Report.aspx?ReportKey=157) published by the Victorian State Government.
+- [Washington Bike Sharing Dataset](https://www.kaggle.com/marklvl/bike-sharing-dataset/) on Kaggle.com.

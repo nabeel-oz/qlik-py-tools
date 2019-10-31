@@ -2,6 +2,7 @@ import argparse
 import json
 import logging
 import logging.config
+import re
 import os
 import sys
 import time
@@ -106,7 +107,16 @@ class ExtensionService(SSE.ConnectorServicer):
             30: '_spacy',
             31: '_spacy',
             32: '_spacy',
-            33: '_misc'
+            33: '_misc',
+            34: '_sklearn',
+            35: '_sklearn',
+            36: '_sklearn',
+            37: '_sklearn',
+            38: '_sklearn',
+            39: '_sklearn',
+            40: '_prophet',
+            41: '_prophet_seasonality',
+            42: '_sklearn'
         }
 
     """
@@ -167,7 +177,7 @@ class ExtensionService(SSE.ConnectorServicer):
         # Values are then structured as SSE.Rows
         response_rows = [SSE.Row(duals=duals) for duals in response_rows]
 
-        # Get the number of rows in the request
+        # Get the number of bundles in the request
         num_request_bundles = len(request_list)
 
         # Get the number of rows in the response
@@ -175,12 +185,12 @@ class ExtensionService(SSE.ConnectorServicer):
 
         # Calculate the number of rows to send per bundle
         if num_rows >= num_request_bundles:
-            rows_per_bundle = len(response_rows)//len(request_list)
+            rows_per_bundle = num_rows//num_request_bundles
         else:
             rows_per_bundle = num_rows
 
         # Stream response as BundledRows
-        for i in range(0, len(response_rows), rows_per_bundle):
+        for i in range(0, num_rows, rows_per_bundle):
             # Yield Row data as Bundled rows
             yield SSE.BundledRows(rows=response_rows[i : i + rows_per_bundle])
     
@@ -335,19 +345,18 @@ class ExtensionService(SSE.ConnectorServicer):
         # This occurs when the load_script=true argument is passed in the Qlik expression.
         response_is_df = isinstance(forecast, pd.DataFrame)   
 
-        # Convert the response to a list of rows
-        forecast = forecast.values.tolist()
-
-        # We convert values to type SSE.Dual, and group columns into a iterable
+        # Set the data types of the output
         if response_is_df:
-            response_rows = [iter([SSE.Dual(strData=row[0]),SSE.Dual(numData=row[1])]) for row in forecast]
+            dtypes = []
+            for dt in forecast.dtypes:
+                dtypes.append('num' if is_numeric_dtype(dt) else 'str')
         else:
-            response_rows = [iter([SSE.Dual(numData=row)]) for row in forecast]
-        
-        # Values are then structured as SSE.Rows
-        response_rows = [SSE.Row(duals=duals) for duals in response_rows]                
-        
-        # Get the number of rows in the request
+            dtypes = ['num']
+
+        # Get the response as SSE.Rows
+        response_rows = utils.get_response_rows(forecast.values.tolist(), dtypes) 
+
+        # Get the number of bundles in the request
         num_request_bundles = len(request_list)
 
         # Get the number of rows in the response
@@ -355,14 +364,14 @@ class ExtensionService(SSE.ConnectorServicer):
 
         # Calculate the number of rows to send per bundle
         if num_rows >= num_request_bundles:
-            rows_per_bundle = len(response_rows)//len(request_list)
+            rows_per_bundle = num_rows//num_request_bundles
         else:
             rows_per_bundle = num_rows
 
         # Stream response as BundledRows
-        for i in range(0, len(response_rows), rows_per_bundle):
+        for i in range(0, num_rows, rows_per_bundle):
             # Yield Row data as Bundled rows
-            yield SSE.BundledRows(rows=response_rows[i : i + rows_per_bundle])    
+            yield SSE.BundledRows(rows=response_rows[i : i + rows_per_bundle])  
     
     @staticmethod
     def _prophet_seasonality(request, context):
@@ -420,7 +429,7 @@ class ExtensionService(SSE.ConnectorServicer):
         # The series is then converted to a list
         response_rows = response_rows.apply(lambda duals: SSE.Row(duals=duals)).tolist()        
         
-        # Get the number of rows in the request
+        # Get the number of bundles in the request
         num_request_bundles = len(request_list)
 
         # Get the number of rows in the response
@@ -428,12 +437,12 @@ class ExtensionService(SSE.ConnectorServicer):
 
         # Calculate the number of rows to send per bundle
         if num_rows >= num_request_bundles:
-            rows_per_bundle = len(response_rows)//len(request_list)
+            rows_per_bundle = num_rows//num_request_bundles
         else:
             rows_per_bundle = num_rows
 
         # Stream response as BundledRows
-        for i in range(0, len(response_rows), rows_per_bundle):
+        for i in range(0, num_rows, rows_per_bundle):
             # Yield Row data as Bundled rows
             yield SSE.BundledRows(rows=response_rows[i : i + rows_per_bundle]) 
     
@@ -456,7 +465,7 @@ class ExtensionService(SSE.ConnectorServicer):
         
         # Call the function based on the mapping in functions.json
         # The if conditions are grouped based on similar output structure
-        if function in (9, 10, 21, 24):    
+        if function in (9, 10, 21, 24, 34):    
             if function == 9:
                 # Set up the model and save to disk
                 response = model.setup()
@@ -469,6 +478,9 @@ class ExtensionService(SSE.ConnectorServicer):
             elif function == 24:
                 # Set a parameter grid for hyperparameter optimization
                 response = model.set_param_grid()
+            elif function == 34:
+                # Setup the architecture for a Keras model
+                response = model.keras_setup()
             
             dtypes = ["str", "str", "str"]
         
@@ -482,7 +494,7 @@ class ExtensionService(SSE.ConnectorServicer):
             response = model.fit()
             dtypes = ["str", "str", "str", "str", "num"]
         
-        elif function in (14, 16, 19, 20, 27):
+        elif function in (14, 16, 19, 20, 27, 36):
             if function == 14:
                 # Provide predictions in a chart expression based on an existing model
                 response = model.predict(load_script=False)
@@ -498,10 +510,16 @@ class ExtensionService(SSE.ConnectorServicer):
             elif function == 27:
                 # Get labels for clustering
                 response = model.fit_transform(load_script=False)
+            elif function == 36:
+                # Get sequence predictions from Keras
+                response = model.sequence_predict(load_script=False)
+            elif function == 38:
+                # Get sequence prediction probabilities from Keras
+                response = model.sequence_predict(load_script=False, variant="predict_proba")
             
             dtypes = ["str"]
             
-        elif function in (15, 17, 28):
+        elif function in (15, 17, 28, 37):
             if function == 15:
                 # Provide predictions in the load script based on an existing model
                 response = model.predict(load_script=True)    
@@ -511,14 +529,22 @@ class ExtensionService(SSE.ConnectorServicer):
             elif function == 28:
                 # Provide labels for clustering
                 response = model.fit_transform(load_script=True)
+            elif function == 37:
+                # Get sequence predictions from Keras
+                response = model.sequence_predict(load_script=True)
+            elif function == 39:
+                # Get sequence prediction probabilities from Keras
+                response = model.sequence_predict(load_script=True, variant="predict_proba")
 
             dtypes = ["str", "str", "str"]
         
-        elif function in (18, 22):
+        elif function in (18, 22, 42):
             if function == 18:
                 response = model.get_metrics()
             elif function == 22:
                 response = model.calculate_metrics()
+            elif function == 42:
+                response = model.calculate_metrics(ordered_data=True)
             
             # Check whether the metrics are for a classifier or regressor and whether they come from cross validation or hold-out testing
             if "accuracy_std" in response.columns:
@@ -543,7 +569,10 @@ class ExtensionService(SSE.ConnectorServicer):
         elif function == 23:
             # Get the confusion matrix for the classifier
             response = model.get_confusion_matrix()
-            dtypes = ["str", "str", "str", "num"]
+            if response.shape[1] == 4:
+                dtypes = ["str", "str", "str", "num"]
+            else:
+                dtypes = ["str", "num", "num", "num", "num", "num"]
         
         elif function == 25:
             # Get the best parameters based on a grid search cross validation
@@ -562,6 +591,14 @@ class ExtensionService(SSE.ConnectorServicer):
             # Explain the feature importances for the model
             response = model.explain_importances()
             dtypes = ["str", "str", "num"]
+        
+        elif function == 35:
+            # Provide metrics from the training history of a Keras model
+            response = model.get_keras_history()
+            dtypes = ["str"]
+
+            for i in range(1, response.shape[1]):
+                dtypes.append("num")
         
         # Get the response as SSE.Rows
         response_rows = utils.get_response_rows(response.values.tolist(), dtypes) 
@@ -669,7 +706,7 @@ class ExtensionService(SSE.ConnectorServicer):
         # Get the response as SSE.Rows
         response_rows = utils.get_response_rows(response.values.tolist(), dtypes) 
 
-        # Get the number of rows in the request
+        # Get the number of bundles in the request
         num_request_bundles = len(request_list)
 
         # Get the number of rows in the response
@@ -677,12 +714,12 @@ class ExtensionService(SSE.ConnectorServicer):
 
         # Calculate the number of rows to send per bundle
         if num_rows >= num_request_bundles:
-            rows_per_bundle = len(response_rows)//len(request_list)
+            rows_per_bundle = num_rows//num_request_bundles
         else:
             rows_per_bundle = num_rows
 
         # Stream response as BundledRows
-        for i in range(0, len(response_rows), rows_per_bundle):
+        for i in range(0, num_rows, rows_per_bundle):
             # Yield Row data as Bundled rows
             yield SSE.BundledRows(rows=response_rows[i : i + rows_per_bundle])
     
@@ -698,12 +735,52 @@ class ExtensionService(SSE.ConnectorServicer):
         header.ParseFromString(metadata['qlik-functionrequestheader-bin'])
 
         return header.functionId
+
+    def _get_call_info(self, context):
+        """
+        Retreive useful information for the function call.
+        :param context: context
+        :return: string containing header info
+        """
+
+        # Get metadata for the call from the context
+        metadata = dict(context.invocation_metadata())
+        
+        # Get the function ID
+        func_header = SSE.FunctionRequestHeader()
+        func_header.ParseFromString(metadata['qlik-functionrequestheader-bin'])
+        func_id = func_header.functionId
+
+        # Get the common request header
+        common_header = SSE.CommonRequestHeader()
+        common_header.ParseFromString(metadata['qlik-commonrequestheader-bin'])
+
+        # Get capabilities
+        if not hasattr(self, 'capabilities'):
+            self.capabilities = self.GetCapabilities(None, context, log=False)
+
+        # Get the name of the capability called in the function
+        capability = [function.name for function in self.capabilities.functions if function.functionId == func_id][0]
+                
+        # Get the user ID using a regular expression
+        match = re.match(r"UserDirectory=(?P<UserDirectory>\w*)\W+UserId=(?P<UserId>\w*)", common_header.userId, re.IGNORECASE)
+        if match:
+            userId = match.group('UserDirectory') + '/' + match.group('UserId')
+        else:
+            userId = common_header.userId
+        
+        # Get the app ID
+        appId = common_header.appId
+        # Get the call's origin
+        peer = context.peer()
+
+        return "{0} - Capability '{1}' called by user {2} from app {3}".format(peer, capability, userId, appId)
     
     """
     Implementation of rpc functions.
     """
 
-    def GetCapabilities(self, request, context):
+    def GetCapabilities(self, request, context, log=True):
         """
         Get capabilities.
         Note that either request or context is used in the implementation of this method, but still added as
@@ -713,12 +790,13 @@ class ExtensionService(SSE.ConnectorServicer):
         :param context: the context, not used in this method.
         :return: the capabilities.
         """
-        logging.info('GetCapabilities')
+        if log:
+            logging.info('GetCapabilities')
 
         # Create an instance of the Capabilities grpc message
         # Enable(or disable) script evaluation
         # Set values for pluginIdentifier and pluginVersion
-        capabilities = SSE.Capabilities(allowScript=False,
+        self.capabilities = SSE.Capabilities(allowScript=False,
                                         pluginIdentifier='Qlik Python Tools',
                                         pluginVersion='v2.3.0')
 
@@ -726,7 +804,7 @@ class ExtensionService(SSE.ConnectorServicer):
         with open(self.function_definitions) as json_file:
             # Iterate over each function definition and add data to the Capabilities grpc message
             for definition in json.load(json_file)['Functions']:
-                function = capabilities.functions.add()
+                function = self.capabilities.functions.add()
                 function.name = definition['Name']
                 function.functionId = definition['Id']
                 function.functionType = definition['Type']
@@ -736,10 +814,11 @@ class ExtensionService(SSE.ConnectorServicer):
                 for param_name, param_type in sorted(definition['Params'].items()):
                     function.params.add(name=param_name, dataType=param_type)
 
-                logging.info('Adding to capabilities: {}({})'.format(function.name,
-                                                                     [p.name for p in function.params]))
+                if log:
+                    logging.info('Adding to capabilities: {}({})'.format(function.name,
+                                                                        [p.name for p in function.params]))
 
-        return capabilities
+        return self.capabilities
 
     def ExecuteFunction(self, request_iterator, context):
         """
@@ -750,8 +829,9 @@ class ExtensionService(SSE.ConnectorServicer):
         """
         # Retrieve function id
         func_id = self._get_function_id(context)
-        logging.info('ExecuteFunction (functionId: {})'.format(func_id))
-
+        logging.info(self._get_call_info(context))
+        logging.info('ExecuteFunction (functionId: {}, {})'.format(func_id, self.functions[func_id]))
+        
         return getattr(self, self.functions[func_id])(request_iterator, context)
 
     """

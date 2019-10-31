@@ -247,12 +247,14 @@ For more information on the [Execution Arguments](#execution-arguments) refer to
 
 ### Making predictions using the model
 
-To make predictions you need to use an existing model. A list of models can be obtained using the `sklearn_List_Models` function. This function is meant to be used in chart expressions, for example as a dimension in a table object.
+To make predictions you need to use a trained model. Trained models are found in the SSE under `../qlik-py-tools/qlik-py-env/models`.
 
-The input to this function is a string to search for within the directory. You can also provide an empty string to get a list of all the models.
+A list of models can be obtained using the `sklearn_List_Models` function. The input to this function is a string to search for within the directory. You can also provide an empty string to get a list of all files.
+
+This function is meant to be used in chart expressions, for example it can be used a measure in a text object with the following expression.
 
 ```
-PyTools.sklearn_List_Models('')
+'$(=PyTools.sklearn_List_Models(''))'
 ```
 
 To make predictions you must provide exactly the same features in exactly the same order as the training data. And as explained in the section above, all features need to be concatenated into a single string. To help with this the function `sklearn_Get_Features_Expression` provides the expression that can be added to a variable in the load script.
@@ -280,7 +282,7 @@ Predictions can be made in a chart expression using the `sklearn_Predict` functi
 PyTools.sklearn_Predict('HR-Attrition-LR', $(vFeaturesExpression))
 ```
 
-_Note: As of the June 2018 release, the expression above can be used as a dimension in the table object, allowing you to make selections on the prediction results. Note that the prediction expression should *not* be stored as a master item dimension as this can lead to unstable behavior._
+_Note: As of the June 2018 release, the expression above can be used as a dimension in the table object, allowing you to make selections on the prediction results. However, the prediction expression should **not** be stored as a master item dimension as this can lead to unstable behavior._
 
 Predictions can also be made in the load script using the `sklearn_Bulk_Predict` method. For classifiers you can also use the `sklearn_Bulk_Predict_Proba` function to get the predicted class probabilities.
 
@@ -455,7 +457,7 @@ If you want to use default values you can simply pass an empty string for `Execu
 
 | Keyword | Description | Sample Values | Remarks |
 | --- | --- | --- | --- |
-| overwrite | Specify whether any existing model with the same name should be overwritten | `true`, `false` | Defaults to `false`. |
+| overwrite | Specify whether any existing model with the same name should be overwritten | `true`, `false` | Defaults to `true`. |
 | test_size | Set the ratio that will be used to split the samples into training and testing data sets | `0.3` | Defaults to `0.33`. |
 | cv | Enable k-fold cross validation | `5` | Defaults to `0` in which case the hold-out testing strategy is used as per `test_size`. <br><br>The value represents the cross validation splitting strategy as defined in the scikit-learn [cross_validate](http://scikit-learn.org/stable/modules/generated/sklearn.model_selection.cross_validate.html#sklearn.model_selection.cross_validate) method. <br><br>Refer to the [Testing strategy](#testing-strategy) section for further explanation. |
 | random_state | Seed used by the random number generator when generating the training testing split | `42` | Default to `42`.<br><br>Must be an integer. |

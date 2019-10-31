@@ -4,6 +4,7 @@ import sys
 import time
 import string
 import pathlib
+import joblib
 import random
 import warnings
 import numpy as np
@@ -350,9 +351,11 @@ class SpaCyForQlik:
         if self.debug:
             self._print_log(6)
     
-    def _retrain_model(self):
+    def _retrain_model(self, locked_timeout=2):
         """
         Update an existing spaCy model with labelled training data.
+        The model is stored to disk using spaCy's to_disk method.
+        If the model is found to be locked (based on the existance of a lock file) this function will fail after 'locked_timeout' seconds.
         """
 
         # Load the model, set up the pipeline and train the entity recognizer:
@@ -446,9 +449,27 @@ class SpaCyForQlik:
         # Save model to output directory:
         
         output_dir = pathlib.Path(self.path + self.model + '/')
+        lock_file = pathlib.Path(self.path + self.model + '.lock')
+        
+        # Create the output directory if required
         if not output_dir.exists():
             output_dir.mkdir(parents=True, exist_ok=False)
-        nlp.to_disk(output_dir)
+        # If the model is locked wait a few seconds
+        elif lock_file.exists():
+            time.sleep(locked_timeout)
+            # If the model is still locked raise an exception
+            if lock_file.exists():
+                raise TimeoutError("The specified model is locked. If you think this is wrong, please delete file {0}".format(lock_file))
+
+        try:
+            # Create the lock file
+            joblib.dump(self.path + self.model, filename=lock_file)
+
+            # Store the spaCy model to disk
+            nlp.to_disk(output_dir)
+        finally:
+            # Delete the lock file
+            lock_file.unlink()
 
         # Debug information is printed to the terminal and logs if the paramater debug = true
         if self.debug:
