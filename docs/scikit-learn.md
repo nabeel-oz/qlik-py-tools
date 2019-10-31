@@ -282,7 +282,7 @@ Predictions can be made in a chart expression using the `sklearn_Predict` functi
 PyTools.sklearn_Predict('HR-Attrition-LR', $(vFeaturesExpression))
 ```
 
-_Note: As of the June 2018 release, the expression above can be used as a dimension in the table object, allowing you to make selections on the prediction results. Note that the prediction expression should *not* be stored as a master item dimension as this can lead to unstable behavior._
+_Note: As of the June 2018 release, the expression above can be used as a dimension in the table object, allowing you to make selections on the prediction results. However, the prediction expression should **not** be stored as a master item dimension as this can lead to unstable behavior._
 
 Predictions can also be made in the load script using the `sklearn_Bulk_Predict` method. For classifiers you can also use the `sklearn_Bulk_Predict_Proba` function to get the predicted class probabilities.
 
