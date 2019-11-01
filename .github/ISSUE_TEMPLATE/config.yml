@@ -1,5 +1,5 @@
 blank_issues_enabled: false
 contact_links:
-  - name: qlik-py-tools
-    url: https://github.com/nabeel-oz/qlik-py-tools/issues
-    about: Please use the most relevant issue template for your post.
+  - name: Project Documentation
+    url: https://github.com/nabeel-oz/qlik-py-tools#python-data-science-tools-for-qlik
+    about: For installation and usage documentation refer to the project README here. 
