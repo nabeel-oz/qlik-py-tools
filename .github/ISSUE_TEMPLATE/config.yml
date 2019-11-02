@@ -2,4 +2,10 @@ blank_issues_enabled: false
 contact_links:
   - name: Project Documentation
     url: https://github.com/nabeel-oz/qlik-py-tools#python-data-science-tools-for-qlik
-    about: For installation and usage documentation refer to the project README here. 
+    about: For installation and usage documentation refer to the project README here.
+  - name: Installation Guide
+    url: https://github.com/nabeel-oz/qlik-py-tools#pre-requisites
+    about: A detailed installation guide for Windows.
+  - name: Help and Sample Apps
+    url: https://github.com/nabeel-oz/qlik-py-tools#usage
+    about: Usage documentation and sample Qlik Sense apps.
