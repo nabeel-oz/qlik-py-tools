@@ -102,7 +102,7 @@ docker run \
 
 ## Installation
 
-For installing this SSE on a machine without Internet access, use the instructions [here](offline-install/README.md).
+This installation requires Internet access. To install this SSE on a machine without Internet access refer to the [offline installation guide](offline-install/).
 
 1. Get Python from [here](https://www.python.org/downloads/release/python-368/). Make sure you get the 64 bit version. Remember to select the option to add Python to your PATH environment variable.
 

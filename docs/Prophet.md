@@ -193,7 +193,7 @@ The `Prophet_Seasonality` function also allows you to add holidays to the foreca
 
 Prophet allows for the use of [Additional Regressors](https://facebook.github.io/prophet/docs/seasonality,_holiday_effects,_and_regressors.html#additional-regressors) for multivariate timeseries forecasting. This means that you can cater for the effect of multiple variables on the forecast, possibly improving the accuracy in modelling more complex timeseries.
 
-The values used as additional regressors need to be numeric and avaialble for both the past and future. So these need to be known quantities, e.g. events on known dates, or values that have been predicted elsewhere, e.g. by a machine learning model or an external source.
+The values used as additional regressors need to be numeric and available for both the past and future. So these need to be known quantities, e.g. events on known dates, or values that have been predicted elsewhere, e.g. by a machine learning model or an external source.
 
 The sample app [Sample-App-Prophet-Multivariate.qvf](Sample-App-Prophet-Multivariate.qvf) provides examples of applying these techniques in the frontend as well as the load script.
 
