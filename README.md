@@ -6,7 +6,7 @@ Version 6.0 with major new updates has been released. Get it [here](https://gith
 
 Deep Learning capabilities have been added through integration with Keras and Tensorflow. This offers powerful capabilities for sequence predictions and complex timeseries forecasting.
 
-This release also includes the ability to use [Additional Regressors](https://facebook.github.io/prophet/docs/seasonality,_holiday_effects,_and_regressors.html#additional-regressors) with Prophet, allowing you to model more complex timeseries.
+This release also includes the ability to use [Additional Regressors](docs/Prophet.md#additional-regressors) with Prophet, allowing you to model more complex timeseries.
 
 ## Table of Contents
 
