@@ -600,9 +600,9 @@ class SKLearnForQlik:
             
             # Include dimensionality reduction in the pipeline steps
             pipe_steps.append(('reduction', reduction))
-            self.model.estimation_step = 1
+            self.model.estimation_step = 2
         else:
-            self.model.estimation_step = 0      
+            self.model.estimation_step = 1      
 
         # If this is a Keras estimator, update the input shape and reshape the data if required
         if self.model.using_keras:
@@ -635,6 +635,7 @@ class SKLearnForQlik:
             # If lag_target is True, an additional feature will be created for each sample using the previous value of y 
             reshape = Reshaper(first_layer_kwargs=self.model.first_layer_kwargs, logfile=self.logfile)
             pipe_steps.append(('reshape', reshape))
+            self.model.estimation_step += self.model.estimation_step
 
             # Avoid tensorflow error for keras models
             # https://github.com/tensorflow/tensorflow/issues/14356
