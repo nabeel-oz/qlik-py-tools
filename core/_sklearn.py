@@ -719,7 +719,7 @@ class SKLearnForQlik:
             # Select the dataset for calculating importances
             if self.model.validation == "hold-out":
                 X = self.X_test
-                y = self.y_test.values.ravel()
+                y = self.y_test # Already a numpy array after calculate_metrics
             else:
                 X = self.X_train
                 y = self.y_train.values.ravel()
