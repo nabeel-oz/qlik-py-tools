@@ -21,6 +21,9 @@ Alternatively, you can provide the latest log files from `../qlik-py-tools/qlik-
 **Error message in Qlik**
 Provide a screenshot of the error message in Qlik.
 
+**Expression or load script used in Qlik**
+Provide a screenshot of the expression or load script where the SSE is being used in Qlik.
+
 **Environment:**
  - OS [e.g. Windows Server, Linux]
  - Qlik Sense Enterprise/ Desktop/ Kubernetes/ QlikView
