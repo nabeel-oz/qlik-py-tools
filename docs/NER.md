@@ -6,7 +6,7 @@
 - [Default Model](#default-model)
 - [Quick Start](#quick-start)
 - [Retraining a model](#retraining-a-model)
-- [NER with a retrained model](#ner-with-a-retrained-model)
+- [NER with a specified model](#ner-with-a-specified-model)
 - [Additional Parameters](#additional-parameters)
 - [NER on the Lord of the Rings](#ner-on-the-lord-of-the-rings)
 - [Attribution](#attribution)
@@ -105,9 +105,9 @@ The function call returns a table with certain evaluation metrics like precision
 
 ![Retrained Model](images/spaCy-02.png)
 
-## NER with a retrained model
+## NER with a specified model
 
-Once you have retrained a model you can use it for entity recognition. For this you can use the `spaCy_Get_Entities_From_Model` function, providing a table with the key, text, model name and additional parameters as input.
+You can use all installed and retrained models for entity recognition. For specifying the model to be used call the `spaCy_Get_Entities_From_Model` function, providing a table with the key, text, model name and additional parameters as input.
 
 If you introduced new entity types during model retraining, the model will not be able to provide an entity type description. However, this can be handled in Qlik by setting up a mapping table for the new entity types, and then using the standard `ApplyMap` function in the load from the SSE as shown below.
 
