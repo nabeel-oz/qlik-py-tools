@@ -11,7 +11,7 @@ This release also includes the ability to use [Additional Regressors](Prophet.md
 ## Table of Contents
 
 - [Introduction](#introduction)
-    - [Demonstration Video](#demonstration-video)
+    - [Demonstration Videos](#demonstration-videos)
 - [Note on the approach](#note-on-the-approach)
 - [Docker Image](#docker-image)
 - [Pre-requisites](#pre-requisites)
@@ -45,8 +45,12 @@ For more information on Qlik Server Side Extensions see [qlik-oss](https://githu
 
 **Disclaimer:** This project has been started by me in a personal capacity and is not supported by Qlik. 
 
-### Demonstration Video
-[![Demonstration Video](images/YouTube-01.png)](https://youtu.be/7E944kz1l5s)
+### Demonstration Videos
+Forecasting, Clustering & Supervised Machine Learning:
+[![Demonstration Video 1](images/YouTube-01.png)](https://youtu.be/7E944kz1l5s)
+
+Deep Learning & Additional Regressors with Prophet
+[![Demonstration Video 2](images/YouTube-02.png)](https://youtu.be/KM0Fo1wdMYw)
 
 ## Note on the approach
 In this project we have defined functions that expose open source algorithms to Qlik using the [gRPC framework](http://www.grpc.io/). Each function allows the user to define input data and parameters to control the underlying algorithm's output. 
