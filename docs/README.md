@@ -47,9 +47,11 @@ For more information on Qlik Server Side Extensions see [qlik-oss](https://githu
 
 ### Demonstration Videos
 Forecasting, Clustering & Supervised Machine Learning:
+
 [![Demonstration Video 1](images/YouTube-01.png)](https://youtu.be/7E944kz1l5s)
 
-Deep Learning & Additional Regressors with Prophet
+Deep Learning & Additional Regressors with Prophet:
+
 [![Demonstration Video 2](images/YouTube-02.png)](https://youtu.be/KM0Fo1wdMYw)
 
 ## Note on the approach
