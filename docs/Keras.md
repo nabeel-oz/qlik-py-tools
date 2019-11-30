@@ -18,7 +18,7 @@
 
 ## Introduction
 
-Many forecasting problems require more than the historical values of a time series to make accurate predictions. For example, when forecasting sales we can make better predictions by considering leads, opportunities and marketing campaigns. When forecasting solar power generation, we need to consider variables such as cloud cover and hours of daylight. Deep Learning offers us poweful capabilities for modelling such sequence prediction problems.
+Many forecasting problems require more than the historical values of a time series to make accurate predictions. For example, when forecasting sales we can make better predictions by considering leads, opportunities and marketing campaigns. When forecasting solar power generation, we need to consider variables such as cloud cover and hours of daylight. Deep Learning offers us powerful capabilities for modelling such sequence prediction problems.
 
 Deep learning models are capable of learning features from sequential data, can take in multiple input variables, and be set up to look at a certain number of periods, for instance 30 days, and make multi-step predictions, for example for the next 7 days. With Convolutional Neural Networks (CNNs) we have the capability to learn patterns from sequential data. And with Long Short Term Memory Networks (LSTMs) we can build models that retain information on long term dependencies. 
 

@@ -125,8 +125,8 @@ This installation requires Internet access. To install this SSE on a machine wit
 
 5. Now whenever you want to start this Python service you can run `Qlik-Py-Start.bat`.
 
-6. Now you need to [set up an Analytics Connection in Qlik Sense Enterprise](https://help.qlik.com/en-US/sense/September2018/Subsystems/ManagementConsole/Content/Sense_QMC/create-analytic-connection.htm) or [update the Settings.ini file in Qlik Sense Desktop](https://help.qlik.com/en-US/sense/September2018/Subsystems/Hub/Content/Sense_Hub/Introduction/configure-analytic-connection-desktop.htm). If you are using the sample apps make sure you use `PyTools` as the name for the analytics connection, or alternatively, update all of the expressions to use the new name.
-     - For Qlik Sense Desktop you need to update the `settings.ini` file:<br/><br/>![QSD Analytics Connection](images/Install-04.png)
+6. Now you need to [set up an Analytics Connection in Qlik Sense Enterprise](https://help.qlik.com/en-US/sense/November2019/Subsystems/ManagementConsole/Content/Sense_QMC/create-analytic-connection.htm) or [update the Settings.ini file in Qlik Sense Desktop](https://help.qlik.com/en-US/sense/November2019/Subsystems/Hub/Content/Sense_Hub/Introduction/configure-analytic-connection-desktop.htm). If you are using the sample apps make sure you use `PyTools` as the name for the analytics connection, or alternatively, update all of the expressions to use the new name.
+     - For Qlik Sense Desktop you need to update the `settings.ini` file. There may be two copies of this file; one at `C:/Users/<User ID>/Documents/Qlik/Sense/` and another at `C:/Users/AppData/Local/Programs/Qlik/Sense/Engine`. Add the SSE settings to both files.<br/><br/>![QSD Analytics Connection](images/Install-04.png)
         ```
         SSEPlugin=PyTools,localhost:50055;
         ```

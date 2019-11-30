@@ -1,0 +1,72 @@
+Date : 2019-11-28 11:23:40
+Directory : c:\Users\naf\Documents\Techy\Git\qlik-py-tools
+Total : 35 files,  7614 codes, 2564 comments, 2562 blanks, all 12740 lines
+
+Languages
++------------+------------+------------+------------+------------+------------+
+| language   | files      | code       | comment    | blank      | total      |
++------------+------------+------------+------------+------------+------------+
+| Python     |         12 |      4,617 |      2,564 |      1,587 |      8,768 |
+| Markdown   |         15 |      2,413 |          0 |        970 |      3,383 |
+| JSON       |          1 |        475 |          0 |          1 |        476 |
+| Batch      |          3 |         70 |          0 |          2 |         72 |
+| PowerShell |          2 |         26 |          0 |          0 |         26 |
+| YAML       |          2 |         13 |          0 |          2 |         15 |
++------------+------------+------------+------------+------------+------------+
+
+Directories
++---------------------------------------------------------------------------------------------------+------------+------------+------------+------------+------------+
+| path                                                                                              | files      | code       | comment    | blank      | total      |
++---------------------------------------------------------------------------------------------------+------------+------------+------------+------------+------------+
+| .                                                                                                 |         35 |      7,614 |      2,564 |      2,562 |     12,740 |
+| .github                                                                                           |          5 |         93 |          0 |         30 |        123 |
+| .github\ISSUE_TEMPLATE                                                                            |          5 |         93 |          0 |         30 |        123 |
+| core                                                                                              |         10 |      4,172 |      2,280 |      1,462 |      7,914 |
+| docker                                                                                            |          1 |        174 |        211 |         57 |        442 |
+| docs                                                                                              |          9 |      2,187 |          0 |        878 |      3,065 |
+| docs\hands-on                                                                                     |          1 |        213 |          0 |        112 |        325 |
+| generated                                                                                         |          2 |        746 |         73 |         69 |        888 |
+| offline-install                                                                                   |          2 |         65 |          0 |          8 |         73 |
++---------------------------------------------------------------------------------------------------+------------+------------+------------+------------+------------+
+
+Files
++---------------------------------------------------------------------------------------------------+------------+------------+------------+------------+------------+
+| filename                                                                                          | language   | code       | comment    | blank      | total      |
++---------------------------------------------------------------------------------------------------+------------+------------+------------+------------+------------+
+| c:\Users\naf\Documents\Techy\Git\qlik-py-tools\.github\ISSUE_TEMPLATE\1-installation-issue.md     | Markdown   |         17 |          0 |          6 |         23 |
+| c:\Users\naf\Documents\Techy\Git\qlik-py-tools\.github\ISSUE_TEMPLATE\2-exception-during-usage.md | Markdown   |         25 |          0 |          9 |         34 |
+| c:\Users\naf\Documents\Techy\Git\qlik-py-tools\.github\ISSUE_TEMPLATE\3-bug-report.md             | Markdown   |         25 |          0 |          8 |         33 |
+| c:\Users\naf\Documents\Techy\Git\qlik-py-tools\.github\ISSUE_TEMPLATE\4-feature-request.md        | Markdown   |         15 |          0 |          6 |         21 |
+| c:\Users\naf\Documents\Techy\Git\qlik-py-tools\.github\ISSUE_TEMPLATE\config.yml                  | YAML       |         11 |          0 |          1 |         12 |
+| c:\Users\naf\Documents\Techy\Git\qlik-py-tools\Qlik-Py-Init.bat                                   | Batch      |         32 |          0 |          1 |         33 |
+| c:\Users\naf\Documents\Techy\Git\qlik-py-tools\Qlik-Py-Init.ps1                                   | PowerShell |         23 |          0 |          0 |         23 |
+| c:\Users\naf\Documents\Techy\Git\qlik-py-tools\Qlik-Py-Start.bat                                  | Batch      |          6 |          0 |          0 |          6 |
+| c:\Users\naf\Documents\Techy\Git\qlik-py-tools\Qlik-Py-Start.ps1                                  | PowerShell |          3 |          0 |          0 |          3 |
+| c:\Users\naf\Documents\Techy\Git\qlik-py-tools\README.md                                          | Markdown   |        111 |          0 |         56 |        167 |
+| c:\Users\naf\Documents\Techy\Git\qlik-py-tools\_config.yml                                        | YAML       |          2 |          0 |          1 |          3 |
+| c:\Users\naf\Documents\Techy\Git\qlik-py-tools\core\__init__.py                                   | Python     |          0 |          0 |          1 |          1 |
+| c:\Users\naf\Documents\Techy\Git\qlik-py-tools\core\__main__.py                                   | Python     |        426 |        325 |        143 |        894 |
+| c:\Users\naf\Documents\Techy\Git\qlik-py-tools\core\_clustering.py                                | Python     |        238 |        143 |         92 |        473 |
+| c:\Users\naf\Documents\Techy\Git\qlik-py-tools\core\_common.py                                    | Python     |        104 |         82 |         53 |        239 |
+| c:\Users\naf\Documents\Techy\Git\qlik-py-tools\core\_machine_learning.py                          | Python     |        569 |        334 |        239 |      1,142 |
+| c:\Users\naf\Documents\Techy\Git\qlik-py-tools\core\_prophet.py                                   | Python     |        488 |        280 |        201 |        969 |
+| c:\Users\naf\Documents\Techy\Git\qlik-py-tools\core\_sklearn.py                                   | Python     |      1,289 |        772 |        489 |      2,550 |
+| c:\Users\naf\Documents\Techy\Git\qlik-py-tools\core\_spacy.py                                     | Python     |        325 |        209 |        135 |        669 |
+| c:\Users\naf\Documents\Techy\Git\qlik-py-tools\core\_utils.py                                     | Python     |        258 |        135 |        108 |        501 |
+| c:\Users\naf\Documents\Techy\Git\qlik-py-tools\core\functions.json                                | JSON       |        475 |          0 |          1 |        476 |
+| c:\Users\naf\Documents\Techy\Git\qlik-py-tools\docker\feature_importance.py                       | Python     |        174 |        211 |         57 |        442 |
+| c:\Users\naf\Documents\Techy\Git\qlik-py-tools\docs\Association-Rules.md                          | Markdown   |         67 |          0 |         32 |         99 |
+| c:\Users\naf\Documents\Techy\Git\qlik-py-tools\docs\Clustering.md                                 | Markdown   |        244 |          0 |        100 |        344 |
+| c:\Users\naf\Documents\Techy\Git\qlik-py-tools\docs\Correlation.md                                | Markdown   |         74 |          0 |         46 |        120 |
+| c:\Users\naf\Documents\Techy\Git\qlik-py-tools\docs\Keras.md                                      | Markdown   |        488 |          0 |        185 |        673 |
+| c:\Users\naf\Documents\Techy\Git\qlik-py-tools\docs\NER.md                                        | Markdown   |        134 |          0 |         49 |        183 |
+| c:\Users\naf\Documents\Techy\Git\qlik-py-tools\docs\Prophet.md                                    | Markdown   |        443 |          0 |        148 |        591 |
+| c:\Users\naf\Documents\Techy\Git\qlik-py-tools\docs\README.md                                     | Markdown   |        111 |          0 |         56 |        167 |
+| c:\Users\naf\Documents\Techy\Git\qlik-py-tools\docs\hands-on\README.md                            | Markdown   |        213 |          0 |        112 |        325 |
+| c:\Users\naf\Documents\Techy\Git\qlik-py-tools\docs\scikit-learn.md                               | Markdown   |        413 |          0 |        150 |        563 |
+| c:\Users\naf\Documents\Techy\Git\qlik-py-tools\generated\ServerSideExtension_pb2.py               | Python     |        746 |         73 |         68 |        887 |
+| c:\Users\naf\Documents\Techy\Git\qlik-py-tools\generated\__init__.py                              | Python     |          0 |          0 |          1 |          1 |
+| c:\Users\naf\Documents\Techy\Git\qlik-py-tools\offline-install\Qlik-Py-Init Offline.bat           | Batch      |         32 |          0 |          1 |         33 |
+| c:\Users\naf\Documents\Techy\Git\qlik-py-tools\offline-install\README.md                          | Markdown   |         33 |          0 |          7 |         40 |
+| Total                                                                                             |            |      7,614 |      2,564 |      2,562 |     12,740 |
++---------------------------------------------------------------------------------------------------+------------+------------+------------+------------+------------+
