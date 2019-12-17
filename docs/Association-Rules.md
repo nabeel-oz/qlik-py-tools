@@ -71,9 +71,9 @@ These arguments can be included in the final string parameter for the function u
 | Keyword | Description | Sample Values | Remarks |
 | --- | --- | --- | --- |
 | debug | Flag to output additional information to the terminal and logs. | `true`, `false` | Information will be printed to the terminal as well to a log file: `..\qlik-py-env\core\logs\spaCy Log <n>.txt`. |
-| min_support | The minimum support of the rules returned.<br><br>The support is frequency of which the items in the rule appear together in the data set. | `0.2|float`, `0.001|float` | If you do not get any rules in the response, this is the first parameter to consider.<br><br>The default value is set to `0.5` |
-| min_confidence  | The minimum confidence of the rules returned.<br><br>Given a rule `X -> Y`, the confidence is the probability of Y, given X, i.e. `P(Y|X) = conf(X -> Y)`. | `0.5|float`, `0.8|float` | The default value is set to `0.5` |
-| max_length | The maximum length of the items in a rule, inclusive of antecedents and consequents. | `5|int`, `10|int` | The default value is set to `8` |
+| min_support | The minimum support of the rules returned.<br><br>The support is frequency of which the items in the rule appear together in the data set. | `0.2\|float`, `0.001\|float` | If you do not get any rules in the response, this is the first parameter to consider.<br><br>The default value is set to `0.5` |
+| min_confidence  | The minimum confidence of the rules returned.<br><br>Given a rule `X -> Y`, the confidence is the probability of Y, given X, i.e. `P(Y\|X) = conf(X -> Y)`. | `0.5\|float`, `0.8\|float` | The default value is set to `0.5` |
+| max_length | The maximum length of the items in a rule, inclusive of antecedents and consequents. | `5\|int`, `10\|int` | The default value is set to `8` |
 
 ## Finding associations in the Lord of the Rings
 
