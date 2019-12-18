@@ -586,5 +586,5 @@ Drop table Response
 ## Attribution
 The data used in the sample apps was obtained from:
 - [Crash Stats Data Extract](https://www.data.vic.gov.au/data/dataset/crash-stats-data-extract) published by the Victorian State Government.
-- [Victorian Health Services Performance](http://performance.health.vic.gov.au/Home/Report.aspx?ReportKey=157) published by the Victorian State Government.
+- [Hospital admission and discharge](https://performance.vahi.vic.gov.au/hospital-admission-and-discharge/patients-treated) published by the Victorian Agency for Health Information.
 - [Washington Bike Sharing Dataset](https://www.kaggle.com/marklvl/bike-sharing-dataset/) on Kaggle.com.

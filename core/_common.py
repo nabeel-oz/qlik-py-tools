@@ -71,8 +71,8 @@ class CommonFunction:
 
         # if no association rules were found the parameters may need to be adjusted
         if len(response) == 0:
-            err = "No association rules could be found. You may get results by lowering the limits imposed by "
-            + "the min_support and min_confidence parameters.\ne.g. by passing min_support=0.2|float in the arguments."
+            err = "No association rules could be found. You may get results by lowering the limits imposed by " + \
+                "the min_support and min_confidence parameters.\ne.g. by passing min_support=0.2|float in the arguments."
             raise Exception(err) 
 
         self.response_df = pd.DataFrame(response, columns=['rule', 'rule_lhs', 'rule_rhs', 'support', 'confidence', 'lift'])

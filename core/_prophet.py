@@ -663,6 +663,8 @@ class ProphetForQlik:
         if len(self.regressors_df.regressors.unique()) == 1:
             # Return without further processing
             self.has_regressors = False
+            if self.debug:
+                self._print_log(7)
             return None
 
         # Get the regressor arguments as a string
@@ -897,6 +899,10 @@ class ProphetForQlik:
         elif step == 6:
             # Print the table description if the call was made from the load script
             output = "\nTABLE DESCRIPTION SENT TO QLIK:\n\n{0} \n\n".format(self.table)
+
+        elif step == 7:
+            # Inform of fall back when additional regressors are incorrect
+            output = "\nAdditional regressors have not been passed correctly. Falling back to a basic model.\n\n"
         
         sys.stdout.write(output)
         with open(self.logfile, mode, encoding='utf-8') as f:
