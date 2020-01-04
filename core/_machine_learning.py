@@ -850,11 +850,12 @@ class TargetTransformer:
         """
 
         if self.scale:
-            y = self.scaler_instance.inverse_transform(y_transform)
-
             if isinstance(y_transform, pd.DataFrame):
+                y = self.scaler_instance.inverse_transform(np.reshape(y_transform.values, (-1, 1)))
                 # The scaler returns a numpy array which needs to be converted back to a data frame
                 y = pd.DataFrame(y, columns=y_transform.columns, index=y_transform.index)
+            else:
+                y = self.scaler_instance.inverse_transform(np.reshape(y_transform, (-1, 1)))
 
         # Apply an exponential to reverse the logarithm applied during transform
         if self.make_stationary == 'log':

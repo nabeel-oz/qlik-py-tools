@@ -452,7 +452,7 @@ The integration with this SSE has been build with sequence prediction and timese
 
 ### Convolutional LSTM
 
-Here is one Convolutional LSTM architecture used in the sample app. Note the lag settings and the input shape. 
+Here is one Convolutional LSTM architecture used in the sample app. Note the lag settings and the input shape in the script below. 
 
 Each sample is going to consist of 29 lag periods. An additional row of data is needed as we are using lag observations of the target, i.e. for the 29th row we need to look at the 30th row's target. Finally, since the `current_sample_as_input` parameter is set to `true` by default, we will use another row of data which will be the period for which we make the prediction. The input from Qlik will be 31 rows of data.
 

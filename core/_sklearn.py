@@ -920,6 +920,16 @@ class SKLearnForQlik:
             self.y_test = self.y_test.iloc[self.placeholders:]
         else:
             self.y_pred = self.model.pipe.predict(self.X_test)
+
+            # Inverse transformations on the predictions if required
+            if self.model.scale_target or self.model.make_stationary:
+                # Apply the transformer to the predictions
+                self.y_pred = self.model.target_transformer.inverse_transform(self.y_pred)
+        
+        # Inverse transformations on the test targets if required
+        if self.model.scale_target or self.model.make_stationary:
+            # Apply the transformer to the test targets
+            self.y_test = self.model.target_transformer.inverse_transform(self.y_test)
         
         # Flatten the y_test DataFrame
         self.y_test = self.y_test.values.ravel()
