@@ -95,6 +95,7 @@ docker run \
     -v pytools-models:/qlik-py-tools/models \
     -v ~/Documents/logs:/qlik-py-tools/core/logs \
     nabeeloz/qlik-py-tools
+    
 # Run a container in detached mode, storing predictive models on a volume , logs on a bind mount and starting the container anytime you restart your machine
 docker run \
     -p 50055:50055 \
