@@ -207,6 +207,21 @@ Dense-Net:3:Compilation::loss=binary_crossentropy|str, optimizer=sgd|str, metric
 
 ![setup architecture](images/keras-train-04.png)
 
+The final row in the architecture should be the compilation parameters for the model. The optimizer parameters can be customized by passing it as the second last row of the table. 
+
+```
+[Keras Architecture]:
+LOAD * INLINE [
+Model Name:Sort Order:Layer Type:Args:Kwargs
+Dense-Net:1:Dense:64|int:input_shape=None|tuple|int, activation=relu|str
+Dense-Net:2:Dense:1|int:activation=softmax|str
+Dense-Net:3:Adam::lr=0.002|float
+Dense-Net:4:Compilation::loss=binary_crossentropy|str, metrics=accuracy|list|str
+](delimiter is ':');
+```
+
+For valid optimizers and relevant parameters refer to the Keras documentation [here](https://keras.io/optimizers/).
+
 #### Input shape
 
 Note that we passed the input shape as `None` in the example above. The SSE will calculate the final number of features after pre-processing the data, for e.g. by applying one hot encoding, and set this value for us. 

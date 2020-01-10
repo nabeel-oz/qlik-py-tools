@@ -1,4 +1,5 @@
 import os
+import gc
 import sys
 import ast
 import time
@@ -2061,6 +2062,7 @@ class SKLearnForQlik:
             if i == max(architecture.index):
                 # Check if an optimizer with custom parameters has been defined
                 try:
+                    kwargs = kwargs.copy() # Copy so that we don't modify the architecture dataframe
                     kwargs['optimizer'] = opt
                 except UnboundLocalError:
                     pass

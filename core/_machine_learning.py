@@ -1,4 +1,5 @@
 import os
+import gc
 import sys
 import time
 import copy
@@ -92,8 +93,27 @@ class PersistentModel:
                     keras_model = self.pipe.named_steps['estimator'].model
                     # Save the keras model architecture and weights to disk
                     keras_model.save(path + name + '.h5', overwrite=overwrite)
+                                        
                     # The Keras estimator is excluded from the model saved to the joblib file
                     self.pipe.named_steps['estimator'].model = None
+                    #self.pipe.steps[self.estimation_step] = ('estimator', None)
+                                        
+                    # Deconstruct the pipeline for pickling
+                    #self.pipe_steps = []
+                    #for step in self.pipe.steps:
+                     #   if step[0] != 'estimator':
+                      #      self.pipe_steps.append(step) 
+                       # else:
+                        #    self.pipe_steps.append(('estimator', None)) 
+                    
+                    # Delete the pipe to avoid pickling errors due to tensorflow remnants
+                    #del self.pipe
+
+                    # Avoid pickling errors due to tensorflow session remnants
+                    #sess = kerasbackend.get_session()
+                    #kerasbackend.clear_session()
+                    #sess.close()
+                    #gc.collect()
             except AttributeError:
                 pass
             
@@ -125,10 +145,19 @@ class PersistentModel:
             # https://github.com/tensorflow/tensorflow/issues/14356
             # https://stackoverflow.com/questions/40785224/tensorflow-cannot-interpret-feed-dict-key-as-tensor
             kerasbackend.clear_session()
+            
+            # Re-create the pipeline
+            #self.pipe = Pipeline(self.pipe_steps)
+
+            # Re-create the scikit-learn wrapper for Keras
+            #if self.estimator_type == "classifier":
+             #   self.pipe.steps[self.estimation_step] = ('estimator', KerasClassifierForQlik(**self.estimator_kwargs))
+            #else:
+             #   self.pipe.steps[self.estimation_step] = ('estimator', KerasRegressorForQlik(**self.estimator_kwargs))
 
             # Load the keras model architecture and weights from disk
             keras_model = keras.models.load_model(path + name + '.h5')
-            keras_model._make_predict_function()
+            keras_model._make_predict_function()                
             # Point the estimator in the sklearn pipeline to the keras model architecture and weights 
             self.pipe.named_steps['estimator'].model = keras_model
 
@@ -1016,7 +1045,7 @@ class KerasClassifierForQlik(KerasClassifier):
         The compiled Keras model should be included in sk_params under the 'neural_net' keyword argument.
         """
         
-        # Deep copy sk_params so that popping build_fn does not affect subsequent instances of the estimator
+        # Assign the parameters to a class variable
         self.sk_params = sk_params
         
         # Set build_fn to the function supplied in sk_params
@@ -1039,6 +1068,7 @@ class KerasClassifierForQlik(KerasClassifier):
             Dictionary of parameter names mapped to their values.
         """
         res = self.sk_params
+        # Add back the Keras build function that was popped out of sk_params
         res.update({'build_fn': self.build_fn})
         return res
 
@@ -1086,7 +1116,7 @@ class KerasRegressorForQlik(KerasRegressor):
         The compiled Keras model should be included in sk_params under the 'neural_net' keyword argument.
         """
 
-        # Deep copy sk_params so that popping build_fn does not affect subsequent instances of the estimator
+        # Assign the parameters to a class variable
         self.sk_params = sk_params
         
         # Set build_fn to the function supplied in sk_params
@@ -1108,6 +1138,7 @@ class KerasRegressorForQlik(KerasRegressor):
         """
 
         res = self.sk_params
+        # Add back the Keras build function that was popped out of sk_params
         res.update({'build_fn': self.build_fn})
         return res
 
