@@ -96,24 +96,6 @@ class PersistentModel:
                                         
                     # The Keras estimator is excluded from the model saved to the joblib file
                     self.pipe.named_steps['estimator'].model = None
-                    #self.pipe.steps[self.estimation_step] = ('estimator', None)
-                                        
-                    # Deconstruct the pipeline for pickling
-                    #self.pipe_steps = []
-                    #for step in self.pipe.steps:
-                     #   if step[0] != 'estimator':
-                      #      self.pipe_steps.append(step) 
-                       # else:
-                        #    self.pipe_steps.append(('estimator', None)) 
-                    
-                    # Delete the pipe to avoid pickling errors due to tensorflow remnants
-                    #del self.pipe
-
-                    # Avoid pickling errors due to tensorflow session remnants
-                    #sess = kerasbackend.get_session()
-                    #kerasbackend.clear_session()
-                    #sess.close()
-                    #gc.collect()
             except AttributeError:
                 pass
             
@@ -146,15 +128,6 @@ class PersistentModel:
             # https://stackoverflow.com/questions/40785224/tensorflow-cannot-interpret-feed-dict-key-as-tensor
             kerasbackend.clear_session()
             
-            # Re-create the pipeline
-            #self.pipe = Pipeline(self.pipe_steps)
-
-            # Re-create the scikit-learn wrapper for Keras
-            #if self.estimator_type == "classifier":
-             #   self.pipe.steps[self.estimation_step] = ('estimator', KerasClassifierForQlik(**self.estimator_kwargs))
-            #else:
-             #   self.pipe.steps[self.estimation_step] = ('estimator', KerasRegressorForQlik(**self.estimator_kwargs))
-
             # Load the keras model architecture and weights from disk
             keras_model = keras.models.load_model(path + name + '.h5')
             keras_model._make_predict_function()                
