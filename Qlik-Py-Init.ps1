@@ -7,7 +7,7 @@ Write-Output "Activating the virtual environment..."
 & $PSScriptRoot\qlik-py-env\Scripts\activate.ps1
 Write-Output "Installing required packages..."
 python -m pip install --upgrade setuptools pip
-pip install grpcio grpcio-tools numpy scipy pandas cython joblib
+pip install grpcio==1.26.0 grpcio-tools==1.26.0 numpy==1.17.5 scipy==1.4.1 pandas==0.25.3 cython==0.29.14 joblib==0.11
 pip install pystan==2.17
 pip install fbprophet==0.4.post2
 pip install scikit-learn==0.21.3
