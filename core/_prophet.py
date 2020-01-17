@@ -402,9 +402,11 @@ class ProphetForQlik:
                 self.load_script = 'true' == self.kwargs['load_script'].lower()
             
             # Set the return type 
-            # Valid values are: yhat, trend, seasonal, seasonalities, all. 
+            # Valid values are: yhat, trend, seasonal, seasonalities, all, y_then_yhat, residual. 
             # Add _lower or _upper to the series name to get lower or upper limits.
             # The special case of 'all' returns all output columns from Prophet. This can only be used with 'load_script=true'.
+            # 'y_then_yhat' returns actual values for historical periods and forecast values for future periods
+            # 'residual' returns y - yhat for historical periods
             if 'return' in self.kwargs:
                 self.result_type = self.kwargs['return'].lower()
 
@@ -778,6 +780,11 @@ class ProphetForQlik:
                     # Overwrite with y values for historic data
                     self.forecast.loc[:len(self.forecast) - self.periods - 1, self.result_type] \
                     = self.input_df.loc[:len(self.request_df) - self.periods - 1, 'y']
+            
+            # For return=residual we return y - yhat for historical periods and Null for future periods
+            elif 'residual' in self.result_type:
+                # Create the residuals for historical periods by subtracting yhat from y
+                self.forecast.loc[:len(self.request_df)-self.periods-1, self.result_type] = self.input_df.loc[:len(self.request_df)-self.periods-1, 'y'] - self.forecast.loc[:len(self.request_df)-self.periods-1, 'yhat']
             
             # Update to the original index from the request data frame
             self.forecast.index = self.request_index.index
