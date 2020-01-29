@@ -13,7 +13,7 @@ cd ..
 echo.
 echo Installing required packages... & echo.
 python -m pip install --upgrade setuptools pip
-pip install grpcio==1.26.0 grpcio-tools==1.26.0 numpy==1.17.5 scipy==1.4.1 pandas==0.25.3 cython==0.29.14 joblib==0.11
+pip install grpcio==1.26.0 grpcio-tools==1.26.0 numpy==1.17.5 scipy==1.4.1 pandas==0.25.3 cython==0.29.14 joblib==0.11 holidays==0.9.11
 pip install pystan==2.17
 pip install fbprophet==0.4.post2
 pip install scikit-learn==0.21.3
@@ -28,5 +28,6 @@ echo.
 echo Creating a new firewall rule for TCP port 50055... & echo.
 netsh advfirewall firewall add rule name="Qlik PyTools" dir=in action=allow protocol=TCP localport=50055
 echo.
-echo All done. Run Qlik-Py-Start.bat to start the SSE Extension Service. & echo.
+echo Setup completed. Please check the log above for errors in red text. & echo.
+echo Run Qlik-Py-Start.bat to start this Server Side Extension. & echo.
 pause
