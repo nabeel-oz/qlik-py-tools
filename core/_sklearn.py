@@ -161,7 +161,7 @@ class SKLearnForQlik:
         
         self.regressors = ["DummyRegressor", "AdaBoostRegressor", "BaggingRegressor", "ExtraTreesRegressor",\
                            "GradientBoostingRegressor", "RandomForestRegressor", "GaussianProcessRegressor",\
-                           "LinearRegression", "PassiveAggressiveRegressor", "RANSACRegressor", "Ridge", "RidgeCV"\
+                           "LinearRegression", "PassiveAggressiveRegressor", "RANSACRegressor", "Ridge", "RidgeCV",\
                            "SGDRegressor", "TheilSenRegressor", "KNeighborsRegressor", "RadiusNeighborsRegressor",\
                            "MLPRegressor", "LinearSVR", "NuSVR", "SVR", "DecisionTreeRegressor",\
                            "ExtraTreeRegressor", "ARDRegression", "BayesianRidge", "ElasticNet", "ElasticNetCV",\
