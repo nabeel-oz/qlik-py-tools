@@ -120,12 +120,6 @@ class CommonFunction:
         # Interpret the request data based on the expected row and column structure
         self._initiate(row_template, col_headers)
 
-        # Set the name of the function to be called on the model
-        # By default this is the predict function, but could be other functions such as 'predict_proba' if supported by the model
-        prediction_func = 'predict'
-        if 'return' in self.pass_on_kwargs:
-            prediction_func = self.pass_on_kwargs['return']
-
         # Load the model
         self._get_model()
 
@@ -142,16 +136,23 @@ class CommonFunction:
         except AssertionError as ae:
             err = "The number of input columns do not match feature definitions. Ensure you are using the | delimiter and that the target is not included in your input to the prediction function."
             raise AssertionError(err) from ae
-
+        
         # Convert the data types based on feature definitions 
         self.X = utils.convert_types(self.X, self.features_df, sort=False)
+        
+        # Apply sorting if required
+        if self.identifier is not None:
+            self.X = self.X.sort_values(by=[self.identifier], ascending=True)
+
+        # Drop sorting feature if required
+        if self.exclude_identifier:
+            self.X = self.X.drop(columns=[self.identifier])
 
         # Apply preprocessing if required
-        if self.prep is not None:
-            self.X = self.prep.transform(self.X)
+        X = self.X.copy() if self.prep is None else self.prep.transform(self.X.copy())
 
         # Generate predictions
-        self.y = getattr(self.model, prediction_func)(self.X)
+        self.y = getattr(self.model, self.prediction_func)(X)
 
         # Prepare the response, catering for multiple outputs per sample
         # Multiple predictions for the same sample are separated by the pipe, i.e; | delimiter
@@ -159,6 +160,10 @@ class CommonFunction:
             self.response_df = pd.DataFrame(["|".join(item) for item in self.y.astype(str)], columns=["result"], index=self.X.index)
         else:
             self.response_df = pd.DataFrame(self.y, columns=["result"], index=self.X.index)
+
+        if self.identifier is not None:
+            # Reindex the response to reset to the original sort order
+            self.response_df = self.response_df.reindex(self.request_df.index)
 
         if load_script:
             # Add the key field column to the response
@@ -179,7 +184,44 @@ class CommonFunction:
             if self.debug:
                 self._print_log(4)
             
-            return self.response_df.loc[:,'result']        
+            return self.response_df.loc[:,'result']
+    
+    def get_features_expression(self):
+        """
+        Get a string that can be evaluated in Qlik to get the features portion of the predict function
+        """
+        
+        # Interpret the request data based on the expected row and column structure
+        row_template = ['strData']
+        col_headers = ['model_name']
+        
+        # Interpret the request data based on the expected row and column structure
+        self._initiate(row_template, col_headers)
+
+        # Get meta data for the model
+        self._get_model(load=False)
+
+        # Prepare the expression as a string
+        delimiter = " &'|'& "
+
+        # Set features that are not expected in the features expression in Qlik
+        exclude = ["excluded", "target", "identifier"]
+
+        # Exclude columns that are not expected in the request data
+        exclusions = self.features_df['variable_type'].isin(exclude)
+        self.features_df = self.features_df.loc[~exclusions]
+
+        # Get the feature names
+        features = self.features_df["name"].tolist()
+        
+        # Prepare a string which can be evaluated to an expression in Qlik with features as field names
+        self.response_df = pd.Series(delimiter.join(["[" + f + "]" for f in features]))
+
+        # Send the reponse table description to Qlik
+        self._send_table_description("expression")
+        
+        # Finally send the response
+        return self.response_df
 
     def _initiate(self, row_template, col_headers):
         """
@@ -192,10 +234,13 @@ class CommonFunction:
         # Create a Pandas DataFrame for the request data
         self.request_df = utils.request_df(self.request, row_template, col_headers)
 
-        # Get the argument strings from the request dataframe
-        kwargs = self.request_df.loc[0, 'kwargs']
-        # Set the relevant parameters using the argument strings
-        self._set_params(kwargs)
+        if 'kwargs' in self.request_df.columns:
+            # Get the argument strings from the request dataframe
+            kwargs = self.request_df.loc[0, 'kwargs']
+            # Set the relevant parameters using the argument strings
+            self._set_params(kwargs)
+        else:
+            self.debug = False
 
         # Print the request dataframe to the logs
         if self.debug:
@@ -208,10 +253,7 @@ class CommonFunction:
         :For details refer to the GitHub project: https://github.com/nabeel-oz/qlik-py-tools
         """
         
-        # Set default values which will be used if execution arguments are not passed
-        
-        # Default parameters:
-        self.debug = False
+        self.pass_on_kwargs = {}
         
         # If key word arguments were included in the request, get the parameters and values
         if len(kwargs) > 0:
@@ -221,19 +263,29 @@ class CommonFunction:
             
             # Set the debug option for generating execution logs
             # Valid values are: true, false
-            if 'debug' in self.kwargs:
-                self.debug = 'true' == self.kwargs.pop('debug').lower()
+            self.debug = False if 'debug' not in self.kwargs else ('true' == self.kwargs.pop('debug').lower())
                 
-                # Additional information is printed to the terminal and logs if the paramater debug = true
-                if self.debug:
-                    # Increment log counter for the class. Each instance of the class generates a new log.
-                    self.__class__.log_no += 1
+            # Additional information is printed to the terminal and logs if the paramater debug = true
+            if self.debug:
+                # Increment log counter for the class. Each instance of the class generates a new log.
+                self.__class__.log_no += 1
 
-                    # Create a log file for the instance
-                    # Logs will be stored in ..\logs\Common Functions Log <n>.txt
-                    self.logfile = os.path.join(os.getcwd(), 'logs', 'Common Functions Log {}.txt'.format(self.log_no))
+                # Create a log file for the instance
+                # Logs will be stored in ..\logs\Common Functions Log <n>.txt
+                self.logfile = os.path.join(os.getcwd(), 'logs', 'Common Functions Log {}.txt'.format(self.log_no))
 
-                    self._print_log(1)
+                self._print_log(1)
+            
+            # Set the name of the function to be called on the model
+            # By default this is the 'predict' function, but could be other functions such as 'predict_proba' if supported by the model
+            self.prediction_func = 'predict' if 'return' not in self.kwargs else self.kwargs.pop('return')
+
+            # Certain models may need sorted data for predictions
+            # A feature can be specified for use in sorting using the identifier argument. 
+            self.identifier = None if 'identifier' not in self.kwargs else self.kwargs.pop('identifier')
+            
+            # The identifier can be excluded from the inputs to the model using the exclude_identifier argument.
+            self.exclude_identifier = False if 'exclude_identifier' not in self.kwargs else (self.kwargs.pop('exclude_identifier').lower()=='true')
             
             # Get the rest of the parameters, converting values to the correct data type
             self.pass_on_kwargs = utils.get_kwargs_by_type(self.kwargs) 
@@ -245,7 +297,7 @@ class CommonFunction:
         # Remove the kwargs column from the request_df
         self.request_df = self.request_df.drop(['kwargs'], axis=1)
 
-    def _get_model(self):
+    def _get_model(self, load=True):
         """
         Load a model from disk.
 
@@ -256,16 +308,20 @@ class CommonFunction:
 
         e.g.
         ---
-        path: '../pretrained/HR-Attrition-v1.pkl'
+        path: ../pretrained/HR-Attrition-v1.pkl
         type: sklearn
         features:
             department : str
             age : int
         ...
+
+        Optional properties of the YAML definition include:
+        preprocessor : path to a pickled preprocessor object that implements the transform method
         """
 
         # Get the model name from the request dataframe
         model_name = self.request_df.loc[0, 'model_name']
+        self.name = model_name
 
         # Get model meta data from the YAML file
         try:
@@ -282,24 +338,23 @@ class CommonFunction:
         supported = ['sklearn', 'scikit-learn', 'keras']
         assert model_type in supported, "Unsupported model type: {}".format(model_meta['type'])
 
-        # Get the preprocessor if required
-        if 'preprocessor' in model_meta:
-            prep_path = model_meta['preprocessor']
-            self.prep = self._get_model_sklearn(prep_path)
-        else:
-            self.prep = None
-        
-        # Load the model
-        if model_type in ['sklearn', 'scikit-learn']:
-            self.model = self._get_model_sklearn(model_path)
-        elif model_type in ['keras']:
-            self.model = self._get_model_keras(model_path)
-        
-        self.name = model_name
-
-        # Debug information is printed to the terminal and logs if the paramater debug = true
-        if self.debug:
-            self._print_log(6)
+        if load:
+            # Get the preprocessor if required
+            if 'preprocessor' in model_meta:
+                prep_path = model_meta['preprocessor']
+                self.prep = self._get_model_sklearn(prep_path)
+            else:
+                self.prep = None
+            
+            # Load the model
+            if model_type in ['sklearn', 'scikit-learn']:
+                self.model = self._get_model_sklearn(model_path)
+            elif model_type in ['keras']:
+                self.model = self._get_model_keras(model_path)
+            
+            # Debug information is printed to the terminal and logs if the paramater debug = true
+            if self.debug:
+                self._print_log(6)
         
         # Set model feature names and data types
         self.features_df = pd.DataFrame([model_features.keys(), model_features.values()]).T
@@ -373,6 +428,8 @@ class CommonFunction:
             self.table.fields.add(name="support", dataType=1)
             self.table.fields.add(name="confidence", dataType=1)
             self.table.fields.add(name="lift", dataType=1)
+        elif variant == "expression":
+            self.table.fields.add(name="result")
         elif variant == "predict":
             self.table.fields.add(name="model_name")
             self.table.fields.add(name="key")
