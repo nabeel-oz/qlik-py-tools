@@ -6,6 +6,7 @@ import pickle
 import string
 import pathlib
 import warnings
+import threading
 import numpy as np
 import pandas as pd
 
@@ -24,6 +25,9 @@ import keras
 from keras import backend as kerasbackend
 sys.stderr = stderr
 
+import tensorflow as tf
+tf.compat.v1.logging.set_verbosity(tf.compat.v1.logging.ERROR)
+
 import _utils as utils
 import ServerSideExtension_pb2 as SSE
 
@@ -38,6 +42,9 @@ class CommonFunction:
     
     # Counter used to name log files for instances of the class
     log_no = 0
+
+    # A locking mechanism to allow tensorflow graphs to be setup uninterrupted by multithreaded requests to the same model
+    thread_lock = None
 
     def __init__(self, request, context, path="../models/"):
         """
@@ -153,6 +160,12 @@ class CommonFunction:
 
         # Generate predictions
         self.y = getattr(self.model, self.prediction_func)(X)
+
+        # The predictions may need to be decoded in case of classification labels
+        # The labels can be passed as a dictionary through the SSE function's additional arguments using the 'labels' parameter
+        if self.labels is not None:
+            # Decode the predictions based on a dictionary of labels. The predictions are assumed to be integers
+            self.y = utils.decode(self.y, self.labels)
 
         # Prepare the response, catering for multiple outputs per sample
         # Multiple predictions for the same sample are separated by the pipe, i.e; | delimiter
@@ -286,9 +299,19 @@ class CommonFunction:
             
             # The identifier can be excluded from the inputs to the model using the exclude_identifier argument.
             self.exclude_identifier = False if 'exclude_identifier' not in self.kwargs else (self.kwargs.pop('exclude_identifier').lower()=='true')
-            
+
+            # Number of seconds to wait if a Keras model is being loaded by another thread
+            self.wait = 2 if 'keras_wait' not in self.kwargs else utils.atoi(self.kwargs.pop('keras_wait'))
+
+            # Number of retries if a Keras model is being loaded by another thread
+            self.retries = 5 if 'keras_retries' not in self.kwargs else utils.atoi(self.kwargs.pop('keras_retries'))
+           
             # Get the rest of the parameters, converting values to the correct data type
             self.pass_on_kwargs = utils.get_kwargs_by_type(self.kwargs) 
+
+            # The predictions may need to be decoded in case of classification labels
+            # The labels can be passed as a dictionary using the 'labels' argument.
+            self.labels = None if 'labels' not in self.pass_on_kwargs else self.pass_on_kwargs.pop('labels')
                           
         # Debug information is printed to the terminal and logs if the paramater debug = true
         if self.debug:
@@ -387,16 +410,36 @@ class CommonFunction:
         Load a pretrained Keras model from disk.
         The model must have been saved in the HDF5 format.
         Versions for Python and Keras should match the SSE.
+        
+        model_path is the path to the model including the file extension if applicable.
+        If the model is already locked, wait for a specified number of seconds.
+        Retry a maximum number of times before timing out.
         """
 
         # Add model directory to the system path
         self._add_model_path(model_path)
 
-        kerasbackend.clear_session()
-         # Load the keras model architecture and weights from disk
-        model = keras.models.load_model(model_path)
-        model._make_predict_function()
-        
+        # Lock the model until the tensorflow graph has been setup
+        for _ in range(self.retries):
+            if self.__class__.thread_lock is None:
+                self.__class__.thread_lock = threading.get_ident()
+
+                # Clear any previous Keras session
+                kerasbackend.clear_session()
+
+                # Load the keras model architecture and weights from disk
+                model = keras.models.load_model(model_path)
+                model._make_predict_function()
+                break
+            else:
+                time.sleep(self.wait)
+        else:
+            raise TimeoutError("The specified model is locked by another thread. If you believe this to be wrong, please restart the SSE. "+\
+                "You can also try increasing the number of retries or wait time using the 'keras_retries' and 'keras_wait' arguments.")
+
+        if self.__class__.thread_lock == threading.get_ident():
+            self.__class__.thread_lock = None
+
         return model
 
     def _add_model_path(self, model_path):
