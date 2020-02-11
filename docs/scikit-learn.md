@@ -36,6 +36,10 @@ This SSE provides functions to train, test and evaluate models and then use thes
 
 In addition this SSE also implements the unsupervised machine learning algorithms available in scikit-learn. These include techniques for inferring structure in unlablelled data such as clustering and dimensionality reduction.
 
+**Using existing scikit-learn models in Qlik**
+
+This SSE also provides capability to get predictions from externally trained scikit-learn and Keras models. This capability is explained [here](Pretrained.md).
+
 ## Supervised Machine Learning
 Machine learning problems can be broken down into general steps. In this SSE each step is carried out with the help of functions that provide a bridge between Qlik and the scikit-learn API. These functions are explained in the sections below.
 

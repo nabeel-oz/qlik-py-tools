@@ -266,52 +266,48 @@ class CommonFunction:
         :For details refer to the GitHub project: https://github.com/nabeel-oz/qlik-py-tools
         """
         
-        self.pass_on_kwargs = {}
+        # If key word arguments were included in the request, get the parameters and values,
+        # by transforming the string of arguments into a dictionary
+        self.kwargs = {} if len(kwargs)==0 else utils.get_kwargs(kwargs)
+            
+        # Set the debug option for generating execution logs
+        # Valid values are: true, false
+        self.debug = False if 'debug' not in self.kwargs else ('true' == self.kwargs.pop('debug').lower())
+            
+        # Additional information is printed to the terminal and logs if the paramater debug = true
+        if self.debug:
+            # Increment log counter for the class. Each instance of the class generates a new log.
+            self.__class__.log_no += 1
+
+            # Create a log file for the instance
+            # Logs will be stored in ..\logs\Common Functions Log <n>.txt
+            self.logfile = os.path.join(os.getcwd(), 'logs', 'Common Functions Log {}.txt'.format(self.log_no))
+
+            self._print_log(1)
         
-        # If key word arguments were included in the request, get the parameters and values
-        if len(kwargs) > 0:
-            
-            # Transform the string of arguments into a dictionary
-            self.kwargs = utils.get_kwargs(kwargs)
-            
-            # Set the debug option for generating execution logs
-            # Valid values are: true, false
-            self.debug = False if 'debug' not in self.kwargs else ('true' == self.kwargs.pop('debug').lower())
-                
-            # Additional information is printed to the terminal and logs if the paramater debug = true
-            if self.debug:
-                # Increment log counter for the class. Each instance of the class generates a new log.
-                self.__class__.log_no += 1
+        # Set the name of the function to be called on the model
+        # By default this is the 'predict' function, but could be other functions such as 'predict_proba' if supported by the model
+        self.prediction_func = 'predict' if 'return' not in self.kwargs else self.kwargs.pop('return')
 
-                # Create a log file for the instance
-                # Logs will be stored in ..\logs\Common Functions Log <n>.txt
-                self.logfile = os.path.join(os.getcwd(), 'logs', 'Common Functions Log {}.txt'.format(self.log_no))
+        # Certain models may need sorted data for predictions
+        # A feature can be specified for use in sorting using the identifier argument. 
+        self.identifier = None if 'identifier' not in self.kwargs else self.kwargs.pop('identifier')
+        
+        # The identifier can be excluded from the inputs to the model using the exclude_identifier argument.
+        self.exclude_identifier = False if 'exclude_identifier' not in self.kwargs else (self.kwargs.pop('exclude_identifier').lower()=='true')
 
-                self._print_log(1)
-            
-            # Set the name of the function to be called on the model
-            # By default this is the 'predict' function, but could be other functions such as 'predict_proba' if supported by the model
-            self.prediction_func = 'predict' if 'return' not in self.kwargs else self.kwargs.pop('return')
+        # Number of seconds to wait if a Keras model is being loaded by another thread
+        self.wait = 2 if 'keras_wait' not in self.kwargs else utils.atoi(self.kwargs.pop('keras_wait'))
 
-            # Certain models may need sorted data for predictions
-            # A feature can be specified for use in sorting using the identifier argument. 
-            self.identifier = None if 'identifier' not in self.kwargs else self.kwargs.pop('identifier')
-            
-            # The identifier can be excluded from the inputs to the model using the exclude_identifier argument.
-            self.exclude_identifier = False if 'exclude_identifier' not in self.kwargs else (self.kwargs.pop('exclude_identifier').lower()=='true')
+        # Number of retries if a Keras model is being loaded by another thread
+        self.retries = 5 if 'keras_retries' not in self.kwargs else utils.atoi(self.kwargs.pop('keras_retries'))
+        
+        # Get the rest of the parameters, converting values to the correct data type
+        self.pass_on_kwargs = {} if len(self.kwargs)==0 else utils.get_kwargs_by_type(self.kwargs) 
 
-            # Number of seconds to wait if a Keras model is being loaded by another thread
-            self.wait = 2 if 'keras_wait' not in self.kwargs else utils.atoi(self.kwargs.pop('keras_wait'))
-
-            # Number of retries if a Keras model is being loaded by another thread
-            self.retries = 5 if 'keras_retries' not in self.kwargs else utils.atoi(self.kwargs.pop('keras_retries'))
-           
-            # Get the rest of the parameters, converting values to the correct data type
-            self.pass_on_kwargs = utils.get_kwargs_by_type(self.kwargs) 
-
-            # The predictions may need to be decoded in case of classification labels
-            # The labels can be passed as a dictionary using the 'labels' argument.
-            self.labels = None if 'labels' not in self.pass_on_kwargs else self.pass_on_kwargs.pop('labels')
+        # The predictions may need to be decoded in case of classification labels
+        # The labels can be passed as a dictionary using the 'labels' argument.
+        self.labels = None if 'labels' not in self.pass_on_kwargs else self.pass_on_kwargs.pop('labels')
                           
         # Debug information is printed to the terminal and logs if the paramater debug = true
         if self.debug:
@@ -421,24 +417,28 @@ class CommonFunction:
 
         # Lock the model until the tensorflow graph has been setup
         for _ in range(self.retries):
+            # If the model is not locked
             if self.__class__.thread_lock is None:
-                self.__class__.thread_lock = threading.get_ident()
+                try:
+                    # Set a class variable to lock the model
+                    self.__class__.thread_lock = threading.get_ident()
 
-                # Clear any previous Keras session
-                kerasbackend.clear_session()
+                    # Clear any previous Keras session
+                    kerasbackend.clear_session()
 
-                # Load the keras model architecture and weights from disk
-                model = keras.models.load_model(model_path)
-                model._make_predict_function()
-                break
+                    # Load the keras model architecture and weights from disk
+                    model = keras.models.load_model(model_path)
+                    model._make_predict_function()
+                    break
+                finally:
+                    # Release the lock, even in the case of any exceptions in the try block
+                    if self.__class__.thread_lock == threading.get_ident():
+                        self.__class__.thread_lock = None
             else:
                 time.sleep(self.wait)
         else:
             raise TimeoutError("The specified model is locked by another thread. If you believe this to be wrong, please restart the SSE. "+\
                 "You can also try increasing the number of retries or wait time using the 'keras_retries' and 'keras_wait' arguments.")
-
-        if self.__class__.thread_lock == threading.get_ident():
-            self.__class__.thread_lock = None
 
         return model
 
