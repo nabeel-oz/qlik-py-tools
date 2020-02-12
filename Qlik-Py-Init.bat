@@ -5,6 +5,7 @@ echo.
 echo Copying project files to the new directory... & echo.
 xcopy /E /I "%~dp0\generated" "%~dp0\qlik-py-env\generated"
 xcopy /E /I "%~dp0\core" "%~dp0\qlik-py-env\core"
+xcopy /E /I "%~dp0\models" "%~dp0\qlik-py-env\models"
 echo.
 echo Activating the virtual environment... & echo.
 cd /d "%~dp0\qlik-py-env\Scripts"

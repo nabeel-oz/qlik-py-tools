@@ -2,11 +2,13 @@
 
 ## Announcements
 
-Version 6.0 with major new updates has been released. Get it [here](https://github.com/nabeel-oz/qlik-py-tools/releases) or with [Docker](https://hub.docker.com/r/nabeeloz/qlik-py-tools).
+Version 7.0 has been released. Get it [here](https://github.com/nabeel-oz/qlik-py-tools/releases) or with [Docker](https://hub.docker.com/r/nabeeloz/qlik-py-tools).
 
-Deep Learning capabilities have been added through integration with Keras and Tensorflow. This offers powerful capabilities for sequence predictions and complex timeseries forecasting.
+This release adds the capability to use pre-trained scikit-learn and Keras models with Qlik. More on this [here](docs/Pretrained.md).
 
-This release also includes the ability to use [Additional Regressors](docs/Prophet.md#additional-regressors) with Prophet, allowing you to model more complex timeseries.
+With version 6, Deep Learning capabilities were added through integration with Keras and Tensorflow. This offers powerful capabilities for sequence predictions and complex timeseries forecasting.
+
+PyTools now also includes the ability to use [Additional Regressors](docs/Prophet.md#additional-regressors) with Prophet, allowing you to model more complex timeseries.
 
 ## Table of Contents
 
@@ -96,7 +98,7 @@ docker run \
     -v ~/Documents/logs:/qlik-py-tools/core/logs \
     nabeeloz/qlik-py-tools
     
-# Run a container in detached mode, storing predictive models on a volume , logs on a bind mount and starting the container anytime you restart your machine
+# Run a container in detached mode, storing predictive models on a volume , logs on a bind mount and restart the container on reboot
 docker run \
     -p 50055:50055 \
     -d \
@@ -104,6 +106,17 @@ docker run \
     -v pytools-models:/qlik-py-tools/models \
     -v ~/Documents/logs:/qlik-py-tools/core/logs \
     nabeeloz/qlik-py-tools
+
+# Run a container in detached mode, restart on reboot, store models and logs to bind mounts, and use certificates for secure communication
+docker run \
+-p 50055:50055 \
+-d \
+--restart unless-stopped \
+--name qlik-py-tools \
+-v ~/sse_PyTools_generated_certs/sse_PyTools_server_certs:/qlik-py-tools/pem-dir \
+-v ~/Documents/models:/qlik-py-tools/models \
+-v ~/Documents/logs:/qlik-py-tools/core/logs \
+nabeeloz/qlik-py-tools python __main__.py --pem_dir=/qlik-py-tools/pem-dir
 ```
 
 
@@ -129,7 +142,7 @@ This installation requires Internet access. To install this SSE on a machine wit
 4. Right click `Qlik-Py-Init.bat` and chose 'Run as Administrator'. You can open this file in a text editor to review the commands that will be executed. If everything goes smoothly you will see a Python virtual environment being set up, project files being copied, some packages being installed and TCP Port `50055` being opened for inbound communication. 
      - Note that the script always ends with a "All done" message and does not check for errors. 
      - If you need to change the port you can do so in the file `core\__main__.py` by opening the file with a text editor, changing the value of the `_DEFAULT_PORT` variable, and then saving the file. You will also need to update `Qlik-Py-Init.bat` to use the same port in the `netsh` command. This command will only work if you run the batch file through an elevated command prompt (i.e. with administrator privileges).
-     - Once the execution completes, do a quick scan of the log to see everything installed correctly. The libraries imported are: `grpcio`, `grpcio-tools`, `numpy`, `scipy`, `pandas`, `cython`, `joblib`, `pystan`, `fbprophet`, `scikit-learn`, `hdbscan`, `skater`, `spacy`, `efficient-apriori`, `tensorflow`, `keras` and their dependencies. Also, check that the `core` and `generated` directories have been copied successfully to the newly created `qlik-py-env` directory.
+     - Once the execution completes, do a quick scan of the log to see everything installed correctly. The libraries imported are: `grpcio`, `grpcio-tools`, `numpy`, `scipy`, `pandas`, `cython`, `joblib`, `pyyaml`, `pystan`, `fbprophet`, `scikit-learn`, `hdbscan`, `skater`, `spacy`, `efficient-apriori`, `tensorflow`, `keras` and their dependencies. Also, check that the `core` and `generated` directories have been copied successfully to the newly created `qlik-py-env` directory.
      - If the initialization fails for any reason, you can simply delete the `qlik-py-env` directory and re-run `Qlik-Py-Init.bat`.
 
 5. Now whenever you want to start this Python service you can run `Qlik-Py-Start.bat`.
@@ -162,7 +175,8 @@ Most of the sample apps require the Dashboard Extension Bundle which was release
 | --- | --- | --- |
 | [Correlations](docs/Correlation.md) | [Correlations](docs/Sample_App_Correlations.qvf) | None. |
 | [Clustering](docs/Clustering.md) | [Clustering with HDBSCAN](docs/Sample_App_Clustering.qvf) | None. |
-| [Machine Learning](docs/scikit-learn.md) | [Train & Test](docs/Sample-App-scikit-learn-Train-Test.qvf)<br><br>[Predict](docs/Sample-App-scikit-learn-Predict.qvf)<br><br>[K-fold Cross Validation](docs/Sample-App-scikit-learn-K-fold-Cross-Validation.qvf)<br><br>[Parameter Tuning](docs/Sample-App-scikit-learn-Parameter-Tuning.qvf)<br><br>[K-fold CV & Parameter Tuning](docs/Sample-App-scikit-learn-K-fold-CV-Grid-Search.qvf)<br><br>[Complex Forecasting with scikit-learn](docs/Sample-App-Forecasting-with-Sklearn.qvf) | Make sure you reload the K-fold Cross Validation or Train & Test app before using the Predict app.<br><br>If using Qlik Sense Desktop you will need to download the [data source](docs/HR-Employee-Attrition.xlsx), create a data connection named `AttachedFiles` in the app, and point the connection to the folder containing the source file.<br><br>The forecasting app is best understood together with the Deep Learning section below. Here we just use more traditional ML algorithms rather than Deep Learning for producing the forecast.<br><br>Make sure you reload the app before using the final sheets to make predictions. The data source for this app can be found [here](docs/bike-sharing/). |
+| [Predictions with pretrained models](docs/Pretrained.md) | [Predictions with scikit-learn and Keras](docs/Sample-App-Pretrained-Predict.qvf) | Follow the [pre-requisites](docs/Pretrained.md#pre-requisites) and [steps](docs/Pretrained.md#complete-example) in the documentation.<br><br>If using Qlik Sense Desktop you will need to download the [data source](docs/HR-Employee-Attrition.xlsx), create a data connection named `AttachedFiles` in the app, and point the connection to the folder containing the source file. |
+| [Machine Learning](docs/scikit-learn.md)<br><br>[Using pre-trained models](docs/Pretrained.md) | [Train & Test](docs/Sample-App-scikit-learn-Train-Test.qvf)<br><br>[Predict](docs/Sample-App-scikit-learn-Predict.qvf)<br><br>[K-fold Cross Validation](docs/Sample-App-scikit-learn-K-fold-Cross-Validation.qvf)<br><br>[Parameter Tuning](docs/Sample-App-scikit-learn-Parameter-Tuning.qvf)<br><br>[K-fold CV & Parameter Tuning](docs/Sample-App-scikit-learn-K-fold-CV-Grid-Search.qvf)<br><br>[Complex Forecasting with scikit-learn](docs/Sample-App-Forecasting-with-Sklearn.qvf) | Make sure you reload the K-fold Cross Validation or Train & Test app before using the Predict app.<br><br>If using Qlik Sense Desktop you will need to download the [data source](docs/HR-Employee-Attrition.xlsx), create a data connection named `AttachedFiles` in the app, and point the connection to the folder containing the source file.<br><br>The forecasting app is best understood together with the Deep Learning section below. Here we just use more traditional ML algorithms rather than Deep Learning for producing the forecast.<br><br>Make sure you reload the app before using the final sheets to make predictions. The data source for this app can be found [here](docs/bike-sharing/). |
 | [Deep Learning](docs/Keras.md) | [Complex Forecasting with Keras](docs/Sample-App-Forecasting-with-Keras.qvf) | Make sure you reload the app before using the final two sheets to make predictions.<br><br>If using Qlik Sense Desktop you will need to download the [data source](docs/bike-sharing/), create a data connection named `AttachedFiles` in the app, and point the connection to the folder containing the source file. |
 | [Forecasting](docs/Prophet.md) | [Facebook Prophet (Detailed)](docs/Sample_App_Prophet.qvf)<br><br>[Facebook Prophet (Simple)](docs/Sample_App_Forecasting_Simple.qvf)<br><br>[Facebook Prophet (Multiple regressors)](docs/Sample-App-Prophet-Multivariate.qvf) | For the detailed app, use the bookmarks to step through the sheets with relevant selections.<br><br>For calling Prophet through the load script refer to the simple app. If you want to reload the app using Qlik Sense Desktop you will need to download the [data source](docs/VIC-Emergency-Department-Attendances.xlsx), create a data connection named `AttachedFiles` in the app, and point the connection to the folder containing the source file.<br><br>For the use of Prophet's additional regressors capability refer to the multiple regressors app. The data for this app is found [here](docs/bike-sharing/). |
 | [Named Entity Recognition](docs/NER.md) | [NER and Association Rules](docs/Sample-App-NER-Apriori.qvf) | If using Qlik Sense Desktop you will need to download the [data sources](docs/LOTR/), create a data connection named `AttachedFiles` in the app, and point the connection to the folder containing the source files. |

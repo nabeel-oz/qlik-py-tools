@@ -3,6 +3,7 @@ python -m venv $PSScriptRoot\qlik-py-env
 Write-Output "Copying project files to the new directory..."
 xcopy /E /I $PSScriptRoot\generated $PSScriptRoot\qlik-py-env\generated
 xcopy /E /I $PSScriptRoot\core $PSScriptRoot\qlik-py-env\core
+xcopy /E /I $PSScriptRoot\models $PSScriptRoot\qlik-py-env\models
 Write-Output "Activating the virtual environment..."
 & $PSScriptRoot\qlik-py-env\Scripts\activate.ps1
 Write-Output "Installing required packages..."

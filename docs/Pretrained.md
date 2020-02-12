@@ -237,17 +237,21 @@ PyTools.Predict('HR-Attrition-v1', FeaturesExpression, 'debug=true')
 
 ### Complete Example
 
-A complete example to generate sample scikit-learn and Keras models is available [here](sample-scripts).
+A complete example to generate sample scikit-learn and Keras models is available [here](sample-scripts/).
 
 A [Jupyter notebook](sample-scripts/HR-Attrition-Model.ipynb) is available for reference. However, to generate the models and call them from Qlik you'll need to follow the steps below to ensure the models are compatible with the SSE. 
 
 - Create a subdirectory called `pretrained` under your SSE's `qlik-py-env` directory. 
-- Copy the `__main__.py` and `preprocessor.py` files from [here](sample-scripts) to `qlik-py-env/pretrained`. 
+- Copy the `__main__.py` and `preprocessor.py` files from [here](sample-scripts/) to `qlik-py-env/pretrained`. 
 - Copy the [data source](HR-Employee-Attrition.xlsx) to `qlik-py-env/pretrained`.
-- Copy `HR-Attrition-v1.yaml` and `HR-Attrition-v2.yaml` from [here](sample-scripts) to `qlik-py-env/models`. Note that these need to be placed in the `models` directory, not `pretrained`.
+- Copy `HR-Attrition-v1.yaml` and `HR-Attrition-v2.yaml` from [here](sample-scripts/) to `qlik-py-env/models`. Note that these need to be placed in the `models` directory, not `pretrained`.
 - Open a terminal in the `qlik-py-env/pretrained` directory and activate the Python virtual environment. For Windows you would open a PowerShell window and use the following command:
     ```
     ..\Scripts\activate.ps1
+    ```
+    Install the `xlrd` package that is not installed with the SSE. This is to allow Pandas to read from the Excel data source.
+    ```
+    pip install xlrd
     ```
     Then generate the models using `__main.py__`:
     ```
