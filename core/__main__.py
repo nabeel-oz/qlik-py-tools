@@ -116,7 +116,10 @@ class ExtensionService(SSE.ConnectorServicer):
             39: '_sklearn',
             40: '_prophet',
             41: '_prophet_seasonality',
-            42: '_sklearn'
+            42: '_sklearn',
+            43: '_misc',
+            44: '_misc',
+            45: '_misc'
         }
 
     """
@@ -699,9 +702,23 @@ class ExtensionService(SSE.ConnectorServicer):
         if function == 33:    
             # Get entities from the default model
             response = handle.association_rules()
-            
             # return six columns: 'rule', 'rule_lhs', 'rule_rhs', 'support', 'confidence', 'lift'
             dtypes = ["str", "str", "str", "num", "num", "num"]
+        elif function == 43:
+            # Provide predictions in a chart expression based on an existing model
+            response = handle.predict(load_script=False)
+            # Return predictions
+            dtypes = ["str"]
+        elif function == 44:
+            # Provide predictions in the load script based on an existing model
+            response = handle.predict(load_script=True)
+            # Return the model name, keys and predictions
+            dtypes = ["str", "str", "str"]
+        elif function == 45:
+            # Get a string that can be evaluated to get the features expression for the predict function
+            response = handle.get_features_expression()
+            # Return the feature expression
+            dtypes = ["str"]
 
         # Get the response as SSE.Rows
         response_rows = utils.get_response_rows(response.values.tolist(), dtypes) 

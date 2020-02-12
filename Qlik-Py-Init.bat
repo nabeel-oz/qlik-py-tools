@@ -5,6 +5,7 @@ echo.
 echo Copying project files to the new directory... & echo.
 xcopy /E /I "%~dp0\generated" "%~dp0\qlik-py-env\generated"
 xcopy /E /I "%~dp0\core" "%~dp0\qlik-py-env\core"
+xcopy /E /I "%~dp0\models" "%~dp0\qlik-py-env\models"
 echo.
 echo Activating the virtual environment... & echo.
 cd /d "%~dp0\qlik-py-env\Scripts"
@@ -13,7 +14,7 @@ cd ..
 echo.
 echo Installing required packages... & echo.
 python -m pip install --upgrade setuptools pip
-pip install grpcio==1.26.0 grpcio-tools==1.26.0 numpy==1.17.5 scipy==1.4.1 pandas==0.25.3 cython==0.29.14 joblib==0.11 holidays==0.9.11
+pip install grpcio==1.26.0 grpcio-tools==1.26.0 numpy==1.17.5 scipy==1.4.1 pandas==0.25.3 cython==0.29.14 joblib==0.11 holidays==0.9.11 pyyaml==5.3
 pip install pystan==2.17
 pip install fbprophet==0.4.post2
 pip install scikit-learn==0.21.3

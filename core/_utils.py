@@ -1,11 +1,15 @@
 import os
 import sys
 import ast
+import time
 import string
 import locale
+import pickle
 import warnings
 import numpy as np
 import pandas as pd
+from pathlib import Path
+
 import ServerSideExtension_pb2 as SSE
 
 # Suppress warnings 
@@ -498,3 +502,60 @@ def vectorize_array(y, steps=1, return_type='df'):
         return y_transform.values
     
     return y_transform
+
+def decode(y, labels={}):
+    """
+    Take in a numpy array and a dictionary of labels.
+    Maps the items in the array to the labels.
+    """
+
+    # Setup a decoding function based on the dictionary of labels
+    decode = lambda x, d={}: round(x) if round(x) not in d else d[round(x)]
+    # Store the shape of the array
+    shape = y.shape
+    # Flatten the array and perform the decoding 
+    y = np.array([decode(x, labels) for x in y.ravel()])
+    # Reshape the array back to it's original form
+    y = np.reshape(y, shape)
+
+    return y
+
+def lock(filepath, wait=2, retries=2):
+    """
+    Create a lockfile for a specified file.
+    If the file is already locked, wait for a specified number of seconds.
+    Retry a maximum number of times before timing out.
+    """
+
+    # Create a path for the lock file
+    f_lock = filepath + '.lock'
+
+    for _ in range(retries):
+        # If the file is currently locked
+        if Path(f_lock).exists():
+            # Wait a few seconds and check again
+            time.sleep(wait)
+        else:
+            # Write a lock file
+            with open(f_lock, 'wb') as file:
+                pickle.dump(f_lock, file)
+                break  
+    else:
+        # If the file is still locked after maximum retries raise an exception
+        if Path(f_lock).exists():
+            raise TimeoutError("The specified file is locked. If you believe this to be wrong, please delete file {0}".format(f_lock))
+    
+    return True
+
+def unlock(filepath):
+    """
+    Unlock a file locked with the lock method.
+    """
+    
+    # Create a path for the lock file
+    f_lock = filepath + '.lock'
+    # Delete the lock file
+    if Path(f_lock).exists():
+        Path(f_lock).unlink()
+     
+    return True

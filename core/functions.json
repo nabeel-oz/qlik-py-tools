@@ -470,6 +470,38 @@
         "b_key": 0,
 		    "n_features": 0
       }
+    },
+    {
+      "Id": 43,
+      "Name": "Predict",
+      "Type": 0,
+      "ReturnType": 0,
+      "Params": {
+        "a_model_name": 0,
+        "n_features": 0,
+        "z_other_args": 0
+      }
+    },
+	  {
+      "Id": 44,
+      "Name": "Bulk_Predict",
+      "Type": 2,
+      "ReturnType": 0,
+      "Params": {
+        "a_model_name": 0,
+		    "b_key": 0,
+        "n_features": 0,
+        "z_other_args": 0
+      }
+    },
+    {
+      "Id": 45,
+      "Name": "Get_Features_Expression",
+      "Type": 2,
+      "ReturnType": 0,
+      "Params": {
+        "a_model_name": 0
+      }
     }
   ]
 }
