@@ -523,16 +523,6 @@ class SKLearnForQlik:
             err = "Incorrect usage. The estimator specified is not a known classifier or regressor: {0}".format(self.model.estimator)
             raise Exception(err)
         
-        # Add lag observations to the samples if required
-        if self.model.lags or self.model.lag_target:
-            # Check if the current sample will be included as an input, or whether we only use lag observations for predictions
-            extrapolate = 1 if self.model.current_sample_as_input else 0
-            # Add the lag observations
-            train_test_df = self._add_lags(train_test_df, target_df, extrapolate=extrapolate, update_features_df=True)
-            # Drop targets for samples which were dropped due to null values after adding lags.
-            if len(target_df) > len(train_test_df):
-                target_df = target_df.iloc[len(target_df)-len(train_test_df):]
-
         # Check which validation strategy is to be used, if any
         # For an explanation of cross validation in scikit-learn see: http://scikit-learn.org/stable/modules/cross_validation.html#multimetric-cross-validation
         if self.model.time_series_split > 0:
@@ -568,8 +558,8 @@ class SKLearnForQlik:
         # Scale the targets and increase stationarity if required
         if self.model.scale_target or self.model.make_stationary:
             # Set up the target transformer
-            self.model.target_transformer = TargetTransformer(scale=self.model.scale_target, make_stationary=self.model.make_stationary, missing=self.model.missing,\
-            scaler=self.model.scaler, logfile=self.logfile, **self.model.scaler_kwargs)
+            self.model.target_transformer = TargetTransformer(scale=self.model.scale_target, make_stationary=self.model.make_stationary, stationarity_lags=self.model.stationarity_lags,\
+                missing=self.model.missing, scaler=self.model.scaler, logfile=self.logfile, **self.model.scaler_kwargs)
 
             # Fit the transformer to the training targets
             self.model.target_transformer = self.model.target_transformer.fit(self.y_train)
@@ -578,13 +568,17 @@ class SKLearnForQlik:
             self.y_train = self.model.target_transformer.transform(self.y_train)
             # Drop samples where the target cannot be transformed due to insufficient lags
             self.X_train = self.X_train.iloc[len(self.X_train)-len(self.y_train):] 
-            # Do the same for the test set if applicable
-            try:
-                self.y_test = self.model.target_transformer.transform(self.y_test)
-                self.X_test = self.X_test.iloc[len(self.X_test)-len(self.y_test):]
-            except AttributeError:
-                pass
         
+        # Add lag observations to the samples if required
+        if self.model.lags or self.model.lag_target:
+            # Check if the current sample will be included as an input, or whether we only use lag observations for predictions
+            extrapolate = 1 if self.model.current_sample_as_input else 0
+            # Add the lag observations
+            self.X_train = self._add_lags(self.X_train, self.y_train, extrapolate=extrapolate, update_features_df=True)
+            # Drop targets for samples which were dropped due to null values after adding lags.
+            if len(self.y_train) > len(self.X_train):
+                self.y_train = self.y_train.iloc[len(self.y_train)-len(self.X_train):]
+
         # If this is a Keras estimator, we require the preprocessing to return a data frame instead of a numpy array
         prep_return = 'df' if self.model.using_keras else 'np'
 
@@ -901,12 +895,19 @@ class SKLearnForQlik:
             # Open an existing model and get the training & test dataset and targets based on the request
             self.X_test, self.y_test = self._get_model_and_data(target=True, ordered_data=ordered_data)    
 
-            # Scale the targets and increase stationarity if required
-            if self.model.scale_target or self.model.make_stationary:
-                # Apply the transformer to the test targets
-                self.y_test = self.model.target_transformer.transform(self.y_test)  
-                # Drop samples where self.y_test cannot be transformed due to insufficient lags
-                self.X_test = self.X_test.iloc[len(self.X_test)-len(self.y_test):]
+        # Keep a copy of the y_test before any transformations
+        y_test_copy = self.y_test.copy()
+        # Calculate if any extra lag periods are expected when making the target stationary using differencing
+        extra_lags = max(self.model.stationarity_lags) if self.model.lag_target and self.model.make_stationary=='difference' else 0
+
+        # Scale the targets and increase stationarity if required
+        if self.model.scale_target or self.model.make_stationary:
+            # If using differencing, we assume sufficient lag values for inversing the transformation later
+            y_lags = self.y_test.iloc[:extra_lags].values if self.model.make_stationary=='difference' else None
+            # Apply the transformer to the test targets
+            self.y_test = self.model.target_transformer.transform(self.y_test)  
+            # Drop samples where self.y_test cannot be transformed due to insufficient lags
+            self.X_test = self.X_test.iloc[len(self.X_test)-len(self.y_test):]
 
         # Refresh the keras model to avoid tensorflow errors
         if self.model.using_keras:
@@ -915,10 +916,19 @@ class SKLearnForQlik:
         # Get predictions based on the samples
         if ordered_data:
             self.y_pred = self.sequence_predict(variant="internal")
-
+           
             # Handle possible null values where a prediction could not be generated
             self.y_pred = self.y_pred[self.placeholders:]
-            self.y_test = self.y_test.iloc[self.placeholders:]
+            self.y_test = y_test_copy.iloc[self.placeholders+extra_lags:]
+
+            # Inverse transformations predictions if required 
+            if self.model.scale_target or self.model.make_stationary:
+                # Apply the transformer to the test targets
+                self.y_pred = self.y_pred if y_lags is None else np.append(y_lags, self.y_pred)
+                self.y_pred = self.model.target_transformer.inverse_transform(self.y_pred) 
+                # Remove lags used for making the series stationary in case of differencing
+                if self.model.make_stationary == 'difference':
+                    self.y_pred = self.y_pred[extra_lags:]
         else:
             self.y_pred = self.model.pipe.predict(self.X_test)
 
@@ -926,11 +936,8 @@ class SKLearnForQlik:
             if self.model.scale_target or self.model.make_stationary:
                 # Apply the transformer to the predictions
                 self.y_pred = self.model.target_transformer.inverse_transform(self.y_pred)
-        
-        # Inverse transformations on the test targets if required
-        if self.model.scale_target or self.model.make_stationary:
-            # Apply the transformer to the test targets
-            self.y_test = self.model.target_transformer.inverse_transform(self.y_test)
+                # Reset y_test to orginal values
+                self.y_test = y_test_copy
         
         # Flatten the y_test DataFrame
         self.y_test = self.y_test.values.ravel()
@@ -1189,6 +1196,8 @@ class SKLearnForQlik:
 
         # Scale the targets and increase stationarity if required
         if variant != 'internal' and self.model.lag_target and (self.model.scale_target or self.model.make_stationary):
+            # If using differencing, we assume sufficient lag values for inversing the transformation later
+            y_lags = y.iloc[:max(self.model.stationarity_lags)].values if self.model.make_stationary=='difference' else None
             # Apply the transformer to the targets
             y = self.model.target_transformer.transform(y)
             # Drop samples where y cannot be transformed due to insufficient lags
@@ -1198,6 +1207,7 @@ class SKLearnForQlik:
         prediction_periods = self.model.prediction_periods
         # Set the number of rows required for one prediction
         rows_per_pred = 1
+        extra_lags = max(self.model.stationarity_lags) if self.model.lag_target and self.model.make_stationary=='difference' else 0
 
         # Check that the input data includes history to meet any lag calculation requirements
         if self.model.lags:
@@ -1205,9 +1215,12 @@ class SKLearnForQlik:
             extrapolate = 1 if self.model.current_sample_as_input else 0        
             # An additional lag observation is needed if previous targets are being added to the features
             rows_per_pred = self.model.lags+extrapolate+1 if self.model.lag_target else self.model.lags+extrapolate
+            # If the target is being lagged and made stationary through differencing additional lag periods are required
+            if self.model.lag_target and self.model.make_stationary=='difference':
+                extra_msg = " plus an additional {} periods for making the target stationary using differencing".format(extra_lags)
             # For multi-step predictions we only expect lag values, not the current period's values
             # rows_per_pred = rows_per_pred-1 if prediction_periods > 1 else rows_per_pred
-            assert len(X) >= rows_per_pred, "Insufficient input data as the model requires {} lag periods for each prediction".format(rows_per_pred)
+            assert len(X) >= rows_per_pred + extra_lags, "Insufficient input data as the model requires {} lag periods for each prediction".format(rows_per_pred) + extra_msg
 
         if variant != 'internal':
             # Prepare the response DataFrame
@@ -1296,10 +1309,10 @@ class SKLearnForQlik:
             if get_proba:
                 # Get the predicted probability for each sample 
                 probabilities = self.model.pipe.predict_proba(X)
-
+        
         # Set the number of placeholders needed in the response
         # These are samples for which predictions were not generated due to insufficient lag periods or for meeting multi-step prediction period requirements
-        self.placeholders = rows_per_pred
+        self.placeholders = rows_per_pred + extra_lags
         # Transform probabilities to a readable string
         if get_proba:
             # Add the required number of placeholders at the start of the response list
@@ -1316,14 +1329,12 @@ class SKLearnForQlik:
                     s = s + ", {0}: {1:.3f}".format(self.model.pipe.named_steps['estimator'].classes_[i], b)
                     i += 1
                 y.append(s[2:])
+
         # Prepare predictions
         else:
             if prediction_periods > 1:
                 # Set the value to use for nulls
-                if is_numeric_dtype(np.array(predictions)):
-                    null = np.NaN
-                else:
-                    null = "\x00"
+                null = np.NaN if is_numeric_dtype(np.array(predictions)) else "\x00"
 
                 # Truncate multi-step predictions if the (number of samples - rows_per_pred) is not a multiple of prediction_periods
                 if (n_samples-rows_per_pred) % prediction_periods > 0:
@@ -1342,11 +1353,21 @@ class SKLearnForQlik:
             else:
                 y = np.array(predictions)
             
-            # Inverse transformations on the targets if required 
-            if self.model.scale_target or self.model.make_stationary:
+            # Inverse transformations on the targets if required  
+            if variant != 'internal' and (self.model.scale_target or self.model.make_stationary):
                 # Apply the transformer to the test targets
+                placeholders = y[:self.placeholders] if prediction_periods > 1 or self.model.lag_target else []
+                y = y if y_lags is None else np.append(y_lags, y[len(placeholders):])
                 y = self.model.target_transformer.inverse_transform(y) 
-           
+                
+                # Replace lags used for making the series stationary with nulls in case of differencing
+                if self.model.make_stationary == 'difference':
+                    null = np.NaN if is_numeric_dtype(np.array(predictions)) else "\x00"
+                    y = np.append(np.array([null]*extra_lags), y[extra_lags:])
+                
+                # Add back the placeholders for lag values
+                if len(placeholders) > 0:
+                    y = np.append(placeholders, y)
         if variant == 'internal':
             return y
 
@@ -1566,7 +1587,9 @@ class SKLearnForQlik:
         self.model.lags= None
         self.model.lag_target = False
         self.model.scale_target = False
+        self.model.scale_lag_target= True
         self.model.make_stationary = None
+        self.model.stationarity_lags = [1]
         self.model.using_keras = False
         self.model.current_sample_as_input = True
         self.model.prediction_periods = 1
@@ -1627,12 +1650,23 @@ class SKLearnForQlik:
             if 'scale_target' in execution_args:
                 self.model.scale_target = 'true' == execution_args['scale_target'].lower()
 
+            # Scale lag values of the targets before fitting
+            # Even if scale_target is set to false, the lag values of targets being used as features can be scaled by setting this to true 
+            if 'scale_lag_target' in execution_args:
+                self.model.scale_lag_target = 'true' == execution_args['scale_lag_target'].lower()
+
             # Make the target series more stationary. This only applies to sequence prediction problems.
             # Valid values are 'log' in which case we apply a logarithm to the target values,
             # or 'difference' in which case we transform the targets into variance from the previous value.
             # The transformation will be reversed before returning predictions.
             if 'make_stationary' in execution_args:
                 self.model.make_stationary = execution_args['make_stationary'].lower()
+
+                # Provide lags periods for differencing
+                # By default the difference will be done with lag = 1. Alternate lags can be provided by passing a list of lags as a list.
+                # e.g. 'stationarity_lags=1;12|list|int'
+                if 'stationarity_lags' in execution_args:
+                    self.model.stationarity_lags = utils.get_kwargs_by_type({'stationarity_lags': execution_args['stationarity_lags']})['stationarity_lags']
 
             # Specify if the current sample should be used as input to the model
             # This is to allow for models that only use lag observations to make future predictions
@@ -1946,8 +1980,14 @@ class SKLearnForQlik:
             if update_features_df:
                 # Check the target's data type
                 dt = 'float' if is_numeric_dtype(y.iloc[:,0]) else 'str'
-                # Check if the target needs to be scaled
-                fs = 'scaling' if dt == 'float' and self.model.scale_target else 'none'
+                # Set the preprocessing feature strategy for the lag targets
+                if self.model.estimator_type == 'classifier':
+                    fs = 'one hot encoding' 
+                elif self.model.scale_lag_target and not self.model.scale_target:
+                    fs = 'scaling'
+                else:
+                    fs = 'none'
+                self.model.scale_lag_target
                 # Update feature definitions for the model
                 self.model.features_df.loc['previous_y'] = [self.model.name, 'previous_y', 'feature', dt, fs, '']
 

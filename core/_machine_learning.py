@@ -745,7 +745,7 @@ class TargetTransformer:
     An inverse transform method allows for reversing the transformations.
     """
 
-    def __init__(self, scale=True, make_stationary=None, missing="zeros", scaler="StandardScaler", logfile=None, **kwargs):
+    def __init__(self, scale=True, make_stationary=None, stationarity_lags=[1], missing="zeros", scaler="StandardScaler", logfile=None, **kwargs):
         """
         Initialize the TargetTransformer instance.
         
@@ -754,8 +754,8 @@ class TargetTransformer:
         make_stationary is a parameter to determine if the target will be made stationary. This should only be used for sequential data.
         Passing make_stationary='log' will apply a logarithm to the target and use an exponential for the inverse transform.
         Passing make_stationary='difference' will difference the values to make the target series stationary.
-        By default the difference will be done with lag = 1. Alternate lags can be provided by passing a list of lags as a kwarg.
-        e.g. lags=[1, 12]
+        By default the difference will be done with lag = 1. Alternate lags can be provided by passing a list using the stationarity_lags parameter.
+        e.g. stationarity_lags=[1, 12]
         
         missing deteremines how missing values are dealt with before the scaling is applied. 
         Valid options specified through the missing parameter are: zeros, mean, median, mode
@@ -770,19 +770,38 @@ class TargetTransformer:
         self.missing = missing
         self.scaler = scaler
         self.logfile = logfile
-
-        if make_stationary and 'lags' in kwargs:
-            self.lags = kwargs.pop('lags')
-        else:
-            self.lags = [1]
-        
+        self.lags = stationarity_lags
         self.kwargs = kwargs
     
     def fit(self, y):
         """
+        Make the data stationary if required.
         Fit the scaler to target values from the training set.
         """
 
+        # Apply a logarithm to make the array stationary
+        if self.make_stationary == 'log':
+            y = np.log(y)
+
+        # Apply stationarity lags by differencing the array
+        elif self.make_stationary == 'difference':
+            y_diff = y.copy()
+            len_y = len(y_diff)
+
+            for i in range(max(self.lags), len_y):
+                for lag in self.lags:
+                    if isinstance(y_diff, (pd.Series, pd.DataFrame)):
+                        y_diff.iloc[i] = y_diff.iloc[i] - y.iloc[i - lag]
+                    else:
+                        y_diff[i] = y_diff[i] - y[i - lag]
+            
+            # Remove targets with insufficient lag periods
+            if isinstance(y_diff, (pd.Series, pd.DataFrame)):
+                y = y_diff.iloc[max(self.lags):]
+            else:
+                y = y_diff[max(self.lags):]
+
+        # Fit the scaler
         if self.scale:
             # Get an instance of the sklearn scaler fit to y
             self.scaler_instance = utils.get_scaler(y, missing=self.missing, scaler=self.scaler, **self.kwargs)
@@ -798,15 +817,7 @@ class TargetTransformer:
         Note that the differencing won't be done if array_like=False.
         """
 
-        y_transform = y
-
-        # Scale the targets using the previously fit scaler
-        if self.scale:
-            y_transform = self.scaler_instance.transform(y)
-            
-            if isinstance(y, pd.DataFrame):
-                # The scaler returns a numpy array which needs to be converted back to a data frame
-                y_transform = pd.DataFrame(y_transform, columns=y.columns, index=y.index)
+        y_transform = y      
 
         # Apply a logarithm to make the array stationary
         if self.make_stationary == 'log':
@@ -831,6 +842,14 @@ class TargetTransformer:
             else:
                 y_transform = y_diff[max(self.lags):]
 
+        # Scale the targets using the previously fit scaler
+        if self.scale:
+            y_transform = self.scaler_instance.transform(y)
+            
+            if isinstance(y, pd.DataFrame):
+                # The scaler returns a numpy array which needs to be converted back to a data frame
+                y_transform = pd.DataFrame(y_transform, columns=y.columns, index=y.index)
+
         if self.logfile is not None:
             self._print_log(1, data=y_transform, array_like=array_like)
         
@@ -849,8 +868,21 @@ class TargetTransformer:
 
         array_like determines if y_transform is expected to be multiple values or a single value.
         Note that the differencing won't be done if array_like=False.
+
+        For an inverse of differencing, y_transform needs to include sufficient actual lag values.
         """
 
+        # If inversing differencing, we assume sufficient lag values. 
+        # These should be actual values that have not been scaled previously.
+        if self.make_stationary == 'difference' and array_like:
+            if isinstance(y_transform, pd.DataFrame):
+                y_lags = y_transform.iloc[:max(self.lags)]
+                y = y_transform.iloc[max(self.lags):]
+            else:
+                y_lags = y_transform[:max(self.lags)]
+                y = y_transform[max(self.lags):]
+        
+        # Inverse the scaling for non-lag values
         if self.scale:
             if isinstance(y_transform, pd.DataFrame):
                 y = self.scaler_instance.inverse_transform(np.reshape(y_transform.values, (-1, 1)))
@@ -864,10 +896,14 @@ class TargetTransformer:
             y = np.exp(y_transform)
 
         # Reverse the differencing applied during transform
-        # NOTE: y_transform will need to include actual values preceding the lags
+        # NOTE: y_transform will need to include actual lag values
         elif self.make_stationary == 'difference' and array_like:
-            y = y_transform.copy()
-            len_y = len(y_transform)
+            if isinstance(y, (pd.Series, pd.DataFrame)):
+                y = pd.concat([y_lags, y])
+            else:
+                y = np.append(y_lags, y)
+
+            len_y = len(y)
             
             for i in range(max(self.lags), len_y):
                 for lag in self.lags:

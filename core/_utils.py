@@ -437,6 +437,45 @@ def dict_to_sse_arg(d):
     
     return s[:-2]
 
+def make_stationary(y, strategy='log', stationarity_lags=[1], array_like=True):
+    """
+    Make a series stationary using a logarithm or differencing.
+    Valid values for the strategy parameter are 'log' or 'difference'
+
+    The array_like parameter determines if y is expected to be multiple values or a single value.
+    Note that the differencing won't be done if array_like=False.
+
+    By default the difference will be done with lag = 1. Alternate lags can be provided by passing a list of stationarity_lags.
+    e.g. stationarity_lags=[1, 12]
+    """
+
+    y_transform = y
+
+    # Apply a logarithm to make the array stationary
+    if strategy == 'log':
+        y_transform = np.log(y)
+
+    # Apply stationarity lags by differencing the array
+    elif strategy == 'difference' and array_like:
+        y_diff = y_transform.copy()
+        len_y = len(y_diff)
+
+        for i in range(max(stationarity_lags), len_y):
+            for lag in stationarity_lags:
+                if isinstance(y_diff, (pd.Series, pd.DataFrame)):
+                    y_diff.iloc[i] = y_diff.iloc[i] - y_transform.iloc[i - lag]
+                else:
+                    y_diff[i] = y_diff[i] - y_transform[i - lag]
+
+        # Remove targets with insufficient lag periods
+        # NOTE: The corresponding samples will need to be dropped at this function call's origin
+        if isinstance(y_diff, (pd.Series, pd.DataFrame)):
+            y_transform = y_diff.iloc[max(stationarity_lags):]
+        else:
+            y_transform = y_diff[max(stationarity_lags):]
+
+    return y_transform
+
 def add_lags(df, lag=1, extrapolate=1, dropna=True, suffix="t"):
     """
     Take in a 2D DataFrame (n_samples by n_features) and create a new DataFrame with lag observations added to it.
