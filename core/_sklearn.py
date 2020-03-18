@@ -916,7 +916,7 @@ class SKLearnForQlik:
         # Get predictions based on the samples
         if ordered_data:
             self.y_pred = self.sequence_predict(variant="internal")
-           
+
             # Handle possible null values where a prediction could not be generated
             self.y_pred = self.y_pred[self.placeholders:]
             self.y_test = y_test_copy.iloc[self.placeholders+extra_lags:]
@@ -925,6 +925,7 @@ class SKLearnForQlik:
             if self.model.scale_target or self.model.make_stationary:
                 # Apply the transformer to the test targets
                 self.y_pred = self.y_pred if y_lags is None else np.append(y_lags, self.y_pred)
+
                 self.y_pred = self.model.target_transformer.inverse_transform(self.y_pred) 
                 # Remove lags used for making the series stationary in case of differencing
                 if self.model.make_stationary == 'difference':
@@ -1355,9 +1356,13 @@ class SKLearnForQlik:
             
             # Inverse transformations on the targets if required  
             if variant != 'internal' and (self.model.scale_target or self.model.make_stationary):
-                # Apply the transformer to the test targets
+                # Take out placeholder values before inverse transform of targets
                 placeholders = y[:self.placeholders] if prediction_periods > 1 or self.model.lag_target else []
-                y = y if y_lags is None else np.append(y_lags, y[len(placeholders):])
+                y = y if len(placeholders) == 0 else y[len(placeholders):]
+                # Add untransformed lag values for differencing if required
+                y = y if y_lags is None else np.append(y_lags, y)
+                
+                # Apply the transformer to the test targets
                 y = self.model.target_transformer.inverse_transform(y) 
                 
                 # Replace lags used for making the series stationary with nulls in case of differencing
@@ -1368,6 +1373,7 @@ class SKLearnForQlik:
                 # Add back the placeholders for lag values
                 if len(placeholders) > 0:
                     y = np.append(placeholders, y)
+        
         if variant == 'internal':
             return y
 

@@ -844,11 +844,11 @@ class TargetTransformer:
 
         # Scale the targets using the previously fit scaler
         if self.scale:
-            y_transform = self.scaler_instance.transform(y)
+            y_transform_scaled = self.scaler_instance.transform(y_transform)
             
-            if isinstance(y, pd.DataFrame):
+            if isinstance(y_transform, pd.DataFrame):
                 # The scaler returns a numpy array which needs to be converted back to a data frame
-                y_transform = pd.DataFrame(y_transform, columns=y.columns, index=y.index)
+                y_transform = pd.DataFrame(y_transform_scaled, columns=y_transform.columns, index=y_transform.index)
 
         if self.logfile is not None:
             self._print_log(1, data=y_transform, array_like=array_like)
@@ -872,6 +872,8 @@ class TargetTransformer:
         For an inverse of differencing, y_transform needs to include sufficient actual lag values.
         """
 
+        y = y_transform
+
         # If inversing differencing, we assume sufficient lag values. 
         # These should be actual values that have not been scaled previously.
         if self.make_stationary == 'difference' and array_like:
@@ -884,16 +886,18 @@ class TargetTransformer:
         
         # Inverse the scaling for non-lag values
         if self.scale:
-            if isinstance(y_transform, pd.DataFrame):
-                y = self.scaler_instance.inverse_transform(np.reshape(y_transform.values, (-1, 1)))
+            if isinstance(y, pd.DataFrame):
+                y = self.scaler_instance.inverse_transform(np.reshape(y.values, (-1, 1)))
                 # The scaler returns a numpy array which needs to be converted back to a data frame
-                y = pd.DataFrame(y, columns=y_transform.columns, index=y_transform.index)
+                y = pd.DataFrame(y, columns=y.columns, index=y.index)
             else:
-                y = self.scaler_instance.inverse_transform(np.reshape(y_transform, (-1, 1)))
+                y = self.scaler_instance.inverse_transform(np.reshape(y, (-1, 1)))
+                # Flatten the reshaping done above
+                y = y.ravel()
 
         # Apply an exponential to reverse the logarithm applied during transform
         if self.make_stationary == 'log':
-            y = np.exp(y_transform)
+            y = np.exp(y)
 
         # Reverse the differencing applied during transform
         # NOTE: y_transform will need to include actual lag values
