@@ -907,9 +907,6 @@ class SKLearnForQlik:
             # Drop samples where self.y_test cannot be transformed due to insufficient lags
             self.X_test = self.X_test.iloc[len(self.X_test)-len(self.y_test):]
 
-            # TEMP LOG
-            sys.stdout.write("\n y_orig {}:\n{}\n\n".format(len(y_orig), y_orig))
-
         # Refresh the keras model to avoid tensorflow errors
         if self.model.using_keras:
             self._keras_refresh()
@@ -918,16 +915,9 @@ class SKLearnForQlik:
         if ordered_data:
             self.y_pred = self.sequence_predict(variant="internal")
 
-            # TEMP LOG
-            sys.stdout.write("\n self.y_pred received from sequence_predict {}:\n{}\n\n".format(len(self.y_pred), self.y_pred))
-
             # Handle possible null values where a prediction could not be generated
             self.y_pred = self.y_pred[self.rows_per_pred - self.first_pred_modifier:]
             self.y_test = y_test_copy.iloc[-1*len(self.y_pred):]
-
-            # TEMP LOG
-            sys.stdout.write("\nAfter removing placeholders self.y_test {}\n\n".format(len(self.y_test)))
-            sys.stdout.write("\nAfter removing placeholders self.y_pred {}\n\n".format(len(self.y_pred)))
 
             # Inverse transformations predictions if required 
             if self.model.scale_target or self.model.make_stationary:
@@ -935,21 +925,11 @@ class SKLearnForQlik:
                 end = self.placeholders
                 start = end - self.diff_lags
 
-                # TEMP LOG
-                sys.stdout.write("\nself.placeholders: {}, self.rows_per_pred: {}, self.diff_lags: {}, start: {}, end: {}\n\n".format(self.placeholders, self.rows_per_pred, self.diff_lags, start, end))
-                sys.stdout.write("\nAppending y_orig[start : end] {}:\n{}\n\n".format(len(y_orig[start : end]), y_orig[start : end]))
-
                 # Add lags for inversing differencing
                 self.y_pred = self.y_pred if y_orig is None else np.append(y_orig[start : end], self.y_pred)
 
-                # TEMP LOG
-                sys.stdout.write("\nAfter appending y_orig self.y_pred {}:\n{}\n\n".format(len(self.y_pred), self.y_pred))
-                
                 # Apply the transformer to the test targets
                 self.y_pred = self.model.target_transformer.inverse_transform(self.y_pred) 
-
-                # TEMP LOG
-                sys.stdout.write("\nAfter inverse transform self.y_pred {}:\n{}\n\n".format(len(self.y_pred), self.y_pred))
 
                 # Remove lags used for making the series stationary in case of differencing
                 if self.model.make_stationary == 'difference':
@@ -967,10 +947,6 @@ class SKLearnForQlik:
         # Flatten the y_test DataFrame
         self.y_test = self.y_test.values.ravel()
 
-        # TEMP LOG
-        sys.stdout.write("\nFinal self.y_test {}:\n{}\n\n".format(len(self.y_test), self.y_test))
-        sys.stdout.write("\nFinal self.y_pred {}:\n{}\n\n".format(len(self.y_pred), self.y_pred))
-        
         # Try getting the metric_args from the model
         try:
             metric_args = self.model.metric_args
@@ -1223,10 +1199,7 @@ class SKLearnForQlik:
             X = self.X_test.copy()
             y = self.y_test.copy()
 
-        # TEMP LOG
-        sys.stdout.write("\nlen X: {}, len y: {}\n\n".format(len(X), len(y)))
-
-        # Scale the targets and increase stationarity if required
+       # Scale the targets and increase stationarity if required
         if variant != 'internal' and self.model.lag_target and (self.model.scale_target or self.model.make_stationary):
             # If using differencing, we retain original y values for inversing the transformation later
             y_orig = y.values.ravel() if self.model.make_stationary=='difference' else None
@@ -1346,11 +1319,7 @@ class SKLearnForQlik:
         # These are samples for which predictions were not generated due to insufficient lag periods or for meeting multi-step prediction period requirements
         self.placeholders = self.rows_per_pred + self.diff_lags - self.first_pred_modifier
 
-        # TEMP LOG
-        sys.stdout.write("\npredictions {}:\n{}\n\n".format(len(predictions),np.array(predictions).ravel()))
-        sys.stdout.write("\nlen X: {}, len y: {}\n\n".format(len(X), len(y)))
-
-        # Transform probabilities to a readable string
+       # Transform probabilities to a readable string
         if get_proba:
             # Add the required number of placeholders at the start of the response list
             y = ["\x00"] * self.placeholders
@@ -1373,22 +1342,12 @@ class SKLearnForQlik:
                 # Set the value to use for nulls
                 null = np.NaN if is_numeric_dtype(np.array(predictions)) else "\x00"
 
-                # TEMP LOG
-                sys.stdout.write("\npredictions len: {}, n_samples: {}, prediction_periods: {}\n\n".format(len(predictions),n_samples,prediction_periods))
-                sys.stdout.write("\nself.placeholders: {}, self.rows_per_pred: {}, self.diff_lags: {}\n\n".format(self.placeholders, self.rows_per_pred, self.diff_lags))
-
                 # Truncate multi-step predictions if the (number of samples - self.placeholders) is not a multiple of prediction_periods
                 if (n_samples-self.rows_per_pred) % prediction_periods > 0:
                     predictions = predictions[:-len(predictions)+(n_samples-self.rows_per_pred)]
 
-                # TEMP LOG
-                sys.stdout.write("\npredictions len after truncation: {}\n\n".format(len(predictions)))
-
                 # Add null values at the start of the response list to match the cardinality of the input from Qlik
                 y = np.array(([null] * (self.rows_per_pred - self.first_pred_modifier)) + predictions)
-
-                # TEMP LOG
-                sys.stdout.write("\ny len: {}\n\n".format(len(y)))
             elif self.model.lag_target: 
                 # Remove actual values for which we did not generate predictions due to insufficient lags
                 if is_numeric_dtype(y.iloc[:, 0].dtype):
@@ -1411,25 +1370,11 @@ class SKLearnForQlik:
                 # Add untransformed lag values for differencing if required
                 end = self.placeholders
                 start = end - self.diff_lags
-
-                # TEMP LOG
-                sys.stdout.write("\nself.placeholders: {}, self.rows_per_pred: {}, self.diff_lags: {}, start: {}, end: {}\n\n".format(self.placeholders, self.rows_per_pred, self.diff_lags, start, end))
-                sys.stdout.write("\nAppending y_orig[start : end] {}:\n{}\n\n".format(len(y_orig[start : end]), y_orig[start : end]))
-
-                # TEMP LOG
-                sys.stdout.write("\ny before append and inverse transform {}:\n{}\n\n".format(len(y), y))
-
                 y = y if y_orig is None else np.append(y_orig[start : end], y)
-
-                # TEMP LOG
-                sys.stdout.write("\ny after append, before inverse transform {}:\n{}\n\n".format(len(y), y))
 
                 # Apply the transformer to the test targets
                 y = self.model.target_transformer.inverse_transform(y) 
 
-                # TEMP LOG
-                sys.stdout.write("\ny after inverse transform {}:\n{}\n\n".format(len(y), y))
-                
                 # Remove lags used for making the series stationary in case of differencing
                 if self.model.make_stationary == 'difference':
                     y = y[self.diff_lags:]
@@ -1442,9 +1387,6 @@ class SKLearnForQlik:
                 # Add back the placeholders for lag values
                 if len(null_values) > 0:
                     y = np.append(null_values, y)
-                
-                # TEMP LOG
-                sys.stdout.write("\nlen(null_values): {}, len(X), len(y): {}, len(self.response): {}\n\n".format(len(null_values), len(X), len(y), len(self.response)))
         
         if variant == 'internal':
             return y
