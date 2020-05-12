@@ -2,10 +2,12 @@ import os
 import sys
 import time
 import yaml
+import json
 import pickle
 import string
 import pathlib
 import warnings
+import requests
 import threading
 import numpy as np
 import pandas as pd
@@ -159,7 +161,10 @@ class CommonFunction:
         X = self.X.copy() if self.prep is None else self.prep.transform(self.X.copy())
 
         # Generate predictions
-        self.y = getattr(self.model, self.prediction_func)(X)
+        if self.is_rest_api:
+            self.y = self._get_rest_response(X)
+        else:
+            self.y = getattr(self.model, self.prediction_func)(X)
 
         # The predictions may need to be decoded in case of classification labels
         # The labels can be passed as a dictionary through the SSE function's additional arguments using the 'labels' parameter
@@ -341,6 +346,7 @@ class CommonFunction:
         # Get the model name from the request dataframe
         model_name = self.request_df.loc[0, 'model_name']
         self.name = model_name
+        self.is_rest_api = False
 
         # Get model meta data from the YAML file
         try:
@@ -354,7 +360,7 @@ class CommonFunction:
         model_path, model_type, model_features = model_meta['path'], model_meta['type'].lower(), model_meta['features']
         
         # Check that the model type is supported
-        supported = ['sklearn', 'scikit-learn', 'keras']
+        supported = ['sklearn', 'scikit-learn', 'keras', 'rest', 'restful']
         assert model_type in supported, "Unsupported model type: {}".format(model_meta['type'])
 
         if load:
@@ -370,6 +376,20 @@ class CommonFunction:
                 self.model = self._get_model_sklearn(model_path)
             elif model_type in ['keras']:
                 self.model = self._get_model_keras(model_path)
+            elif model_type in ['rest', 'restful']:
+                # Set a flag if the model is to be called using a REST API
+                self.is_rest_api = True
+                # The JSON response may contain multiple objects under the root. A specific result section can be specified in the YAML file
+                self.response_section = None if 'response_section' not in model_meta else model_meta['response_section']
+                # The endpoint key or user can be passed through the user tag in the YAML file
+                model_user = model_meta['user']
+                # The endpoint password can be passed through the password tag in the YAML file
+                model_password = '' if 'password' not in model_meta else model_meta['password']
+                # The data/payload can be nested within a header before sending the request e.g. 'features'
+                model_payload = {} if 'payload_header' not in model_meta else {model_meta['payload_header']: {}}
+
+                # For REST endpoints, the model is a dictionary of inputs for the HTTP POST request
+                self.model = {'url':model_path, 'auth':(model_user, model_password), 'json':model_payload}
             
             # Debug information is printed to the terminal and logs if the paramater debug = true
             if self.debug:
@@ -441,6 +461,32 @@ class CommonFunction:
                 "You can also try increasing the number of retries or wait time using the 'keras_retries' and 'keras_wait' arguments.")
 
         return model
+
+    def _get_rest_response(self, X):
+        """
+        Call a REST endpoint to get predictions from a model
+        """
+
+        predictions = []
+        # Set nesting for the json payload if required
+        payload_header = None if len(self.model['json'].keys()) == 0 else next(iter(self.model['json']))
+        
+        # Make a REST call for each sample
+        for i in range(len(X)):
+            # Next the JSON payload if required
+            self.model['json'] = dict(X.loc[i,:].astype("str").T) if payload_header is None else {payload_header: dict(X.loc[i,:].astype("str").T)}
+
+            # Send the REST request and store parse the JSON response
+            response = json.loads(requests.post(**self.model).text)
+            # Add response for the current sample to a list
+            predictions.append(response if self.response_section is None else response[self.response_section])
+
+        # Convert responses to a dataframe
+        predictions_df = pd.DataFrame(predictions).astype("str")
+        
+        # Return the required column from the response dataframe
+        y = predictions_df.iloc[:,0].values if self.prediction_func == 'predict' else predictions_df['self.prediction_func'].values
+        return y
 
     def _add_model_path(self, model_path):
         """
