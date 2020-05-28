@@ -485,7 +485,7 @@ class CommonFunction:
         predictions_df = pd.DataFrame(predictions).astype("str")
         
         # Return the required column from the response dataframe
-        y = predictions_df.iloc[:,0].values if self.prediction_func == 'predict' else predictions_df['self.prediction_func'].values
+        y = predictions_df.iloc[:,0].values if self.prediction_func == 'predict' else predictions_df[self.prediction_func].values
         return y
 
     def _add_model_path(self, model_path):
