@@ -55,7 +55,7 @@ Deep Learning & Additional Regressors with Prophet:
 
 Clustering COVID-19 Literature:
 
-[![Demonstration Video 3](docs/images/YouTube-03.png)](https://youtu.be/5fYWgglx84M)
+[![Demonstration Video 3](images/YouTube-03.png)](https://youtu.be/5fYWgglx84M)
 
 ## Note on the approach
 In this project we have defined functions that expose open source algorithms to Qlik using the [gRPC framework](http://www.grpc.io/). Each function allows the user to define input data and parameters to control the underlying algorithm's output. 
