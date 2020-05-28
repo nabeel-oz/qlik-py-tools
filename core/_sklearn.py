@@ -54,8 +54,7 @@ from sklearn.tree import DecisionTreeClassifier, DecisionTreeRegressor, ExtraTre
 from sklearn.cluster import AffinityPropagation, AgglomerativeClustering, Birch, DBSCAN, FeatureAgglomeration, KMeans,\
                             MiniBatchKMeans, MeanShift, SpectralClustering
 
-from skater.model import InMemoryModel
-from skater.core.explanations import Interpretation
+from sklearn.inspection import permutation_importance
 
 # Workaround for Keras issue #1406
 # "Using X backend." always printed to stdout #1406 
@@ -1604,6 +1603,7 @@ class SKLearnForQlik:
         self.model.estimator_kwargs = {}
         self.model.missing = "zeros"
         self.model.calc_feature_importances = False
+        self.model.importances_n_repeats = 30
         self.model.lags= None
         self.model.lag_target = False
         self.model.scale_target = False
@@ -1714,6 +1714,10 @@ class SKLearnForQlik:
             # Flag to determine if feature importances should be calculated when the fit method is called
             if 'calculate_importances' in execution_args:
                 self.model.calc_feature_importances = 'true' == execution_args['calculate_importances'].lower()
+
+            # Sets the number of times a feature is randomly shuffled during the feature importance calculation
+            if 'importances_n_repeats' in execution_args:
+                self.model.importances_n_repeats = utils.atoi(execution_args['importances_n_repeats'])
                        
             # Set the debug option for generating execution logs
             # Valid values are: true, false
@@ -1734,7 +1738,8 @@ class SKLearnForQlik:
                     "time_series_split": self.model.time_series_split, "max_train_size":self.model.max_train_size, "lags":self.model.lags,\
                     "lag_target":self.model.lag_target, "scale_target":self.model.scale_target, "make_stationary":self.model.make_stationary,\
                     "random_state":self.model.random_state, "compress":self.model.compress, "retain_data":self.model.retain_data,\
-                    "calculate_importances": self.model.calc_feature_importances, "debug":self.model.debug}
+                    "calculate_importances": self.model.calc_feature_importances, "importances_n_repeats": self.model.importances_n_repeats,\
+                    "debug":self.model.debug}
 
                     self._print_log(1)
         
@@ -2301,41 +2306,18 @@ class SKLearnForQlik:
     def _calc_importances(self, X=None, y=None):
         """
         Calculate feature importances.
-        Importances are calculated using the Skater library to provide this capability for all sklearn algorithms.
-        For more information: https://www.datascience.com/resources/tools/skater
+        Importances are calculated using sklearn.inspection.permutation_importance to provide this capability for all sklearn algorithms.
+        https://scikit-learn.org/stable/modules/permutation_importance.html
         """
         
         # Fill null values in the test set according to the model settings
         X_test = utils.fillna(X, method=self.model.missing)
         
-        # Calculate model agnostic feature importances using the skater library
-        interpreter = Interpretation(X_test, training_labels=y, feature_names=self.model.features_df.index.tolist())
-        
-        if self.model.estimator_type == "classifier":
-            try:
-                # We use the predicted probabilities from the estimator if available
-                predictor = self.model.pipe.predict_proba
+        # Calculate mean importances
+        importances = permutation_importance(self.model.pipe, X, y, n_repeats=self.model.importances_n_repeats, random_state=self.model.random_state)
 
-                # Set up keyword arguments accordingly
-                imm_kwargs = {"probability": True}
-            except AttributeError:
-                # Otherwise we simply use the predict method
-                predictor = self.model.pipe.predict
-
-                # Set up keyword arguments accordingly
-                imm_kwargs = {"probability": False, "unique_values": self.model.pipe.classes_}
-            
-            # Set up a skater InMemoryModel to calculate feature importances
-            imm = InMemoryModel(predictor, examples = X_test[:10], model_type="classifier", **imm_kwargs)
-        
-        elif self.model.estimator_type == "regressor":
-            # Set up a skater InMemoryModel to calculate feature importances using the predict method
-            imm = InMemoryModel(self.model.pipe.predict, examples = X_test[:10], model_type="regressor")
-        
-        # Add the feature importances to the model as a sorted data frame
-        self.model.importances = interpreter.feature_importance.feature_importance(imm, progressbar=False, ascending=False)
-        self.model.importances = pd.DataFrame(self.model.importances).reset_index()
-        self.model.importances.columns = ["feature_name", "importance"]
+        # Structure into a dataframe
+        self.model.importances = pd.DataFrame({"feature_name": X_test.columns, "importance": importances.importances_mean})
 
     def _send_table_description(self, variant):
         """

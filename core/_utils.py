@@ -195,7 +195,7 @@ def get_kwargs_by_type(dict_kwargs):
     
     # Dictionary used to convert argument values to the correct type
     types = {"boolean":ast.literal_eval, "bool":ast.literal_eval, "integer":atoi, "int":atoi,\
-             "float":atof, "string":str, "str":str}
+             "float":atof, "string":str, "str":str, "none":atonone, "None":atonone}
     
     result_dict = {}
     
@@ -228,7 +228,7 @@ def get_kwargs_by_type(dict_kwargs):
                         b = b.capitalize()
                     
                     # Handle None as an item in the dictionary
-                    if b == "None":
+                    if b in ("None", "none"):
                         d[types[split[2]](a)] = None
                     else:
                         d[types[split[2]](a)] = types[split[3]](b)
@@ -245,8 +245,8 @@ def get_kwargs_by_type(dict_kwargs):
                     if split[2] in ("boolean", "bool"):
                         i = i.capitalize()
 
-                    # Handle None as an item in the dictionary
-                    if i == "None":
+                    # Handle None as an item
+                    if i in ("None", "none"):
                         l.append(None)
                     else:
                         l.append(types[split[2]](i))
@@ -416,6 +416,14 @@ def atof(a):
     s = a.translate(str.maketrans("", "", del_chars))
 
     return float(s.replace(",", "."))
+
+def atonone(a):
+    """
+    Return None.
+    Convenience function for type conversions.
+    """
+
+    return None
 
 def dict_to_sse_arg(d):
     """

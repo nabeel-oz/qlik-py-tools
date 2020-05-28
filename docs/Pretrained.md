@@ -27,31 +27,31 @@ This SSE also provides capabilities for training machine learning models entirel
 
 ## Pre-requisites
 
-- This SSE currently supports scikit-learn and Keras models that have been saved to disk.
-- The models need to be built with the same version of Python that is being used by the SSE (3.6.x). 
+- This SSE supports REST API based models, as well as scikit-learn and Keras models that have been saved to disk.
+- Keras and scikit-learn models need to be built with the same version of Python that is being used by the SSE (3.6.x). 
 - scikit-learn models need to be saved using the Pickle library.
 - Keras models need to be saved using the Keras model.save method.
-- The Keras version needs to match the SSE.
+- The scikit-learn and Keras version used to build the model needs to match the SSE.
 - Preprocessing (e.g. scaling, OHE) needs to be handled by the model / pipeline.
 
 ## Setting up the model
 
 This SSE will handle the communication between Qlik and Python and call the specified model. However, we need certain details for the model to translate the incoming data and call the model correctly. This information has to be supplied through a YAML file.
 
-The YAML file needs to be placed in the SSE's `qlik-py-env/models` directory. The file needs to provide:
+The YAML file needs to be placed in the SSE's `qlik-py-env/models` directory. The tags available for defining a model are provided below:
 
-- **path**: Relative or absolute path to the model.
-- **type**: Type of the model.
-    - Currently supported values are `scikit-learn`, `sklearn` and `keras`.
-- **preprocessor**: Optional preprocessor to prepare data for the model.
-    - This has to be a path to a Python object that implements the `transform` method and has been stored using `Pickle`.
-    - The SSE will call the preprocessor's `transform` method on the samples received from Qlik and use its output to call the model's prediction function.
-- **features**: List of features expected by the model together with their data types.
-    - The order of the features is important and needs to be followed by the model and the Qlik app calling the model.
-    - The data types are required for correctly interpreting the data received from Qlik. Valid types are `int`, `float`, `str`, `bool`.
-    - The names of the features should correspond to fields in the Qlik app. 
+| Tag | Scope | Description | Sample Values | Remarks |
+| --- | --- | --- | --- | --- |
+| **path** | Mandatory | Relative or absolute path to the model | `../pretrained/HR-Attrition-v1.pkl`<br><br>`http://xxx:123/public/api/v1/model/predict` | This will be a URL if the model is exposed through a REST API. |
+| **type** | Mandatory | Type of the model | `scikit-learn`, `sklearn`, `keras`, `rest` | Currently this SSE only supports scikit-learn, Keras and REST API based models. |
+| **response_section** | Optional. Only applicable for REST. | Defines the section of the JSON response that will be returned to Qlik | `result` | A JSON response will typically contain several sections under the root. This tag can be used to specify the section which contains the predictions to be returned to Qlik. |
+| **user** | Optional. Only applicable for REST. | Used to pass the endpoint key or user in the REST call | `qlik` | Note that this SSE does not handle encryption of the YAML file on disk. |
+| **password** | Optional. Only applicable for REST. | Used to pass the password in the REST call | `password` | Note that this SSE does not handle masking of the password or encryption of the YAML file on disk. |
+| **payload_header** | Optional. Only applicable for REST. | Used to nest the data/payload within a section of the JSON request | `features` | A REST API may require the JSON payload in the request to be contained within a parent object, e.g. `features`. |
+| **preprocessor** | Optional | Pickled preprocessor that will be called to prepare data for the model | `../pretrained/HR-Attrition-prep-v1.pkl` | This has to be a path to a Python object that implements the `transform` method and has been stored using `Pickle`. The SSE will call the preprocessor's `transform` method on the samples received from Qlik and use its output to call the model's prediction function. |
+| **features** | Mandatory | List of features expected by the model together with their data types | `overtime : str`<br><br>`salary : float` | The order of the features is important and needs to be followed by the model and the Qlik app calling the model.<br><br>The data types are required for correctly interpreting the data received from Qlik. Valid types are `int`, `float`, `str`, `bool`.<br><br>The names of the features should correspond to fields in the Qlik app.<br><br>Please refer to the examples below for formatting this list. |
 
-Here is a sample YAML file. You can also find complete examples [here](sample-scripts/HR-Attrition-v1.yaml) and [here](sample-scripts/HR-Attrition-v2.yaml).
+Here is a sample YAML file for a scikit-learn model. You can also find complete examples [here](sample-scripts/HR-Attrition-v1.yaml) and [here](sample-scripts/HR-Attrition-v2.yaml).
 
 ```
 ---
@@ -60,6 +60,23 @@ type: sklearn
 features:
     overtime : str
     salary : float
+...
+```
+Here is a sample YAML file for a deployed model that is exposed via a REST API.
+```
+---
+path: http://xxx:123/public/api/v1/procedures/predict
+type: rest
+user: abc
+response_section: result
+payload_header: features
+features:
+    admit_date: str
+    patient_status: str
+    proc_date: str
+    proc_desc: str
+    surg_descrp: str
+    surgery_type: str
 ...
 ```
 

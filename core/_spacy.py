@@ -9,6 +9,7 @@ import random
 import warnings
 import numpy as np
 import pandas as pd
+from copy import copy
 
 # Suppress warnings
 if not sys.warnoptions:
@@ -327,15 +328,42 @@ class SpaCyForQlik:
             entities = sample[1]["entities"]
             entity_boundaries = []
             
-            # For each entity
-            for entity in entities:
+            # Structure the entities and types into a DataFrame
+            entities_df = pd.DataFrame(zip(*entities)).T
+            entities_df.columns = ['ents', 'types']
+            
+            # For each unique entity
+            for entity in entities_df.ents.unique():
                 
                 # Set up a regex pattern to look for the entity w.r.t. word boundaries 
-                pattern = re.compile(r"\b" + entity[0] + r"\b")
+                pattern = re.compile(r"\b" + entity + r"\b")
+
+                # Get entity types for the entity. This may be a series of values if the entity appears more than once.
+                types = entities_df[entities_df.ents == entity].types.reset_index(drop=True)
+                has_multiple_types = True if len(types.unique()) > 1 else False
+                i = 0
                 
                 # Find all occurrences of the entity in the text
                 for match in re.finditer(pattern, text):
-                    entity_boundaries.append((match.start(), match.end(), entity[1]))
+                    entity_boundaries.append((match.start(), match.end(), types[i]))
+
+                    # Assign types according to the series
+                    if has_multiple_types:
+                        i += 1
+                        
+            if len(entity_boundaries)  > 0:
+                # Prepare variables to check for overlapping entity boundaries
+                start, stop, entity_type = map(list, zip(*entity_boundaries))
+
+                # Drop overlapping entities, i.e. where an entity is a subset of a longer entity
+                for i in range(len(start)):
+                    other_start, other_stop = copy(start), copy(stop)
+                    del other_start[i]
+                    del other_stop[i]
+                    
+                    for j in range(len(other_start)):
+                        if start[i] >= other_start[j] and stop[i] <= other_stop[j]:
+                            entity_boundaries.remove((start[i], stop[i], entity_type[i]))
             
             # Add the entity boundaries to the sample
             sample[1]["entities"] = entity_boundaries
