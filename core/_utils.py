@@ -561,7 +561,7 @@ def decode(y, labels={}):
     # Store the shape of the array
     shape = y.shape
     # Flatten the array and perform the decoding 
-    y = np.array([decode(x, labels) for x in y.ravel()])
+    y = np.array([decode(atof(x), labels) for x in y.ravel()])
     # Reshape the array back to it's original form
     y = np.reshape(y, shape)
 
