@@ -472,7 +472,7 @@ class CommonFunction:
         payload_header = None if len(self.model['json'].keys()) == 0 else next(iter(self.model['json']))
         
         # Make a REST call for each sample
-        for i in range(len(X)):
+        for i in X.index:
             # Next the JSON payload if required
             self.model['json'] = dict(X.loc[i,:].astype("str").T) if payload_header is None else {payload_header: dict(X.loc[i,:].astype("str").T)}
 
